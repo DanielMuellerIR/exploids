@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+Packages/
+# Generiertes App-Bundle (per build-app.sh erzeugt, nicht versionieren)
+Exploids.app/
+# Release-Artefakte (DMG + Notes) aus wrappers/sign-and-release.sh
+build/
+*.dmg
+# Generierter DMG-Hintergrund (aus assets/generate-dmg-background.swift)
+assets/dmg-background.png
+# Lokale, private Agent-/Tool-Konfiguration (nicht öffentlich)
+.agents/
+.claude/
