@@ -4,13 +4,20 @@ import PackageDescription
 let package = Package(
     name: "exploids",
     platforms: [
-        .macOS(.v14)
+        // GameCore ist plattformunabhängig (SpriteKit/AVFoundation) und gegen das iOS-SDK
+        // verifiziert kompilierbar. Die App-Shell ExploidsMac ist weiterhin macOS-only; ein
+        // iOS-App-Target (Xcode) wird die GameCore-Library als Abhängigkeit einbinden.
+        .macOS(.v14),
+        .iOS(.v17)
     ],
     products: [
-        .executable(name: "exploids", targets: ["GameCore"])
+        // Produktname bleibt "exploids", damit build-app.sh die Binary unverändert findet.
+        .executable(name: "exploids", targets: ["ExploidsMac"])
     ],
     targets: [
-        .executableTarget(
+        // Plattformunabhängige Spiel-Engine als Library – kann später auch von einem
+        // iOS-App-Target (Xcode) als Package-Abhängigkeit eingebunden werden.
+        .target(
             name: "GameCore",
             path: "Sources/GameCore",
             resources: [
@@ -19,6 +26,12 @@ let package = Package(
                 // Retro-Pixel-Font (Press Start 2P, OFL) – beim Start registriert.
                 .copy("Fonts")
             ]
+        ),
+        // macOS-App-Shell (AppKit): Entry-Point, Fenster, Menü, Dock-Icon.
+        .executableTarget(
+            name: "ExploidsMac",
+            dependencies: ["GameCore"],
+            path: "Sources/ExploidsMac"
         ),
         .testTarget(
             name: "GameCoreTests",

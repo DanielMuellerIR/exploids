@@ -1,5 +1,6 @@
 import AppKit
 import SpriteKit
+import GameCore
 
 /// A custom NSWindow subclass that hosts the SpriteKit rendering view.
 public final class GameWindow: NSWindow {
@@ -34,6 +35,9 @@ public final class GameWindow: NSWindow {
         let scene = GameScene(size: contentRect.size)
         scene.scaleMode = .resizeFill
         scene.backgroundColor = .black
+        // Cmd+Q über die Scene an AppKit weiterreichen: GameCore ist plattformunabhängig und kennt
+        // NSApplication nicht mehr; die macOS-Shell legt hier das Beenden-Verhalten fest.
+        scene.onQuit = { NSApplication.shared.terminate(nil) }
         skView.presentScene(scene)
         
         // Set the window's contentView to the SpriteKit view

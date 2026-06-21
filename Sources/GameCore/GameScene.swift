@@ -1,5 +1,8 @@
 import SpriteKit
+// AppKit wird nur für die macOS-Tastatur-Brücke (NSEvent) gebraucht und existiert auf iOS nicht.
+#if canImport(AppKit)
 import AppKit
+#endif
 
 /// A structure representing a saved high score entry.
 public struct HighScore: Codable, Sendable {
@@ -370,41 +373,72 @@ public final class GameScene: SKScene {
         // Tastatur-Fokus sicherstellen: Die hostende SKView muss First Responder des Fensters sein,
         // sonst erreichen keyDown-Events die Scene nicht. Beim Aufruf von didMove ist das Fenster
         // noch nicht fertig (view.window == nil), daher verzögert auf dem Main-Loop nachsetzen.
+        // Nur macOS: First-Responder/keyDown gibt es auf iOS nicht – dort kommt die Eingabe per Touch.
+        #if canImport(AppKit)
         DispatchQueue.main.async { [weak view] in
             guard let view = view else { return }
             view.window?.makeFirstResponder(view)
         }
+        #endif
     }
     
     // MARK: - Input Handling
 
+    /// Wird ausgelöst, wenn der Spieler die App beenden will (Cmd+Q auf macOS). Die Plattform-Shell
+    /// legt das konkrete Verhalten fest (macOS: `NSApplication.terminate`). Auf iOS bleibt das i. d. R.
+    /// ungesetzt, da iOS-Apps sich laut Apple-HIG nicht selbst beenden.
+    public var onQuit: (() -> Void)?
+
+    // Die folgenden NSEvent-Overrides sind die macOS-Tastatur-Brücke: Sie ziehen die nötigen Felder
+    // aus dem Event und reichen sie an die plattformunabhängige Verarbeitung weiter. NSEvent existiert
+    // nur auf macOS – auf iOS kommt die Eingabe über die Touch-/Controller-Schicht in `handleKeyDown`.
+    #if canImport(AppKit)
     public override func keyDown(with event: NSEvent) {
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers?.lowercased() == "q" {
-            NSApp.terminate(nil)
+        handleKeyDown(
+            keyCode: event.keyCode,
+            characters: event.characters,
+            charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+            isCommandDown: event.modifierFlags.contains(.command)
+        )
+    }
+
+    public override func keyUp(with event: NSEvent) {
+        handleKeyUp(keyCode: event.keyCode)
+    }
+    #endif
+
+    /// Plattformunabhängige Verarbeitung eines Tastendrucks. Aufgerufen von der macOS-keyDown-Brücke,
+    /// den Simulate-Helfern (Headless-Tests) und künftig der iOS-Touch-/Controller-Schicht.
+    /// - Parameters:
+    ///   - keyCode: virtueller Tastencode (macOS-Layout; die Spiellogik kennt nur diese Codes)
+    ///   - characters: getippte Zeichen (für den „#"-Cheat und die Initialen-Eingabe), ggf. nil
+    ///   - charactersIgnoringModifiers: Zeichen ohne Modifier (Cmd+Q, „M"-Musik-Toggle), ggf. nil
+    ///   - isCommandDown: ob die Command-Taste gehalten wird (für Cmd+Q)
+    private func handleKeyDown(keyCode: UInt16, characters: String?, charactersIgnoringModifiers: String?, isCommandDown: Bool) {
+        if isCommandDown, charactersIgnoringModifiers?.lowercased() == "q" {
+            onQuit?()
             return
         }
 
         // „M" schaltet die Hintergrundmusik global ein/aus – in jedem Zustand außer der
         // Initialen-Eingabe (dort ist „M" ein einzugebender Buchstabe).
-        if gameState != .nameEntry, event.charactersIgnoringModifiers?.lowercased() == "m" {
+        if gameState != .nameEntry, charactersIgnoringModifiers?.lowercased() == "m" {
             MusicPlayer.shared.toggle()
             updateMusicHintLabel()
             return
         }
-
-        let keyCode = event.keyCode
 
         switch gameState {
         case .startScreen:
             if keyCode == 49 || keyCode == 36 { // Space or Enter
                 currentLevel = selectedStartLevel
                 transitionTo(.playing)
-            } else if keyCode == 123 || (keyCode == 0 && event.characters?.lowercased() == "a") { // Left arrow or A
+            } else if keyCode == 123 || (keyCode == 0 && characters?.lowercased() == "a") { // Left arrow or A
                 if selectedStartLevel > 1 {
                     selectedStartLevel -= 1
                     updateLevelSelectionLabel()
                 }
-            } else if keyCode == 124 || (keyCode == 2 && event.characters?.lowercased() == "d") { // Right arrow or D
+            } else if keyCode == 124 || (keyCode == 2 && characters?.lowercased() == "d") { // Right arrow or D
                 if selectedStartLevel < 10 {
                     selectedStartLevel += 1
                     updateLevelSelectionLabel()
@@ -412,7 +446,7 @@ public final class GameScene: SKScene {
             } else if keyCode == 126 || keyCode == 125 { // Up or Down arrow -> toggle game mode
                 selectedMode = (selectedMode == .ancientAsteroids) ? .madMeteoroids : .ancientAsteroids
                 updateModeSelectionLabel()
-            } else if let characters = event.characters?.lowercased(), characters == "i" {
+            } else if let characters = characters?.lowercased(), characters == "i" {
                 transitionTo(.glossary)
             }
 
@@ -421,7 +455,7 @@ public final class GameScene: SKScene {
                 transitionTo(.quitConfirmation)
                 return
             }
-            if event.characters == "#" { // Undokumentierter Cheat: ein Extra-Leben (zum Testen)
+            if characters == "#" { // Undokumentierter Cheat: ein Extra-Leben (zum Testen)
                 extraLives += 1
                 updateLivesLabel()
                 showPowerUpNotification(text: "EXTRA LIFE!", color: SKColor(red: 1.0, green: 0.3, blue: 0.45, alpha: 1.0))
@@ -435,7 +469,7 @@ public final class GameScene: SKScene {
                     fireLaser()
                 }
             }
-            
+
         case .nameEntry:
             if keyCode == 36 { // Enter / Return
                 if typedInitials.count == 3 {
@@ -447,7 +481,7 @@ public final class GameScene: SKScene {
                     typedInitials.removeLast()
                     updateNameEntryInputLabel()
                 }
-            } else if let chars = event.characters, !chars.isEmpty {
+            } else if let chars = characters, !chars.isEmpty {
                 let char = chars.first!
                 let isAllowed = char.isLetter || char.isNumber || char == " "
                 if isAllowed && typedInitials.count < 3 {
@@ -455,7 +489,7 @@ public final class GameScene: SKScene {
                     updateNameEntryInputLabel()
                 }
             }
-            
+
         case .gameOver:
             if keyCode == 15 || keyCode == 49 { // R key or Space bar -> replay same mode/level
                 transitionTo(.playing)
@@ -466,10 +500,10 @@ public final class GameScene: SKScene {
         case .quitConfirmation:
             if keyCode == 53 { // Escape -> resume
                 transitionTo(.playing)
-            } else if let characters = event.characters?.lowercased(), characters == "y" {
+            } else if let characters = characters?.lowercased(), characters == "y" {
                 transitionTo(.startScreen)
             }
-            
+
         case .glossary:
             if keyCode == 53 { // Escape -> back to title
                 transitionTo(.startScreen)
@@ -483,25 +517,26 @@ public final class GameScene: SKScene {
                 if glossaryContainer.position.y < glossaryScrollBottom {
                     glossaryContainer.position.y = glossaryScrollTop
                 }
-            } else if let characters = event.characters?.lowercased() {
+            } else if let characters = characters?.lowercased() {
                 if characters == "i" {
                     transitionTo(.startScreen)
                 }
             }
         }
     }
-    
-    public override func keyUp(with event: NSEvent) {
+
+    /// Plattformunabhängige Verarbeitung des Loslassens einer Taste.
+    private func handleKeyUp(keyCode: UInt16) {
         if gameState == .playing {
-            activeKeys.remove(event.keyCode)
-            if event.keyCode == 49 { // Space bar release: fire Charge Shot if ready
+            activeKeys.remove(keyCode)
+            if keyCode == 49 { // Space bar release: fire Charge Shot if ready
                 if isSpaceHeld {
                     isSpaceHeld = false
                     let holdDuration = ProcessInfo.processInfo.systemUptime - spacePressedTime
-                    
+
                     // Stop continuous charging synthesizer sound
                     SoundManager.shared.setChargingActive(false)
-                    
+
                     if holdDuration >= 1.5 {
                         fireChargeShot(type: .chargeMax)
                     } else if holdDuration >= 0.5 {
@@ -2119,10 +2154,10 @@ public final class GameScene: SKScene {
         
         let colorSequence = SKKeyframeSequence(
             keyframeValues: [
-                NSColor(red: 1.0, green: 0.3, blue: 0.8, alpha: 1.0),
-                NSColor(red: 0.6, green: 0.1, blue: 1.0, alpha: 1.0),
-                NSColor.darkGray,
-                NSColor.clear
+                SKColor(red: 1.0, green: 0.3, blue: 0.8, alpha: 1.0),
+                SKColor(red: 0.6, green: 0.1, blue: 1.0, alpha: 1.0),
+                SKColor.darkGray,
+                SKColor.clear
             ],
             times: [0.0, 0.4, 0.8, 1.0] as [NSNumber]
         )
@@ -2659,10 +2694,10 @@ public final class GameScene: SKScene {
     // MARK: - Starfield Helpers
 
     private func setupStarfield() {
-        let layers: [(count: Int, size: CGFloat, color: NSColor, parallax: CGFloat)] = [
-            (count: 40, size: 1.0, color: NSColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 1.0), parallax: 0.02),
-            (count: 25, size: 2.0, color: NSColor(red: 0.4, green: 0.45, blue: 0.55, alpha: 1.0), parallax: 0.05),
-            (count: 15, size: 3.0, color: NSColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0), parallax: 0.1)
+        let layers: [(count: Int, size: CGFloat, color: SKColor, parallax: CGFloat)] = [
+            (count: 40, size: 1.0, color: SKColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 1.0), parallax: 0.02),
+            (count: 25, size: 2.0, color: SKColor(red: 0.4, green: 0.45, blue: 0.55, alpha: 1.0), parallax: 0.05),
+            (count: 15, size: 3.0, color: SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0), parallax: 0.1)
         ]
         
         let halfWidth = size.width / 2
@@ -2761,7 +2796,7 @@ public final class GameScene: SKScene {
         emitter.particleAlphaSpeed = -1.6
         
         let colorSequence = SKKeyframeSequence(
-            keyframeValues: [NSColor.white, NSColor.lightGray, NSColor.darkGray, NSColor.clear],
+            keyframeValues: [SKColor.white, SKColor.lightGray, SKColor.darkGray, SKColor.clear],
             times: [0.0, 0.35, 0.75, 1.0] as [NSNumber]
         )
         emitter.particleColorSequence = colorSequence
@@ -2797,7 +2832,7 @@ public final class GameScene: SKScene {
         emitter.particleAlphaSpeed = -0.85
         
         let colorSequence = SKKeyframeSequence(
-            keyframeValues: [NSColor.cyan, NSColor.blue, NSColor.darkGray, NSColor.clear],
+            keyframeValues: [SKColor.cyan, SKColor.blue, SKColor.darkGray, SKColor.clear],
             times: [0.0, 0.4, 0.8, 1.0] as [NSNumber]
         )
         emitter.particleColorSequence = colorSequence
@@ -2821,7 +2856,7 @@ public final class GameScene: SKScene {
                                 bytesPerRow: 0,
                                 space: colorSpace,
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(NSColor.white.cgColor)
+        context.setFillColor(SKColor.white.cgColor)
         context.fillEllipse(in: CGRect(origin: .zero, size: size))
         let cgImage = context.makeImage()!
         return SKTexture(cgImage: cgImage)
@@ -2829,55 +2864,19 @@ public final class GameScene: SKScene {
     
     // MARK: - Input Simulation Helpers
     
-    /// Simulates pressing a key down (useful for headless testing).
+    /// Simulates pressing a key down (useful for headless testing and the iOS touch/controller layer).
     public func simulateKeyDown(keyCode: UInt16) {
-        let event = NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: [],
-            timestamp: 0.0,
-            windowNumber: 0,
-            context: nil,
-            characters: "",
-            charactersIgnoringModifiers: "",
-            isARepeat: false,
-            keyCode: keyCode
-        )!
-        self.keyDown(with: event)
+        handleKeyDown(keyCode: keyCode, characters: nil, charactersIgnoringModifiers: nil, isCommandDown: false)
     }
-    
-    /// Simulates releasing a key (useful for headless testing).
+
+    /// Simulates releasing a key (useful for headless testing and the iOS touch/controller layer).
     public func simulateKeyUp(keyCode: UInt16) {
-        let event = NSEvent.keyEvent(
-            with: .keyUp,
-            location: .zero,
-            modifierFlags: [],
-            timestamp: 0.0,
-            windowNumber: 0,
-            context: nil,
-            characters: "",
-            charactersIgnoringModifiers: "",
-            isARepeat: false,
-            keyCode: keyCode
-        )!
-        self.keyUp(with: event)
+        handleKeyUp(keyCode: keyCode)
     }
-    
+
     /// Simulates typing a letter (useful for initials entry testing).
     public func simulateTypeCharacter(_ char: String) {
-        let event = NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: [],
-            timestamp: 0.0,
-            windowNumber: 0,
-            context: nil,
-            characters: char,
-            charactersIgnoringModifiers: char,
-            isARepeat: false,
-            keyCode: 0
-        )!
-        self.keyDown(with: event)
+        handleKeyDown(keyCode: 0, characters: char, charactersIgnoringModifiers: char, isCommandDown: false)
     }
     
     /// For testing: directly adds an asteroid.

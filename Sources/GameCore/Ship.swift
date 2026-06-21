@@ -170,7 +170,7 @@ public final class Ship: SKShapeNode {
         emitter.particleColorBlendFactor = 1.0
         
         let colorSequence = SKKeyframeSequence(
-            keyframeValues: [NSColor.yellow, NSColor.orange, NSColor.red, NSColor.clear],
+            keyframeValues: [SKColor.yellow, SKColor.orange, SKColor.red, SKColor.clear],
             times: [0.0, 0.3, 0.7, 1.0] as [NSNumber]
         )
         emitter.particleColorSequence = colorSequence
@@ -191,7 +191,7 @@ public final class Ship: SKShapeNode {
                                 space: colorSpace,
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         
-        context.setFillColor(NSColor.white.cgColor)
+        context.setFillColor(SKColor.white.cgColor)
         context.fillEllipse(in: CGRect(origin: .zero, size: size))
         
         let cgImage = context.makeImage()!

@@ -1,6 +1,7 @@
 import AppKit
 import SpriteKit
 import Foundation
+import GameCore
 
 /// The application delegate responsible for managing the application's lifecycle,
 /// drawing the programmatic Dock icon, and setting up the native macOS menu bar.

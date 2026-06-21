@@ -1,5 +1,4 @@
 import SpriteKit
-import AppKit
 
 /// A structure representing a 3D vector for asteroid vertices.
 public struct Vector3D: Sendable {
@@ -149,7 +148,7 @@ public final class Asteroid: SKShapeNode {
         }
         
         self.strokeColor = strokeColor
-        self.fillColor = NSColor(white: 0.15, alpha: 0.8)
+        self.fillColor = SKColor(white: 0.15, alpha: 0.8)
         self.lineWidth = 2.0
         self.lineJoin = .miter
         

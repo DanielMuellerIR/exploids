@@ -1,5 +1,4 @@
 import SpriteKit
-import AppKit
 
 /// A subclass of `SKShapeNode` representing a retro vector alien flying saucer (UFO) enemy.
 public final class UFO: SKShapeNode {
