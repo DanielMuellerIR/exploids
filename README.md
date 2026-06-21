@@ -14,11 +14,13 @@ Prefer to build from source? See [Build & run](#build--run-cli--headless-friendl
 
 ## Screenshots
 
-<p align="center"><img src="screenshots/sc1.jpg" width="860" alt="Asteroid field with an option drone acquired, the ship shielded and compressed"></p>
+<p align="center"><img src="screenshots/sc0.jpg" width="860" alt="Survival mode in full flow — the ship fires a rainbow stream of shots past a purple gravity well as asteroids and an enemy saucer close in"></p>
 
-| In-game glossary | Laser beam | Gravity well + screen bomb |
-|:--:|:--:|:--:|
-| ![In-game glossary of objects and power-ups](screenshots/sc3.jpg) | ![The hold-to-fire laser beam sweeping the field](screenshots/sc2.jpg) | ![A gravity well warps space as a screen bomb detonates](screenshots/sc4.jpg) |
+| Option drone + shield | In-game glossary |
+|:--:|:--:|
+| ![Asteroid field with an option drone acquired, the ship shielded and compressed](screenshots/sc1.jpg) | ![In-game glossary of objects and power-ups](screenshots/sc3.jpg) |
+| **Laser beam** | **Gravity well + screen bomb** |
+| ![The hold-to-fire laser beam sweeping the field](screenshots/sc2.jpg) | ![A gravity well warps space as a screen bomb detonates](screenshots/sc4.jpg) |
 
 ## Build & run (CLI / headless‑friendly)
 

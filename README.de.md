@@ -16,11 +16,13 @@ Lieber selbst aus dem Quellcode bauen? Siehe [Bauen & starten](#bauen--starten-k
 
 ## Screenshots
 
-<p align="center"><img src="screenshots/sc1.jpg" width="860" alt="Asteroidenfeld mit aufgesammelter Option-Drohne, Schiff mit Schild und geschrumpft"></p>
+<p align="center"><img src="screenshots/sc0.jpg" width="860" alt="Survival-Modus in vollem Fluss — das Schiff feuert einen regenbogenfarbenen Schuss-Strom an einem violetten Gravitationsfeld vorbei, während Asteroiden und ein gegnerisches UFO heranrücken"></p>
 
-| Glossar im Spiel | Laserstrahl | Gravitationsfeld + Bombe |
-|:--:|:--:|:--:|
-| ![Glossar der Objekte und Power-Ups](screenshots/sc3.jpg) | ![Der gehaltene Laserstrahl fegt über das Feld](screenshots/sc2.jpg) | ![Ein Gravitationsfeld verzerrt den Raum, während eine Bombe zündet](screenshots/sc4.jpg) |
+| Option-Drohne + Schild | Glossar im Spiel |
+|:--:|:--:|
+| ![Asteroidenfeld mit aufgesammelter Option-Drohne, Schiff mit Schild und geschrumpft](screenshots/sc1.jpg) | ![Glossar der Objekte und Power-Ups](screenshots/sc3.jpg) |
+| **Laserstrahl** | **Gravitationsfeld + Bombe** |
+| ![Der gehaltene Laserstrahl fegt über das Feld](screenshots/sc2.jpg) | ![Ein Gravitationsfeld verzerrt den Raum, während eine Bombe zündet](screenshots/sc4.jpg) |
 
 ## Bauen & starten (Kommandozeile / headless-tauglich)
 
