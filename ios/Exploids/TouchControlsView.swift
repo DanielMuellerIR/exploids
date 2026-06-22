@@ -367,6 +367,10 @@ final class TouchControlsView: UIView {
                 // „m" löst in der Scene denselben globalen Musik-Toggle aus.
                 TouchButton(id: 16, relativeRect: CGRect(x: 0.02, y: 0.06, width: 0.14, height: 0.16),
                             label: "MUSIK", kind: .typeChar("m")),
+                // Darunter: SFX-Stil umschalten (prozedural <-> generierte Samples). „n" löst in der
+                // Scene den globalen Toggle aus und spielt sofort einen Bestätigungs-Sound.
+                TouchButton(id: 17, relativeRect: CGRect(x: 0.02, y: 0.24, width: 0.14, height: 0.16),
+                            label: "SFX", kind: .typeChar("n")),
                 // Obere Ecke rechts: Highscore-Ansicht
                 TouchButton(id: 15, relativeRect: CGRect(x: 0.84, y: 0.06, width: 0.14, height: 0.16),
                             label: "HISCORE", kind: .typeChar("h")),

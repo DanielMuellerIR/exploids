@@ -839,29 +839,61 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(scene.difficultyFactor, 2.5, accuracy: 1e-4)
     }
     
-    func testChargeShotFiring() {
+    /// Feuertaste: Der erste Tastendruck feuert sofort genau einen normalen Laser.
+    /// (Der frühere Auflade-Schuss wurde durch Dauerfeuer-beim-Halten ersetzt.)
+    func testFirePressFiresOneNormalLaser() {
         let scene = GameScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
-        
+
         scene.transitionTo(.playing)
         scene.clearAllEntitiesForTesting()
-        
-        // Simulate space key down (code 49)
+
+        // Feuertaste (49) drücken -> sofort ein normaler Schuss, kein Aufladen.
         scene.simulateKeyDown(keyCode: 49)
-        // This immediately fires one normal laser
         XCTAssertEqual(scene.activeLasers.count, 1)
         XCTAssertEqual(scene.activeLasers[0].type, .normal)
-        
-        // Hold for 0.6 seconds (Level 1 Charge)
-        Thread.sleep(forTimeInterval: 0.6)
+
+        // Loslassen feuert KEINEN zusätzlichen (Charge-)Schuss mehr.
         scene.simulateKeyUp(keyCode: 49)
-        
-        // There should be a new Level 1 Charge Shot fired
-        XCTAssertEqual(scene.activeLasers.count, 2)
-        XCTAssertEqual(scene.activeLasers.last?.type, .charge1)
+        XCTAssertEqual(scene.activeLasers.count, 1)
     }
     
+    /// Shield ist additiv bis Stufe 3 und jede Stufe absorbiert einen Treffer.
+    func testShieldStacksToThreeAndAbsorbsHits() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
+        view.presentScene(scene)
+        scene.transitionTo(.playing)
+
+        XCTAssertEqual(scene.ship.shieldLevel, 0)
+        for _ in 0..<4 { scene.collectPowerUpForTesting(type: .shield) }
+        XCTAssertEqual(scene.ship.shieldLevel, 3, "Schild stapelt höchstens bis Stufe 3")
+
+        scene.ship.position = .zero
+        scene.damageShipForTesting()
+        XCTAssertEqual(scene.ship.shieldLevel, 2, "Ein Treffer verbraucht genau eine Schild-Stufe")
+    }
+
+    /// Beim Revive (Extra Life) gehen alle aktiven Power-ups verloren.
+    func testReviveLosesAllPowerUps() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
+        view.presentScene(scene)
+        scene.transitionTo(.playing)
+
+        scene.collectPowerUpForTesting(type: .extraLife)
+        scene.collectPowerUpForTesting(type: .triple)
+        XCTAssertEqual(scene.extraLivesForTesting, 1)
+        XCTAssertGreaterThan(scene.tripleShotEndTimeForTesting, 0)
+        XCTAssertEqual(scene.ship.shieldLevel, 0, "kein Schild -> der nächste Treffer löst Revive aus")
+
+        scene.ship.position = .zero
+        scene.damageShipForTesting()
+        XCTAssertEqual(scene.extraLivesForTesting, 0, "Revive verbraucht eine Reserve")
+        XCTAssertEqual(scene.tripleShotEndTimeForTesting, 0, "beim Revive gehen Power-ups verloren")
+    }
+
     func testPowerUpCollection() {
         let scene = GameScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))

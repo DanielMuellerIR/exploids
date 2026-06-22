@@ -26,6 +26,8 @@ let package = Package(
             resources: [
                 // Hintergrundmusik (mp3) – über Bundle.module zur Laufzeit geladen.
                 .copy("Music"),
+                // Generierte Retro-Soundeffekte (AAC/.m4a) – optionaler Sample-Modus im SoundManager.
+                .copy("SFX"),
                 // Retro-Pixel-Font (Press Start 2P, OFL) – beim Start registriert.
                 .copy("Fonts")
             ]

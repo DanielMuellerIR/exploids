@@ -99,8 +99,8 @@ public final class GameScene: SKScene {
         LevelSpawnConfig(level: 1, maxAsteroids: 3, spawnRate: 2.8, speedMultiplier: 1.0, powerUpChance: 0.12, normalWeight: 100, implodingWeight: 0, wobblingWeight: 0, ufoInterval: nil, blackHoleInterval: nil),
         LevelSpawnConfig(level: 2, maxAsteroids: 4, spawnRate: 2.4, speedMultiplier: 1.08, powerUpChance: 0.14, normalWeight: 90, implodingWeight: 0, wobblingWeight: 10, ufoInterval: 35.0, blackHoleInterval: nil),
         LevelSpawnConfig(level: 3, maxAsteroids: 5, spawnRate: 2.1, speedMultiplier: 1.16, powerUpChance: 0.16, normalWeight: 80, implodingWeight: 10, wobblingWeight: 10, ufoInterval: 30.0, blackHoleInterval: nil),
-        LevelSpawnConfig(level: 4, maxAsteroids: 6, spawnRate: 1.8, speedMultiplier: 1.24, powerUpChance: 0.18, normalWeight: 65, implodingWeight: 18, wobblingWeight: 17, ufoInterval: 25.0, blackHoleInterval: 50.0),
-        LevelSpawnConfig(level: 5, maxAsteroids: 7, spawnRate: 1.5, speedMultiplier: 1.32, powerUpChance: 0.20, normalWeight: 55, implodingWeight: 23, wobblingWeight: 22, ufoInterval: 20.0, blackHoleInterval: 40.0)
+        LevelSpawnConfig(level: 4, maxAsteroids: 6, spawnRate: 1.8, speedMultiplier: 1.24, powerUpChance: 0.18, normalWeight: 65, implodingWeight: 18, wobblingWeight: 17, ufoInterval: 25.0, blackHoleInterval: 90.0),
+        LevelSpawnConfig(level: 5, maxAsteroids: 7, spawnRate: 1.5, speedMultiplier: 1.32, powerUpChance: 0.20, normalWeight: 55, implodingWeight: 23, wobblingWeight: 22, ufoInterval: 20.0, blackHoleInterval: 75.0)
     ]
     
     public func configForLevel(_ lvl: Int) -> LevelSpawnConfig {
@@ -117,7 +117,7 @@ public final class GameScene: SKScene {
                 implodingWeight: min(40, last.implodingWeight + extraLevels * 2),
                 wobblingWeight: min(40, last.wobblingWeight + extraLevels * 2),
                 ufoInterval: max(8.0, (last.ufoInterval ?? 15.0) - Double(extraLevels) * 0.8),
-                blackHoleInterval: max(15.0, (last.blackHoleInterval ?? 30.0) - Double(extraLevels) * 1.5)
+                blackHoleInterval: max(35.0, (last.blackHoleInterval ?? 60.0) - Double(extraLevels) * 1.0)
             )
         }
         return GameScene.levelConfigs[max(1, min(lvl, GameScene.levelConfigs.count)) - 1]
@@ -271,8 +271,13 @@ public final class GameScene: SKScene {
     // Power-up-Tuning (Dauer in Sekunden) – hier zentral justierbar.
     private let beamDuration: TimeInterval = 10.0
     private let rearLaserDuration: TimeInterval = 12.0
-    private let compressDuration: TimeInterval = 12.0
-    private let compressScale: CGFloat = 0.3
+    private let compressDuration: TimeInterval = 24.0
+    private let compressScale: CGFloat = 0.3          // Stufe 1
+    private let compressLevel2Scale: CGFloat = 0.04   // Stufe 2: nur noch ein Pixel
+    /// Aktuelle Compress-Stufe (0 = normal, 1 = klein, 2 = winzig). Gilt für Schiff UND Beiboote.
+    private var compressLevel: Int = 0
+    /// Dämpft die Power-up-Drop-Häufigkeit global (Feedback: kamen zu oft). 1.0 = wie Level-Config.
+    private let powerUpDropScale: Double = 0.55
     private let extraLifeInvincibility: TimeInterval = 5.0
 
     /// Visueller Knoten für den Laserbeam (wird pro Frame neu aufgebaut).
@@ -281,10 +286,13 @@ public final class GameScene: SKScene {
     // Invincibility state (blinking on shield burst)
     private var invincibilityEndTime: TimeInterval = 0.0
     
-    // Space charging states
+    // Feuertaste-Status: gehalten = Dauerfeuer (mit normaler bzw. Rapidfire-Feuerrate).
     private var isSpaceHeld: Bool = false
-    private var spacePressedTime: TimeInterval = 0.0
-    
+    /// Auto-Feuer: das Schiff schießt durchgehend von selbst, ohne dass man die Feuertaste hält.
+    /// Engine-Default aus (für Headless-Tests); die App-Hosts (macOS/iOS) schalten es zum Start AN
+    /// – entspanntes Spielgefühl, ideal fürs iPhone. Umschaltbar (Einstellungen).
+    public var autoFire: Bool = false
+
     // Enemy Spawning times
     private var lastUFOSpawnTime: TimeInterval = 0.0
     private var lastGravityWellSpawnTime: TimeInterval = 0.0
@@ -314,6 +322,9 @@ public final class GameScene: SKScene {
     private let levelSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private let modeSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private let musicHintLabel = SKLabelNode(fontNamed: "Courier")
+    /// Zeigt am Startbildschirm den aktuellen SFX-Stil (prozedural vs. Samples) und – auf macOS –
+    /// die Umschalt-Taste. Wird beim Umschalten (N / iOS-„SFX"-Button) aktualisiert.
+    private let sfxModeLabel = SKLabelNode(fontNamed: "Courier")
     private let levelClearedLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private let prepareNextLevelLabel = SKLabelNode(fontNamed: "Courier")
     
@@ -447,6 +458,16 @@ public final class GameScene: SKScene {
             return
         }
 
+        // „N" schaltet den SFX-Stil um: prozedurale Synth-Effekte <-> generierte Samples.
+        // Zum sofortigen Vergleich spielt direkt ein Bestätigungs-Sound im NEUEN Modus.
+        // Ebenfalls überall außer bei der Initialen-Eingabe (dort ist „N" ein Buchstabe).
+        if gameState != .nameEntry, charactersIgnoringModifiers?.lowercased() == "n" {
+            SoundManager.shared.useSampledSFX.toggle()
+            updateSfxModeLabel()   // Anzeige am Startbildschirm sofort mitführen
+            SoundManager.shared.playPowerUp()
+            return
+        }
+
         switch gameState {
         case .startScreen:
             if keyCode == 49 || keyCode == 36 { // Space or Enter
@@ -486,10 +507,9 @@ public final class GameScene: SKScene {
                 return
             }
             activeKeys.insert(keyCode)
-            if keyCode == 49 { // Space bar (Charge start & instant shot)
+            if keyCode == 49 { // Feuertaste: erster Schuss sofort, Halten feuert weiter (siehe update)
                 if !isSpaceHeld {
                     isSpaceHeld = true
-                    spacePressedTime = ProcessInfo.processInfo.systemUptime
                     fireLaser()
                 }
             }
@@ -559,21 +579,8 @@ public final class GameScene: SKScene {
     private func handleKeyUp(keyCode: UInt16) {
         if gameState == .playing {
             activeKeys.remove(keyCode)
-            if keyCode == 49 { // Space bar release: fire Charge Shot if ready
-                if isSpaceHeld {
-                    isSpaceHeld = false
-                    let holdDuration = ProcessInfo.processInfo.systemUptime - spacePressedTime
-
-                    // Stop continuous charging synthesizer sound
-                    SoundManager.shared.setChargingActive(false)
-
-                    if holdDuration >= 1.5 {
-                        fireChargeShot(type: .chargeMax)
-                    } else if holdDuration >= 0.5 {
-                        fireChargeShot(type: .charge1)
-                    }
-                    ship.chargeLevel = 0.0
-                }
+            if keyCode == 49 { // Feuertaste losgelassen: Dauerfeuer beenden
+                isSpaceHeld = false
             }
         }
     }
@@ -643,21 +650,6 @@ public final class GameScene: SKScene {
     }
     
     /// Spawns an R-Type Wave Cannon Charge Shot.
-    private func fireChargeShot(type: LaserType) {
-        let angle = ship.zRotation
-        let tipDistance: CGFloat = 18.0
-        let spawnPos = CGPoint(
-            x: ship.position.x + tipDistance * cos(angle),
-            y: ship.position.y + tipDistance * sin(angle)
-        )
-        
-        let laser = Laser(position: spawnPos, angle: angle, type: type)
-        self.addChild(laser)
-        self.activeLasers.append(laser)
-        
-        SoundManager.shared.playChargeShot()
-    }
-    
     // MARK: - Game Loop
     
     public override func update(_ currentTime: TimeInterval) {
@@ -876,16 +868,11 @@ public final class GameScene: SKScene {
                 option.zRotation = ship.zRotation
             }
             
-            // Update continuous engine hum + space charge synth
+            // Engine-Hum aktualisieren. Feuertaste halten = Dauerfeuer mit normaler Feuerrate
+            // (fireLaser begrenzt selbst per Cooldown; mit Rapidfire wird der Cooldown kürzer).
             SoundManager.shared.setThrustActive(isThrusting)
-            if isSpaceHeld {
-                let elapsed = ProcessInfo.processInfo.systemUptime - spacePressedTime
-                let prog = min(1.0, elapsed / 1.5)
-                ship.chargeLevel = prog
-                SoundManager.shared.setChargingActive(true, progress: Double(prog))
-            } else {
-                ship.chargeLevel = 0.0
-                SoundManager.shared.setChargingActive(false)
+            if (autoFire || isSpaceHeld) && !ship.isHidden {
+                fireLaser()
             }
             
             // Unverwundbarkeit (z.B. nach Extra-Life-Revive) gilt für ALLE Todesarten,
@@ -893,6 +880,7 @@ public final class GameScene: SKScene {
             let isInvincible = currentTime < invincibilityEndTime
 
             // Apply Gravity Well attraction forces
+            var wellsToCollapse: [GravityWell] = []
             for well in activeGravityWells {
                 // Pull Ship
                 if !ship.isHidden {
@@ -905,6 +893,9 @@ public final class GameScene: SKScene {
                         // Über damageShip(), damit ein Extra-Leben auch hier den Tod abfängt.
                         lastDeathCause = .gravityWell
                         damageShip()
+                        // Treffer -> das Loch kollabiert sofort und zieht nicht weiter an
+                        // (sonst bliebe man im Sog hängen, nachdem z.B. ein Schild verbraucht wurde).
+                        wellsToCollapse.append(well)
                     }
                 }
                 
@@ -942,7 +933,16 @@ public final class GameScene: SKScene {
                 }
                 self.activeUFOs = remainingUFOs
             }
-            
+
+            // Vom Spieler getroffene Löcher kollabieren (Sog endet sofort) – kleiner Effekt zur Quittung.
+            if !wellsToCollapse.isEmpty {
+                for w in wellsToCollapse {
+                    createExplosion(at: w.position, sizeClass: .small)
+                    w.removeFromParent()
+                }
+                activeGravityWells.removeAll { w in wellsToCollapse.contains(where: { $0 === w }) }
+            }
+
             // Collision detection: Ship vs. Asteroids
             if !ship.isHidden && !isInvincible {
                 let shipPoly = ship.getWorldVertices()
@@ -980,13 +980,14 @@ public final class GameScene: SKScene {
                 }
             }
             
-            // Collision detection: Ship vs. Power-ups
+            // Collision detection: Ship vs. Power-ups – distanzbasiert (Abstand der Mittelpunkte),
+            // NICHT über das Schiff-Polygon. Sonst sind Power-ups bei aktivem Compress (winziges
+            // Schiff) praktisch nicht mehr einsammelbar und bleiben „hängen".
             if !ship.isHidden {
-                let shipPoly = ship.getWorldVertices()
+                let collectRadius: CGFloat = 30.0
                 var remainingPowerUps: [PowerUp] = []
                 for powerUp in activePowerUps {
-                    let powerUpPoly = powerUp.getWorldVertices()
-                    if CollisionHelper.polygonsIntersect(shipPoly, powerUpPoly) {
+                    if distanceBetween(ship.position, powerUp.position) <= collectRadius {
                         SoundManager.shared.playPowerUp()
                         collectPowerUp(powerUp)
                         powerUp.removeFromParent()
@@ -1310,16 +1311,17 @@ public final class GameScene: SKScene {
     
     private func damageShip() {
         if ship.isShieldActive {
-            ship.isShieldActive = false
+            ship.shieldLevel -= 1   // eine Schild-Stufe absorbiert den Treffer
             SoundManager.shared.playExplosion()
             createShipExplosion(at: ship.position)
             invincibilityEndTime = ProcessInfo.processInfo.systemUptime + 1.5
             shakeCamera(amplitude: 4.5, numberOfShakes: 6, durationPerShake: 0.03)
         } else if extraLives > 0 {
             // Extra-Life-Power-up: kein Game Over – stattdessen in der Mitte wiederbeleben und
-            // kurz unsterblich machen.
+            // kurz unsterblich machen. Beim Revive gehen ALLE aktiven Power-ups verloren.
             extraLives -= 1
             updateLivesLabel()
+            resetPowerUpsOnRevive()
             SoundManager.shared.playExplosion()
             createShipExplosion(at: ship.position)
             ship.position = .zero
@@ -1565,9 +1567,12 @@ public final class GameScene: SKScene {
 
     /// Wählt einen Power-up-Typ gewichtet aus (Extra Life selten, Triple etwas häufiger).
     private func randomPowerUpType() -> PowerUpType {
+        // Extra Life wird in höheren Levels häufiger (mehr Reserven für die härteren Level):
+        // L1 = 5, L5 = 13, L10 = 23.
+        let extraLifeWeight = 5 + max(0, currentLevel - 1) * 2
         let weights: [(PowerUpType, Int)] = [
             (.shield, 12), (.triple, 14), (.rapid, 10), (.option, 10), (.bomb, 8),
-            (.beam, 9), (.rear, 10), (.compress, 9), (.extraLife, 5)
+            (.beam, 9), (.rear, 10), (.compress, 9), (.extraLife, extraLifeWeight)
         ]
         let total = weights.reduce(0) { $0 + $1.1 }
         var r = Int.random(in: 0..<total)
@@ -1586,11 +1591,13 @@ public final class GameScene: SKScene {
         
         switch powerUp.type {
         case .shield:
-            ship.isShieldActive = true
-            text = "SHIELD ACTIVE!"
+            // Additiv bis Stufe 3 (jede Stufe fängt einen Treffer ab); endlos bis Treffer/Revive.
+            ship.shieldLevel = min(3, ship.shieldLevel + 1)
+            text = "SHIELD LEVEL \(ship.shieldLevel)!"
             color = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0)
         case .triple:
-            tripleShotEndTime = now + 12.0
+            // Endlos (additiv) bis zum Revive – kein Timer.
+            tripleShotEndTime = .greatestFiniteMagnitude
             text = "TRIPLE LASER!"
             color = SKColor(red: 1.0, green: 0.2, blue: 0.0, alpha: 1.0)
         case .rapid:
@@ -1605,6 +1612,7 @@ public final class GameScene: SKScene {
                 drone.position = ship.position
                 self.addChild(drone)
                 options.append(drone)
+                applyCompressScale()   // neue Drohne an evtl. aktive Compress-Größe anpassen
             }
         case .bomb:
             detonateBomb()
@@ -1619,9 +1627,11 @@ public final class GameScene: SKScene {
             text = "REAR LASER!"
             color = SKColor(red: 0.4, green: 0.7, blue: 1.0, alpha: 1.0)
         case .compress:
+            // Zwei Stufen: 1 = klein, 2 = winzig (ein Pixel) – Schiff und Beiboote. Timer (24s).
+            compressLevel = min(2, compressLevel + 1)
             compressEndTime = now + compressDuration
-            ship.setScale(compressScale)
-            text = "COMPRESSED!"
+            applyCompressScale()
+            text = compressLevel >= 2 ? "COMPRESSED x2!" : "COMPRESSED!"
             color = SKColor(red: 0.9, green: 0.9, blue: 0.95, alpha: 1.0)
         case .extraLife:
             extraLives += 1
@@ -1632,7 +1642,35 @@ public final class GameScene: SKScene {
 
         showPowerUpNotification(text: text, color: color)
     }
-    
+
+    /// Setzt Schiff UND Beiboote auf die zur aktuellen Compress-Stufe passende Größe.
+    private func applyCompressScale() {
+        let scale: CGFloat
+        switch compressLevel {
+        case 2:  scale = compressLevel2Scale
+        case 1:  scale = compressScale
+        default: scale = 1.0
+        }
+        ship.setScale(scale)
+        for drone in options { drone.setScale(scale) }
+    }
+
+    /// Beim Revive (Extra Life) gehen ALLE aktiven Power-ups verloren – Timer, Schild, Beiboote,
+    /// Compress. Das Schiff kehrt auf Normalgröße zurück.
+    private func resetPowerUpsOnRevive() {
+        tripleShotEndTime = 0.0
+        rapidFireEndTime = 0.0
+        beamEndTime = 0.0
+        rearLaserEndTime = 0.0
+        compressEndTime = 0.0
+        compressLevel = 0
+        beamNode.isHidden = true
+        ship.shieldLevel = 0
+        for drone in options { drone.removeFromParent() }
+        options.removeAll()
+        applyCompressScale()   // -> Normalgröße
+    }
+
     /// Zündet die Screen Bomb: legt einen einzelnen Schuss-Treffer auf JEDES Objekt am Bildschirm
     /// (alle Asteroiden + UFOs) – über dieselbe Treffer-Logik wie ein Laser. Plus Schockwelle,
     /// Kamera-Wackeln und Bomben-Sound; gegnerische Laser werden gelöscht.
@@ -1727,7 +1765,7 @@ public final class GameScene: SKScene {
             self.score += 200
             scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
 
-            if Double.random(in: 0...1) <= config.powerUpChance {
+            if Double.random(in: 0...1) <= config.powerUpChance * powerUpDropScale {
                 spawnPowerUp(at: asteroid.position)
             }
 
@@ -1752,7 +1790,7 @@ public final class GameScene: SKScene {
             self.score += points
             scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
 
-            if Double.random(in: 0...1) <= config.powerUpChance {
+            if Double.random(in: 0...1) <= config.powerUpChance * powerUpDropScale {
                 spawnPowerUp(at: asteroid.position)
             }
 
@@ -1767,14 +1805,15 @@ public final class GameScene: SKScene {
     private func updateTimedPowerUpEffects(currentTime: TimeInterval) {
         let now = ProcessInfo.processInfo.systemUptime
 
-        // Compress: nach Ablauf Schiff wieder auf Originalgröße.
+        // Compress: nach Ablauf Schiff (und Beiboote) wieder auf Originalgröße.
         if compressEndTime > 0 && now >= compressEndTime {
             compressEndTime = 0
-            ship.setScale(1.0)
+            compressLevel = 0
+            applyCompressScale()
         }
 
-        // Laserbeam: nur während Power-up-Dauer und solange Space gehalten wird.
-        if now < beamEndTime && isSpaceHeld && !ship.isHidden {
+        // Laserbeam: während der Power-up-Dauer, solange gefeuert wird (Auto-Feuer oder Taste).
+        if now < beamEndTime && (autoFire || isSpaceHeld) && !ship.isHidden {
             fireBeam()
         } else {
             beamNode.isHidden = true
@@ -1866,7 +1905,7 @@ public final class GameScene: SKScene {
     private func triggerGameOver() {
         ship.isHidden = true
         ship.velocity = .zero
-        ship.isShieldActive = false
+        ship.shieldLevel = 0
         
         // Stop key states and engine sound hum
         activeKeys.removeAll()
@@ -1920,6 +1959,7 @@ public final class GameScene: SKScene {
         levelSelectionLabel.isHidden = true
         modeSelectionLabel.isHidden = true
         musicHintLabel.isHidden = true
+        sfxModeLabel.isHidden = true
         levelClearedLabel.isHidden = true
         prepareNextLevelLabel.isHidden = true
         
@@ -1939,7 +1979,7 @@ public final class GameScene: SKScene {
             ship.position = .zero
             ship.velocity = .zero
             ship.zRotation = 0.0
-            ship.isShieldActive = false
+            ship.shieldLevel = 0
             
             titleLabel.isHidden = false
             startPromptLabel.isHidden = false
@@ -1961,7 +2001,10 @@ public final class GameScene: SKScene {
 
             updateMusicHintLabel()
             musicHintLabel.isHidden = false
-            
+
+            updateSfxModeLabel()
+            sfxModeLabel.isHidden = false
+
             // Blink "PRESS SPACE TO START"
             startPromptLabel.removeAction(forKey: "blink")
             let fadeOut = SKAction.fadeOut(withDuration: 0.5)
@@ -2017,6 +2060,7 @@ public final class GameScene: SKScene {
                 beamEndTime = 0.0
                 rearLaserEndTime = 0.0
                 compressEndTime = 0.0
+                compressLevel = 0
                 extraLives = 0
                 beamNode.isHidden = true
                 updateLivesLabel()
@@ -2030,7 +2074,7 @@ public final class GameScene: SKScene {
                 ship.zRotation = 0.0
                 ship.setScale(1.0)
                 ship.isHidden = false
-                ship.isShieldActive = false
+                ship.shieldLevel = 0
                 ship.chargeLevel = 0.0
                 
                 // Reset scoring
@@ -2071,7 +2115,7 @@ public final class GameScene: SKScene {
         case .nameEntry:
             ship.isHidden = true
             ship.velocity = .zero
-            ship.isShieldActive = false
+            ship.shieldLevel = 0
             
             typedInitials = ""
             updateNameEntryInputLabel()
@@ -2082,7 +2126,7 @@ public final class GameScene: SKScene {
         case .gameOver:
             ship.isHidden = true
             ship.velocity = .zero
-            ship.isShieldActive = false
+            ship.shieldLevel = 0
             
             gameOverLabel.isHidden = false
             finalScoreLabel.text = "YOUR SCORE: \(score)"
@@ -2113,7 +2157,7 @@ public final class GameScene: SKScene {
         case .glossary:
             ship.isHidden = true
             ship.velocity = .zero
-            ship.isShieldActive = false
+            ship.shieldLevel = 0
             
             clearGameEntities()
             buildGlossary()
@@ -2125,7 +2169,7 @@ public final class GameScene: SKScene {
             // Eigene Highscore-Ansicht (iOS): Liste mittig, Zurück über das Touch-Overlay.
             ship.isHidden = true
             ship.velocity = .zero
-            ship.isShieldActive = false
+            ship.shieldLevel = 0
 
             clearGameEntities()
 
@@ -2151,6 +2195,8 @@ public final class GameScene: SKScene {
         instructionsLabel.isHidden = true
         glossaryPromptLabel.isHidden = true
         musicHintLabel.isHidden = true
+        // SFX-Stil-Anzeige bleibt auf iOS sichtbar (zwischen Level-Auswahl und unteren Buttons).
+        sfxModeLabel.position = CGPoint(x: 0, y: -70)
     }
 
     /// iOS-Breitformat: Highscore-Liste kompakt unter einem Titel oben anordnen (eigene
@@ -2227,6 +2273,13 @@ public final class GameScene: SKScene {
     private func updateMusicHintLabel() {
         let state = MusicPlayer.shared.isEnabled ? "ON" : "OFF"
         musicHintLabel.text = "PRESS M TO TOGGLE MUSIC ON/OFF  (\(state))"
+    }
+
+    /// Aktualisiert die Startbildschirm-Anzeige des SFX-Stils. Auf macOS mit Tasten-Hinweis,
+    /// auf iOS (kompakt) ohne (dort gibt es den „SFX"-Button).
+    private func updateSfxModeLabel() {
+        let mode = SoundManager.shared.useSampledSFX ? "SAMPLE" : "PROCEDURAL"
+        sfxModeLabel.text = isCompactLayout ? "SFX: \(mode)" : "SFX: \(mode)   (PRESS N)"
     }
     
     private func shouldSpawnImploding() -> Bool {
@@ -2378,7 +2431,7 @@ public final class GameScene: SKScene {
         startPromptLabel.isHidden = true
         self.addChild(startPromptLabel)
         
-        instructionsLabel.text = "W/▲: THRUST   A/D/◀/▶: ROTATE   SPACE: FIRE (HOLD TO CHARGE)   I: GLOSSARY"
+        instructionsLabel.text = "W/▲: THRUST   A/D/◀/▶: ROTATE   SPACE: FIRE (HOLD = AUTO)   I: GLOSSARY"
         instructionsLabel.fontSize = 14
         instructionsLabel.fontColor = .lightGray
         instructionsLabel.position = CGPoint(x: 0, y: -270)
@@ -2466,6 +2519,17 @@ public final class GameScene: SKScene {
         musicHintLabel.isHidden = true
         self.addChild(musicHintLabel)
         updateMusicHintLabel()
+
+        // SFX-Stil-Anzeige (Start Screen). Default-Position für macOS (unter dem Musik-Hinweis);
+        // iOS verschiebt sie in applyCompactStartScreenLayout an eine im Querformat sichtbare Stelle.
+        sfxModeLabel.fontSize = 14
+        sfxModeLabel.fontColor = .lightGray
+        sfxModeLabel.horizontalAlignmentMode = .center
+        sfxModeLabel.position = CGPoint(x: 0, y: -330)
+        sfxModeLabel.zPosition = 100
+        sfxModeLabel.isHidden = true
+        self.addChild(sfxModeLabel)
+        updateSfxModeLabel()
 
         // Level Cleared Overlay
         levelClearedLabel.fontSize = 40
@@ -3314,7 +3378,7 @@ public final class GameScene: SKScene {
         // und (wo sinnvoll) einem Tipp.
         let powerUpEntries: [(type: PowerUpType, title: String, color: SKColor, desc: String)] = [
             (.shield, "SHIELD [S]", SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0),
-             "Absorbs one fatal hit. Save it for tight spots."),
+             "Stacks up to 3 layers; each one absorbs a fatal hit. Stays until used."),
             (.triple, "TRIPLE LASER [W]", SKColor(red: 1.0, green: 0.2, blue: 0.0, alpha: 1.0),
              "Three-way spread shot. Great against swarms."),
             (.rapid, "RAPID FIRE [R]", SKColor(red: 1.0, green: 0.85, blue: 0.0, alpha: 1.0),
@@ -3328,7 +3392,7 @@ public final class GameScene: SKScene {
             (.rear, "REAR LASER [T]", SKColor(red: 0.4, green: 0.7, blue: 1.0, alpha: 1.0),
              "Adds a shot out your tail. Watch your back."),
             (.compress, "COMPRESS [C]", SKColor(red: 0.9, green: 0.9, blue: 0.95, alpha: 1.0),
-             "Shrinks you to a tiny, hard-to-hit target."),
+             "Shrinks you (and drones). Two stages – level 2 is a single pixel. Timed."),
             (.extraLife, "EXTRA LIFE [+]", SKColor(red: 1.0, green: 0.3, blue: 0.45, alpha: 1.0),
              "If killed, revives you centered, briefly invincible.")
         ]

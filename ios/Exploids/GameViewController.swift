@@ -56,6 +56,7 @@ final class GameViewController: UIViewController {
         // kompaktes Breitformat-Menü + Highscores in eigener Ansicht statt am Startbildschirm.
         s.isCompactLayout = true
         s.showsHighScoresOnStartScreen = false
+        s.autoFire = true   // Auto-Feuer standardmäßig an (kein Dauertippen, ideal fürs iPhone)
 
         // onQuit absichtlich NICHT setzen: iOS-Apps dürfen sich nicht selbst beenden (Apple HIG).
 

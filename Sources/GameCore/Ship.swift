@@ -35,15 +35,21 @@ public final class Ship: SKShapeNode {
     /// The emitter node for particle-based thruster fire.
     private var thrusterEmitter: SKEmitterNode?
     
-    // Shield Visual Elements
-    private let shieldNode = SKShapeNode()
-    
-    /// Activates/deactivates the protective energy shield.
-    public var isShieldActive: Bool = false {
+    // Shield Visual Elements – bis zu drei konzentrische Ringe, einer je Schild-Stufe.
+    private let shieldRings: [SKShapeNode] = [SKShapeNode(), SKShapeNode(), SKShapeNode()]
+
+    /// Schild-Stufe 0…3 = Anzahl der absorbierbaren tödlichen Treffer. Zeigt entsprechend viele Ringe.
+    public var shieldLevel: Int = 0 {
         didSet {
-            shieldNode.isHidden = !isShieldActive
+            let lvl = max(0, min(shieldRings.count, shieldLevel))
+            for (i, ring) in shieldRings.enumerated() {
+                ring.isHidden = (i >= lvl)
+            }
         }
     }
+
+    /// Convenience: mindestens eine Schild-Stufe aktiv?
+    public var isShieldActive: Bool { shieldLevel > 0 }
     
     // Charge Visual Elements
     private let chargeIndicatorNode = SKShapeNode()
@@ -130,14 +136,17 @@ public final class Ship: SKShapeNode {
         flameNode.isHidden = true
         self.addChild(flameNode)
         
-        // Setup Shield Node
-        let shieldPath = CGPath(ellipseIn: CGRect(x: -28, y: -28, width: 56, height: 56), transform: nil)
-        shieldNode.path = shieldPath
-        shieldNode.strokeColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0)
-        shieldNode.fillColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 0.08)
-        shieldNode.lineWidth = 1.5
-        shieldNode.isHidden = true
-        self.addChild(shieldNode)
+        // Setup Shield Nodes: drei konzentrische Ringe mit wachsendem Radius (innerster = Stufe 1).
+        let shieldRadii: [CGFloat] = [28, 35, 42]
+        for (i, ring) in shieldRings.enumerated() {
+            let r = shieldRadii[i]
+            ring.path = CGPath(ellipseIn: CGRect(x: -r, y: -r, width: r * 2, height: r * 2), transform: nil)
+            ring.strokeColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0 - CGFloat(i) * 0.22)
+            ring.fillColor = (i == 0) ? SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 0.08) : .clear
+            ring.lineWidth = 1.5
+            ring.isHidden = true
+            self.addChild(ring)
+        }
         
         // Setup Charge Indicator at the ship's nose (18, 0)
         let chargePath = CGPath(ellipseIn: CGRect(x: -6, y: -6, width: 12, height: 12), transform: nil)
@@ -229,11 +238,13 @@ public final class Ship: SKShapeNode {
             thrusterEmitter?.particleBirthRate = 0
         }
         
-        // Animate Shield Pulsing
+        // Animate Shield Pulsing (alle sichtbaren Ringe)
         if isShieldActive {
             let pulse = 1.0 + 0.05 * sin(CGFloat(ProcessInfo.processInfo.systemUptime) * 6.0)
-            shieldNode.xScale = pulse
-            shieldNode.yScale = pulse
+            for ring in shieldRings where !ring.isHidden {
+                ring.xScale = pulse
+                ring.yScale = pulse
+            }
         }
         
         // Ensure particle target is the scene so they trail behind naturally

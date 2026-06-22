@@ -1,0 +1,59 @@
+{
+  "note": "Generierte Retro-SFX (Stable Audio 3 / M5), kuratiert in Number One, als kleine AAC (.m4a). Mehrere Dateien pro Effekt -> der SoundManager spielt sie abwechselnd.",
+  "effects": [
+    {
+      "name": "laser",
+      "files": [
+        "laser_0.m4a"
+      ],
+      "prompt": "short punchy retro arcade laser zap (gewaehlt)"
+    },
+    {
+      "name": "explosion",
+      "files": [
+        "explosion_0.m4a",
+        "explosion_1.m4a"
+      ]
+    },
+    {
+      "name": "powerup",
+      "files": [
+        "powerup_0.m4a"
+      ]
+    },
+    {
+      "name": "bomb",
+      "files": [
+        "bomb_0.m4a",
+        "bomb_1.m4a"
+      ]
+    },
+    {
+      "name": "chargeshot",
+      "files": [
+        "chargeshot_0.m4a"
+      ]
+    },
+    {
+      "name": "ufo",
+      "files": [
+        "ufo_0.m4a",
+        "ufo_1.m4a",
+        "ufo_2.m4a"
+      ]
+    },
+    {
+      "name": "levelcomplete",
+      "files": [
+        "levelcomplete_0.m4a"
+      ]
+    },
+    {
+      "name": "implosion",
+      "files": [
+        "implosion_0.m4a",
+        "implosion_1.m4a"
+      ]
+    }
+  ]
+}

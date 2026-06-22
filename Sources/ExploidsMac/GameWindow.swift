@@ -35,6 +35,7 @@ public final class GameWindow: NSWindow {
         let scene = GameScene(size: contentRect.size)
         scene.scaleMode = .resizeFill
         scene.backgroundColor = .black
+        scene.autoFire = true   // Auto-Feuer standardmäßig an (Spieler müssen nicht selbst schießen)
         // Cmd+Q über die Scene an AppKit weiterreichen: GameCore ist plattformunabhängig und kennt
         // NSApplication nicht mehr; die macOS-Shell legt hier das Beenden-Verhalten fest.
         scene.onQuit = { NSApplication.shared.terminate(nil) }

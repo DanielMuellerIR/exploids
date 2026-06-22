@@ -19,6 +19,23 @@ public final class SoundManager: @unchecked Sendable {
     // SFX Mixer State
     private let sfxLock = NSLock()
     private var activeSounds: [ActiveSound] = []
+
+    // MARK: - Sample-basierte SFX (optionaler Modus, umschaltbar zur Laufzeit)
+
+    /// Umschalter: false = prozedurale Synth-Effekte (Default, bisheriges Verhalten),
+    /// true = abgespielte generierte Samples aus dem Bundle (SFX/). Pro Effekt können mehrere
+    /// Varianten vorliegen – die werden reihum abgespielt, damit es weniger eintönig klingt.
+    public var useSampledSFX: Bool = false
+
+    private let sampleLock = NSLock()
+    /// Vorgeladene Sample-Puffer je Effektname (z.B. "laser" -> [variante0, variante1]).
+    private var sampleBuffers: [String: [AVAudioPCMBuffer]] = [:]
+    /// Pool von Player-Knoten für überlappende Wiedergabe (Round-Robin).
+    private var samplePlayers: [AVAudioPlayerNode] = []
+    private var samplePlayerIndex = 0
+    /// Zähler je Effekt für das reihum-Abspielen der Varianten.
+    private var sampleVariantIndex: [String: Int] = [:]
+    private var samplesLoaded = false
     
     // Engine & Charging Hum State
     private let engineLock = NSLock()
@@ -332,12 +349,110 @@ public final class SoundManager: @unchecked Sendable {
         if !audioEngine.isRunning {
             start()
         }
-        
+
+        // Sample-Modus: erst versuchen, ein generiertes Sample abzuspielen. Klappt das nicht
+        // (kein Sample vorhanden), fällt es unten auf den prozeduralen Synth zurück.
+        if useSampledSFX {
+            loadSamplesIfNeeded()
+            if playSampled(name(for: type)) { return }
+        }
+
         sfxLock.lock()
         defer { self.sfxLock.unlock() }
-        
+
         guard activeSounds.count < 16 else { return }
         activeSounds.append(ActiveSound(type: type, sampleRate: sampleRate))
+    }
+
+    // MARK: - Sample-basierte SFX: Laden & Abspielen
+
+    /// Effektname (Dateipräfix im SFX-Bundle) zu einem Sound-Typ.
+    private func name(for type: ActiveSound.SoundType) -> String {
+        switch type {
+        case .laser:         return "laser"
+        case .explosion:     return "explosion"
+        case .powerUp:       return "powerup"
+        case .bomb:          return "bomb"
+        case .chargeShot:    return "chargeshot"
+        case .ufo:           return "ufo"
+        case .levelComplete: return "levelcomplete"
+        case .implosion:     return "implosion"
+        }
+    }
+
+    /// Lädt einmalig alle Samples aus dem Bundle (SFX/<name>_<n>.m4a) und legt den Player-Pool an.
+    /// Idempotent. Alle Puffer werden auf das kanonische Engine-Format (mono, sampleRate) konvertiert,
+    /// damit sie problemlos auf demselben Mixer laufen.
+    private func loadSamplesIfNeeded() {
+        sampleLock.lock()
+        defer { sampleLock.unlock() }
+        guard !samplesLoaded else { return }
+        samplesLoaded = true
+
+        // Stereo/sampleRate – passt zum Format der generierten .m4a-Dateien, daher ist beim Laden
+        // keine Format-Konvertierung nötig (Puffer werden direkt verwendet).
+        guard let canonical = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else { return }
+        let names = ["laser", "explosion", "powerup", "bomb", "chargeshot", "ufo", "levelcomplete", "implosion"]
+        for n in names {
+            var variants: [AVAudioPCMBuffer] = []
+            var idx = 0
+            while let url = Bundle.module.url(forResource: "\(n)_\(idx)", withExtension: "m4a", subdirectory: "SFX") {
+                if let buf = SoundManager.loadBuffer(url: url, expected: canonical) {
+                    variants.append(buf)
+                }
+                idx += 1
+            }
+            if !variants.isEmpty { sampleBuffers[n] = variants }
+        }
+
+        // Pool aus Player-Knoten für überlappende Wiedergabe (mehr als die meisten Spielszenen brauchen).
+        for _ in 0..<8 {
+            let node = AVAudioPlayerNode()
+            audioEngine.attach(node)
+            audioEngine.connect(node, to: audioEngine.mainMixerNode, format: canonical)
+            samplePlayers.append(node)
+        }
+    }
+
+    /// Spielt ein Sample des Effekts ab (reihum die nächste Variante, Round-Robin über den Player-Pool).
+    /// Gibt false zurück, wenn kein Sample vorliegt -> Aufrufer nutzt dann den prozeduralen Synth.
+    private func playSampled(_ effectName: String) -> Bool {
+        sampleLock.lock()
+        guard let variants = sampleBuffers[effectName], !variants.isEmpty, !samplePlayers.isEmpty else {
+            sampleLock.unlock()
+            return false
+        }
+        let vi = (sampleVariantIndex[effectName] ?? 0)
+        sampleVariantIndex[effectName] = vi + 1
+        let buffer = variants[vi % variants.count]
+        let node = samplePlayers[samplePlayerIndex % samplePlayers.count]
+        samplePlayerIndex += 1
+        sampleLock.unlock()
+
+        // .interrupts: belegt der Knoten gerade noch etwas, wird es ersetzt (bei 8 Knoten selten).
+        node.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
+        if !node.isPlaying { node.play() }
+        return true
+    }
+
+    /// Lädt eine Audiodatei in einen Puffer. Erwartet das Zielformat (Stereo/sampleRate) – die
+    /// generierten SFX liegen genau so vor, daher ist keine Konvertierung nötig. Weicht eine Datei
+    /// doch ab, wird sie übersprungen (statt mit falschem Format auf dem Mixer zu landen).
+    private static func loadBuffer(url: URL, expected format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        do {
+            let file = try AVAudioFile(forReading: url)
+            guard file.processingFormat == format else {
+                print("SoundManager: Sample-Format unerwartet (\(url.lastPathComponent)) – übersprungen")
+                return nil
+            }
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format,
+                                                frameCapacity: AVAudioFrameCount(file.length)) else { return nil }
+            try file.read(into: buffer)
+            return buffer
+        } catch {
+            print("SoundManager: Sample konnte nicht geladen werden (\(url.lastPathComponent)): \(error.localizedDescription)")
+            return nil
+        }
     }
 }
 
