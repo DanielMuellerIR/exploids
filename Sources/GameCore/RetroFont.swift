@@ -6,15 +6,16 @@ import Foundation
 /// systemweit installiert – daher muss er beim Start einmalig in den Prozess registriert werden.
 /// `@MainActor`, weil alle Aufrufer (Scene-Setup) ohnehin auf dem Main-Thread laufen.
 @MainActor
-enum RetroFont {
+public enum RetroFont {
 
-    /// PostScript-Name des gebündelten Pixel-Fonts (für `SKLabelNode.fontName`).
-    static let pixel = "PressStart2P-Regular"
+    /// PostScript-Name des gebündelten Pixel-Fonts (für `SKLabelNode.fontName` bzw. `UIFont(name:)`).
+    public static let pixel = "PressStart2P-Regular"
 
     private static var registered = false
 
     /// Registriert den Font einmalig im Prozess. Idempotent.
-    static func registerIfNeeded() {
+    /// `public`, damit auch der iOS-App-Target (Touch-Overlay) den Font sicher laden kann.
+    public static func registerIfNeeded() {
         guard !registered else { return }
         registered = true
 

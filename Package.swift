@@ -12,7 +12,10 @@ let package = Package(
     ],
     products: [
         // Produktname bleibt "exploids", damit build-app.sh die Binary unverändert findet.
-        .executable(name: "exploids", targets: ["ExploidsMac"])
+        .executable(name: "exploids", targets: ["ExploidsMac"]),
+        // GameCore zusätzlich als Library-Produkt: So kann das iOS-App-Target (Xcode)
+        // dieses Package als lokale Abhängigkeit einbinden und GameCore linken.
+        .library(name: "GameCore", targets: ["GameCore"])
     ],
     targets: [
         // Plattformunabhängige Spiel-Engine als Library – kann später auch von einem

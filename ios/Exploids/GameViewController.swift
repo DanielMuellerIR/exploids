@@ -52,6 +52,11 @@ final class GameViewController: UIViewController {
         s.scaleMode = .resizeFill
         s.backgroundColor = .black
 
+        // iOS-spezifische Layout-Konfiguration (macOS lässt die Defaults stehen → unverändert):
+        // kompaktes Breitformat-Menü + Highscores in eigener Ansicht statt am Startbildschirm.
+        s.isCompactLayout = true
+        s.showsHighScoresOnStartScreen = false
+
         // onQuit absichtlich NICHT setzen: iOS-Apps dürfen sich nicht selbst beenden (Apple HIG).
 
         skView.presentScene(s)
@@ -125,6 +130,7 @@ private func statesEqual(_ a: GameState, _ b: GameState) -> Bool {
     case (.gameOver,         .gameOver):          return true
     case (.quitConfirmation, .quitConfirmation): return true
     case (.glossary,         .glossary):         return true
+    case (.highScores,       .highScores):       return true
     default:                                     return false
     }
 }

@@ -57,5 +57,12 @@ targets:
         # iPhone (1) und iPad (2) unterstützen
         TARGETED_DEVICE_FAMILY: "1,2"
 
-        # Signierung abschalten für Simulator-Build-Check (kein Developer-Account nötig)
-        CODE_SIGNING_ALLOWED: NO
+        # Code Signing: automatisch über das Apple-Developer-Team. Die Team-ID ist dieselbe
+        # wie bei der macOS-Signierung (vgl. wrappers/sign-and-release.sh) und in Xcode unter
+        # "Signing & Capabilities" jederzeit überschreibbar. Damit lässt sich die App direkt
+        # auf ein angeschlossenes iPhone/iPad bauen (Gerätebuilds werden signiert).
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 9QSWKSR4NQ
+        # Reine Simulator-Builds (Headless-Check/CI) brauchen keine Signatur – nur dort
+        # abschalten; Gerätebuilds (SDK iphoneos) werden automatisch signiert.
+        CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]: NO

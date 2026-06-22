@@ -1,26 +1,26 @@
 import UIKit
+import CoreText
 import GameCore
 
 // MARK: - Modell-Typen
 
 /// Beschreibt, wie ein Touch-Button die GameScene-API aufruft.
 enum ButtonKind {
-    /// Taste bleibt gedrückt solange der Finger liegt (z.B. Schub, Drehen, Feuer).
+    /// Taste bleibt gedrückt, solange der Finger auf dem Button liegt (drehen, Schub, Feuer).
     case hold(keyCode: UInt16)
-    /// Einmaliger Tap: keyDown sofort gefolgt von keyUp (z.B. Start, Replay).
+    /// Einmaliger Tap: keyDown sofort gefolgt von keyUp (Start, Replay, ESC, …).
     case tap(keyCode: UInt16)
-    /// Zeichen-Eingabe: simulateTypeCharacter(_:) — für Initialen und Glossar-Taste.
+    /// Zeichen-Eingabe: simulateTypeCharacter(_:) – für Initialen, Glossar- und Highscore-Taste.
     case typeChar(String)
 }
 
-/// Ein einzelner virtueller Button im Touch-Overlay.
+/// Ein einzelner rechteckiger Button.
 struct TouchButton {
-    /// Eindeutige ID – wird als Wörterbuch-Schlüssel für aktive Touches verwendet.
+    /// Eindeutige ID – Schlüssel für berechnete Frames und aktive Hold-Touches.
     let id: Int
-    /// Position und Größe relativ zu den Bounds der TouchControlsView (0…1 Koordinaten).
-    /// In layoutSubviews/draw(_:) werden daraus absolute CGRects berechnet.
+    /// Position und Größe relativ zum sicheren Bereich (0…1). Wird in layoutSubviews zu absoluten Frames.
     let relativeRect: CGRect
-    /// Angezeigtes Kürzel auf dem Button.
+    /// Beschriftung auf dem Button.
     let label: String
     /// Verhalten beim Berühren.
     let kind: ButtonKind
@@ -28,12 +28,12 @@ struct TouchButton {
 
 // MARK: - TouchControlsView
 
-/// Transparente UIView-Subklasse, die zustandsabhängige virtuelle Buttons rendert
-/// und Multitouch auf die öffentliche GameScene-Eingabe-API mappt.
+/// Transparentes Overlay über dem SKView. Es zeigt rechteckige Buttons und mappt Touches
+/// (inkl. Multitouch) auf die öffentliche GameScene-Eingabe-API.
 ///
-/// Das Overlay sitzt direkt über dem SKView. Es empfängt alle Touches; der SKView
-/// darunter bekommt keine Touches (passthrough findet nicht statt – GameScene wird
-/// ausschließlich über die simulateKey*-Methoden gesteuert).
+/// Steuerung im Spiel (`.playing`): Drehen ist auf den LINKEN Daumen gelegt (◄ / ►),
+/// Schub und Feuer auf den RECHTEN (SCHUB / FEUER, Feuer halten = Charge-Shot). Dreh- und
+/// Schub-Eingabe sind so auf zwei Daumen getrennt – gleichzeitig drehen + schub + feuer geht.
 final class TouchControlsView: UIView {
 
     // MARK: - Öffentliche Eigenschaften
@@ -41,20 +41,31 @@ final class TouchControlsView: UIView {
     /// Schwache Referenz auf die GameScene – das Overlay kennt nur die öffentliche Bridge-API.
     weak var scene: GameScene?
 
-    // MARK: - Private Eigenschaften
+    // MARK: - Zustand
 
-    /// Aktuell angezeigte Button-Definitionen (abhängig vom GameState).
+    /// Aktueller Spielzustand – bestimmt das angezeigte Button-Set.
+    private var currentState: GameState = .startScreen
+
+    /// Buttons des aktuellen Zustands.
     private var buttons: [TouchButton] = []
-
-    /// Berechnete absolute Rects für jeden Button (aktualisiert in layoutSubviews).
+    /// Berechnete absolute Frames je Button-ID (aktualisiert in layoutSubviews).
     private var buttonFrames: [Int: CGRect] = [:]
-
-    /// Welcher Button ist gerade von welchem Touch berührt?
-    /// Key: UITouch (Objekt-Identität), Value: Button-ID.
+    /// Welcher Finger hält gerade welchen Hold-Button? (Touch-Identität → Button-ID)
     private var activeHoldTouches: [UITouch: Int] = [:]
+    /// Wie viele Finger halten gerade welchen keyCode? Referenzzählung, damit zwei Buttons mit
+    /// demselben keyCode (z.B. der redundante Schub links + rechts) sich nicht gegenseitig
+    /// aufheben: keyDown erst beim ersten Finger, keyUp erst, wenn der letzte loslässt.
+    private var holdCounts: [UInt16: Int] = [:]
 
-    /// Neon-Cyan-Farbe für alle Button-Outlines und Beschriftungen.
-    private let neonColor = UIColor(red: 0.0, green: 1.0, blue: 0.9, alpha: 0.75)
+    // MARK: - Schrift
+
+    /// Liefert den gebündelten Retro-Pixel-Font (wie der EXPLOIDS-Titel) in der gewünschten Größe.
+    /// Fällt auf eine Monospace-Systemschrift zurück, falls der Font (noch) nicht geladen ist.
+    private func pixelFont(ofSize size: CGFloat) -> UIFont {
+        RetroFont.registerIfNeeded()   // idempotent – stellt sicher, dass der Font im Prozess ist
+        return UIFont(name: RetroFont.pixel, size: size)
+            ?? .monospacedSystemFont(ofSize: size, weight: .medium)
+    }
 
     // MARK: - Init
 
@@ -62,40 +73,47 @@ final class TouchControlsView: UIView {
         super.init(frame: frame)
         isOpaque = false
         backgroundColor = .clear
+        isMultipleTouchEnabled = true
     }
 
     required init?(coder: NSCoder) {
         fatalError("Nur programmatisch initialisieren")
     }
 
-    // MARK: - Zustand wechseln
+    // MARK: - Zustandswechsel
 
-    /// Wird vom GameViewController bei jedem GameState-Wechsel aufgerufen.
-    /// Baut das Button-Set für den neuen Zustand auf und löst Neuzeichnen aus.
+    /// Vom GameViewController bei jedem GameState-Wechsel aufgerufen.
     func update(for state: GameState) {
-        // Alle aktiven Hold-Touches sauber beenden, bevor wir die Buttons austauschen.
-        releaseAllHoldTouches()
-
+        // Beim Verlassen eines Zustands alle gehaltenen Tasten lösen, sonst bliebe z.B. „Schub"
+        // hängen, wenn man während des Drückens stirbt.
+        releaseAllHolds()
+        currentState = state
         buttons = makeButtons(for: state)
-        buttonFrames = [:]      // werden in layoutSubviews neu berechnet
+        buttonFrames = [:]          // wird in layoutSubviews neu berechnet
         setNeedsLayout()
         setNeedsDisplay()
+    }
+
+    /// Lässt alle aktuell gehaltenen Hold-Tasten los.
+    private func releaseAllHolds() {
+        for touch in Array(activeHoldTouches.keys) { releaseTouchHold(touch) }
+        activeHoldTouches.removeAll()
+        holdCounts.removeAll()
     }
 
     // MARK: - Layout
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Sicherer Bereich (Notch, Home-Indikator) berücksichtigen.
+        // Sicheren Bereich (Notch, Home-Indikator) berücksichtigen.
         let safe = bounds.inset(by: safeAreaInsets)
-        // Absolute Frames aus relativen Rects berechnen.
         buttonFrames = [:]
         for btn in buttons {
             let r = btn.relativeRect
             buttonFrames[btn.id] = CGRect(
                 x: safe.minX + r.minX * safe.width,
                 y: safe.minY + r.minY * safe.height,
-                width: r.width  * safe.width,
+                width:  r.width  * safe.width,
                 height: r.height * safe.height
             )
         }
@@ -105,242 +123,314 @@ final class TouchControlsView: UIView {
 
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-
-        // Hintergrund: vollständig transparent (SKView scheint durch)
         ctx.clear(rect)
-
         for btn in buttons {
             guard let frame = buttonFrames[btn.id] else { continue }
             drawButton(ctx: ctx, frame: frame, label: btn.label)
         }
     }
 
-    /// Zeichnet einen einzelnen Button mit Neon-Outline und zentriertem Text.
+    /// Zeichnet einen rechteckigen Button: dezente Füllung, dünner Rand, graue Pixel-Font-
+    /// Beschriftung. Im Spiel (.playing) liegen die Buttons über dem Spielfeld und werden daher
+    /// deutlich transparenter gezeichnet als in den Menüs. Dreh-Buttons (◄/►) bekommen statt
+    /// eines Schriftzeichens einen großen Kontur-Pfeil (nur Umriss, innen leer).
     private func drawButton(ctx: CGContext, frame: CGRect, label: String) {
+        let inGame = (currentState == .playing)
+        let borderAlpha: CGFloat = inGame ? 0.16 : 0.5
+        let fillAlpha:   CGFloat = inGame ? 0.02 : 0.05
+        let textAlpha:   CGFloat = inGame ? 0.42 : 0.95
+
         let inset = frame.insetBy(dx: 3, dy: 3)
+        let radius = min(inset.height, inset.width) * 0.22
+        let path = UIBezierPath(roundedRect: inset, cornerRadius: radius)
+        ctx.setFillColor(UIColor(white: 1.0, alpha: fillAlpha).cgColor)
+        ctx.addPath(path.cgPath); ctx.fillPath()
+        ctx.setStrokeColor(UIColor(white: 0.6, alpha: borderAlpha).cgColor)
+        ctx.setLineWidth(1.0)
+        ctx.addPath(path.cgPath); ctx.strokePath()
 
-        // Halbtransparenter Füllhintergrund
-        ctx.setFillColor(UIColor(red: 0, green: 0.9, blue: 0.85, alpha: 0.08).cgColor)
-        ctx.fillEllipse(in: inset)
+        // Symbol-Buttons als Vektor-Form zeichnen (kein Font): Dreh-Pfeile, Schließen-X,
+        // Scroll-Dreiecke. So hängt keiner dieser Buttons an einer Fremdschrift.
+        let symbolAlpha = textAlpha + 0.15
+        switch label {
+        case "◄": drawArrowOutline(ctx: ctx, frame: frame, pointingLeft: true,  alpha: symbolAlpha); return
+        case "►": drawArrowOutline(ctx: ctx, frame: frame, pointingLeft: false, alpha: symbolAlpha); return
+        case "✕": drawCloseX(ctx: ctx, frame: frame, alpha: symbolAlpha); return
+        case "▲": drawTriangle(ctx: ctx, frame: frame, up: true,  alpha: symbolAlpha); return
+        case "▼": drawTriangle(ctx: ctx, frame: frame, up: false, alpha: symbolAlpha); return
+        default: break
+        }
 
-        // Neon-Outline
-        ctx.setStrokeColor(neonColor.cgColor)
-        ctx.setLineWidth(1.5)
-        ctx.strokeEllipse(in: inset)
-
-        // Beschriftung zentriert
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.monospacedSystemFont(ofSize: min(frame.height * 0.28, 14), weight: .medium),
-            .foregroundColor: neonColor
-        ]
+        // Text-Label im Retro-Pixel-Font (wie der Titel). Systemschrift nur als Notnagel, falls
+        // der Pixel-Font ein Zeichen nicht enthält – verhindert leere Kästchen.
         let str = label as NSString
-        let textSize = str.size(withAttributes: attrs)
-        let textRect = CGRect(
-            x: frame.midX - textSize.width / 2,
-            y: frame.midY - textSize.height / 2,
-            width: textSize.width,
-            height: textSize.height
-        )
-        str.draw(in: textRect, withAttributes: attrs)
+        var fontSize = min(inset.height * 0.42, 16)
+        var font = fontForLabel(label, size: fontSize)
+        while fontSize > 6 && str.size(withAttributes: [.font: font]).width > inset.width - 8 {
+            fontSize -= 1
+            font = fontForLabel(label, size: fontSize)
+        }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: UIColor(white: 0.72, alpha: textAlpha)
+        ]
+        let ts = str.size(withAttributes: attrs)
+        str.draw(in: CGRect(x: frame.midX - ts.width / 2, y: frame.midY - ts.height / 2,
+                            width: ts.width, height: ts.height), withAttributes: attrs)
+    }
+
+    /// Wählt für ein Text-Label den Retro-Pixel-Font – aber nur, wenn dieser ALLE Zeichen
+    /// darstellen kann (z.B. „ZURÜCK" mit Ü). Sonst Systemschrift, damit keine leeren Kästchen
+    /// entstehen.
+    private func fontForLabel(_ label: String, size: CGFloat) -> UIFont {
+        let pixel = pixelFont(ofSize: size)
+        let ctFont = CTFontCreateWithName(pixel.fontName as CFString, size, nil)
+        let utf16 = Array(label.utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: utf16.count)
+        let hasAllGlyphs = CTFontGetGlyphsForCharacters(ctFont, utf16, &glyphs, utf16.count)
+        return hasAllGlyphs ? pixel : .monospacedSystemFont(ofSize: size, weight: .medium)
+    }
+
+    /// Zeichnet ein Schließen-„X" als zwei gekreuzte Linien (für die Zurück-/Schließen-Buttons).
+    private func drawCloseX(ctx: CGContext, frame: CGRect, alpha: CGFloat) {
+        let s = min(frame.width, frame.height) * 0.22
+        let cx = frame.midX, cy = frame.midY
+        ctx.setStrokeColor(UIColor(white: 0.82, alpha: alpha).cgColor)
+        ctx.setLineWidth(2.5)
+        ctx.setLineCap(.round)
+        ctx.move(to: CGPoint(x: cx - s, y: cy - s)); ctx.addLine(to: CGPoint(x: cx + s, y: cy + s))
+        ctx.move(to: CGPoint(x: cx + s, y: cy - s)); ctx.addLine(to: CGPoint(x: cx - s, y: cy + s))
+        ctx.strokePath()
+    }
+
+    /// Zeichnet ein Kontur-Dreieck nach oben (▲) bzw. unten (▼) – für die Scroll-Buttons.
+    private func drawTriangle(ctx: CGContext, frame: CGRect, up: Bool, alpha: CGFloat) {
+        let s = min(frame.width, frame.height) * 0.26
+        let cx = frame.midX, cy = frame.midY
+        ctx.setStrokeColor(UIColor(white: 0.82, alpha: alpha).cgColor)
+        ctx.setLineWidth(2.5)
+        ctx.setLineJoin(.round)
+        if up {
+            ctx.move(to: CGPoint(x: cx, y: cy - s))
+            ctx.addLine(to: CGPoint(x: cx + s, y: cy + s))
+            ctx.addLine(to: CGPoint(x: cx - s, y: cy + s))
+        } else {
+            ctx.move(to: CGPoint(x: cx, y: cy + s))
+            ctx.addLine(to: CGPoint(x: cx + s, y: cy - s))
+            ctx.addLine(to: CGPoint(x: cx - s, y: cy - s))
+        }
+        ctx.closePath()
+        ctx.strokePath()
+    }
+
+    /// Zeichnet einen großen, innen leeren Kontur-Pfeil (Dreieck) nach links bzw. rechts.
+    private func drawArrowOutline(ctx: CGContext, frame: CGRect, pointingLeft: Bool, alpha: CGFloat) {
+        let s = min(frame.width, frame.height) * 0.30   // halbe Pfeilgröße
+        let cx = frame.midX, cy = frame.midY
+        ctx.setStrokeColor(UIColor(white: 0.82, alpha: alpha).cgColor)
+        ctx.setLineWidth(2.5)
+        ctx.setLineJoin(.round)
+        if pointingLeft {
+            ctx.move(to: CGPoint(x: cx - s, y: cy))
+            ctx.addLine(to: CGPoint(x: cx + s, y: cy - s))
+            ctx.addLine(to: CGPoint(x: cx + s, y: cy + s))
+        } else {
+            ctx.move(to: CGPoint(x: cx + s, y: cy))
+            ctx.addLine(to: CGPoint(x: cx - s, y: cy - s))
+            ctx.addLine(to: CGPoint(x: cx - s, y: cy + s))
+        }
+        ctx.closePath()
+        ctx.strokePath()
     }
 
     // MARK: - Touch-Handling
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            let pt = touch.location(in: self)
-            guard let btn = hitButton(at: pt) else { continue }
-
-            switch btn.kind {
-            case .hold(let kc):
-                // Taste als gedrückt markieren und merken, welcher Touch sie hält.
-                scene?.simulateKeyDown(keyCode: kc)
-                activeHoldTouches[touch] = btn.id
-
-            case .tap(let kc):
-                // Einmaliger Tap: sofort drücken und loslassen.
-                scene?.simulateKeyDown(keyCode: kc)
-                scene?.simulateKeyUp(keyCode: kc)
-
-            case .typeChar(let ch):
-                // Zeichen an die Initialen-/Glossar-Eingabe übergeben.
-                scene?.simulateTypeCharacter(ch)
-            }
+            guard let btn = hitButton(at: touch.location(in: self)) else { continue }
+            press(btn, with: touch)
         }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // Wenn ein Finger von einem Hold-Button auf einen anderen gleitet:
-        // alten keyUp auslösen, neuen keyDown starten – verhindert hängende Tasten.
+        // Robustheit gegen „Finger rutscht vom Button": einen gehaltenen Button loslassen, wenn
+        // der Finger ihn verlässt, und ggf. den neu berührten Hold-Button übernehmen.
         for touch in touches {
-            let pt = touch.location(in: self)
-            let newBtn = hitButton(at: pt)
+            guard let heldId = activeHoldTouches[touch] else { continue }
+            let nowBtn = hitButton(at: touch.location(in: self))
+            if nowBtn?.id == heldId { continue }   // noch auf demselben Button
 
-            if let oldId = activeHoldTouches[touch] {
-                let oldBtn = buttons.first(where: { $0.id == oldId })
-                let oldKey: UInt16?
-                if case .hold(let kc) = oldBtn?.kind { oldKey = kc } else { oldKey = nil }
-
-                if let newBtn, case .hold(let newKc) = newBtn.kind, newBtn.id != oldId {
-                    // Finger gleitet auf neuen Hold-Button
-                    if let ok = oldKey { scene?.simulateKeyUp(keyCode: ok) }
-                    scene?.simulateKeyDown(keyCode: newKc)
-                    activeHoldTouches[touch] = newBtn.id
-                } else if newBtn == nil {
-                    // Finger hat den Button verlassen, ohne einen neuen zu betreten
-                    if let ok = oldKey { scene?.simulateKeyUp(keyCode: ok) }
-                    activeHoldTouches.removeValue(forKey: touch)
-                }
+            releaseTouchHold(touch)
+            if let nb = nowBtn, case .hold(let kc) = nb.kind {
+                activeHoldTouches[touch] = nb.id
+                beginHold(kc)
             }
         }
     }
 
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        releaseTouches(touches)
-    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { endTouches(touches) }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { endTouches(touches) }
 
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        releaseTouches(touches)
+    private func endTouches(_ touches: Set<UITouch>) {
+        for touch in touches { releaseTouchHold(touch) }
     }
 
     // MARK: - Hilfsfunktionen
 
-    /// Lässt für eine Menge beendeter Touches alle Hold-Tasten los.
-    private func releaseTouches(_ touches: Set<UITouch>) {
-        for touch in touches {
-            guard let id = activeHoldTouches.removeValue(forKey: touch) else { continue }
-            guard let btn = buttons.first(where: { $0.id == id }) else { continue }
-            if case .hold(let kc) = btn.kind {
-                scene?.simulateKeyUp(keyCode: kc)
-            }
+    /// Verarbeitet das Antippen eines Buttons je nach Art (hold / tap / typeChar).
+    private func press(_ btn: TouchButton, with touch: UITouch) {
+        switch btn.kind {
+        case .hold(let kc):
+            activeHoldTouches[touch] = btn.id
+            beginHold(kc)
+        case .tap(let kc):
+            scene?.simulateKeyDown(keyCode: kc)
+            scene?.simulateKeyUp(keyCode: kc)
+        case .typeChar(let ch):
+            scene?.simulateTypeCharacter(ch)
         }
     }
 
-    /// Lässt alle aktuell gedrückten Hold-Tasten los (beim Zustandswechsel).
-    private func releaseAllHoldTouches() {
-        for (_, id) in activeHoldTouches {
-            guard let btn = buttons.first(where: { $0.id == id }) else { continue }
-            if case .hold(let kc) = btn.kind {
-                scene?.simulateKeyUp(keyCode: kc)
-            }
-        }
-        activeHoldTouches = [:]
+    /// Beginnt das Halten eines keyCodes (referenzgezählt → keyDown nur beim ersten Finger).
+    private func beginHold(_ kc: UInt16) {
+        holdCounts[kc, default: 0] += 1
+        if holdCounts[kc] == 1 { scene?.simulateKeyDown(keyCode: kc) }
     }
 
-    /// Treffertest: gibt den ersten Button zurück, dessen absoluter Frame den Punkt enthält.
+    /// Beendet das Halten eines keyCodes (keyUp erst, wenn der letzte Finger loslässt).
+    private func endHold(_ kc: UInt16) {
+        guard let n = holdCounts[kc] else { return }
+        if n <= 1 {
+            holdCounts[kc] = nil
+            scene?.simulateKeyUp(keyCode: kc)
+        } else {
+            holdCounts[kc] = n - 1
+        }
+    }
+
+    /// Löst den von diesem Finger gehaltenen Button (falls vorhanden) referenzgezählt.
+    private func releaseTouchHold(_ touch: UITouch) {
+        guard let id = activeHoldTouches.removeValue(forKey: touch) else { return }
+        if let b = buttons.first(where: { $0.id == id }), case .hold(let kc) = b.kind {
+            endHold(kc)
+        }
+    }
+
+    /// Treffertest: erster Button, dessen absoluter Frame den Punkt enthält.
     private func hitButton(at point: CGPoint) -> TouchButton? {
         for btn in buttons {
-            guard let frame = buttonFrames[btn.id] else { continue }
-            if frame.contains(point) { return btn }
+            if let frame = buttonFrames[btn.id], frame.contains(point) { return btn }
         }
         return nil
     }
 
     // MARK: - Button-Definitionen je GameState
 
-    /// Erzeugt die passende Button-Liste für einen GameState.
-    /// Alle Rects sind relativ zum sicheren Bereich (0…1 normalisiert).
+    /// Erzeugt die Button-Liste für einen GameState. Rects sind 0…1, relativ zum sicheren Bereich.
     private func makeButtons(for state: GameState) -> [TouchButton] {
         switch state {
 
-        // ── Spielfeld ──────────────────────────────────────────────────────────────
+        // Im Spiel: Drehen links (◄ ► unten), Schub redundant links DARÜBER. Rechts Schub +
+        // Feuer ÜBEREINANDER. So lässt sich Schub mit beiden Daumen geben; kleiner ESC oben Mitte.
+        // Schub (126) liegt doppelt vor (links + rechts) – die Referenzzählung verhindert, dass
+        // das Loslassen des einen den anderen aufhebt.
         case .playing:
-            // Links unten: Dreh-Cluster (◄ und ►)
-            // Rechts unten: SCHUB (W=13, hold) und FEUER (Space=49, hold)
-            // Oben rechts: ESC (53, tap) – klein
             return [
-                TouchButton(id: 0, relativeRect: CGRect(x: 0.02, y: 0.55, width: 0.14, height: 0.35),
-                            label: "◄", kind: .hold(keyCode: 123)),   // Links drehen (A=0 wäre auch möglich, 123 = Left-Arrow)
-                TouchButton(id: 1, relativeRect: CGRect(x: 0.17, y: 0.55, width: 0.14, height: 0.35),
-                            label: "►", kind: .hold(keyCode: 124)),   // Rechts drehen
-                TouchButton(id: 2, relativeRect: CGRect(x: 0.70, y: 0.45, width: 0.14, height: 0.45),
-                            label: "SCHUB", kind: .hold(keyCode: 13)), // W = Schub halten
-                TouchButton(id: 3, relativeRect: CGRect(x: 0.86, y: 0.45, width: 0.14, height: 0.45),
-                            label: "FEUER", kind: .hold(keyCode: 49)), // Space = Feuer / Charge-Shot halten
-                TouchButton(id: 4, relativeRect: CGRect(x: 0.88, y: 0.04, width: 0.10, height: 0.22),
-                            label: "ESC", kind: .tap(keyCode: 53)),    // Quit-Bestätigung
+                // Links: redundanter Schub über den Dreh-Buttons
+                TouchButton(id: 6, relativeRect: CGRect(x: 0.02, y: 0.40, width: 0.31, height: 0.16),
+                            label: "SCHUB", kind: .hold(keyCode: 126)),
+                // Links unten: drehen (große Kontur-Pfeile)
+                TouchButton(id: 1, relativeRect: CGRect(x: 0.02, y: 0.59, width: 0.15, height: 0.36),
+                            label: "◄", kind: .hold(keyCode: 123)),   // gegen den Uhrzeigersinn
+                TouchButton(id: 2, relativeRect: CGRect(x: 0.18, y: 0.59, width: 0.15, height: 0.36),
+                            label: "►", kind: .hold(keyCode: 124)),   // im Uhrzeigersinn
+                // Rechts: Schub oben, Feuer unten (übereinander)
+                TouchButton(id: 3, relativeRect: CGRect(x: 0.83, y: 0.40, width: 0.15, height: 0.27),
+                            label: "SCHUB", kind: .hold(keyCode: 126)),
+                TouchButton(id: 4, relativeRect: CGRect(x: 0.83, y: 0.69, width: 0.15, height: 0.26),
+                            label: "FEUER", kind: .hold(keyCode: 49)),  // halten = Charge-Shot
+                // Oben Mitte: ESC (Quit-Bestätigung)
+                TouchButton(id: 5, relativeRect: CGRect(x: 0.45, y: 0.0, width: 0.10, height: 0.10),
+                            label: "ESC", kind: .tap(keyCode: 53)),
             ]
 
-        // ── Startbildschirm ────────────────────────────────────────────────────────
         case .startScreen:
-            // Level − / Level +, Modus umschalten, START (groß), INFO (kleiner Tap)
             return [
-                TouchButton(id: 10, relativeRect: CGRect(x: 0.02, y: 0.10, width: 0.12, height: 0.35),
-                            label: "LVL−", kind: .tap(keyCode: 123)),  // Left = Level runter
-                TouchButton(id: 11, relativeRect: CGRect(x: 0.02, y: 0.55, width: 0.12, height: 0.35),
-                            label: "LVL+", kind: .tap(keyCode: 124)),  // Right = Level rauf
-                TouchButton(id: 12, relativeRect: CGRect(x: 0.16, y: 0.30, width: 0.14, height: 0.40),
-                            label: "MODUS", kind: .tap(keyCode: 126)), // Up = Modus wechseln
-                TouchButton(id: 13, relativeRect: CGRect(x: 0.38, y: 0.25, width: 0.24, height: 0.50),
-                            label: "START", kind: .tap(keyCode: 36)),  // Enter = Starten
-                TouchButton(id: 14, relativeRect: CGRect(x: 0.86, y: 0.04, width: 0.12, height: 0.25),
-                            label: "INFO", kind: .typeChar("i")),       // Glossar öffnen
+                // Level −/+ flankieren die zentrale „STARTING LEVEL"-Anzeige (Bildmitte).
+                TouchButton(id: 10, relativeRect: CGRect(x: 0.19, y: 0.49, width: 0.13, height: 0.15),
+                            label: "LVL-", kind: .tap(keyCode: 123)),
+                TouchButton(id: 11, relativeRect: CGRect(x: 0.68, y: 0.49, width: 0.13, height: 0.15),
+                            label: "LVL+", kind: .tap(keyCode: 124)),
+                // Obere Ecke rechts: Highscore-Ansicht
+                TouchButton(id: 15, relativeRect: CGRect(x: 0.84, y: 0.06, width: 0.14, height: 0.16),
+                            label: "HISCORE", kind: .typeChar("h")),
+                // Untere Reihe: Modus links (bleibt), START groß in der Mitte, Glossar (INFO) rechts
+                TouchButton(id: 12, relativeRect: CGRect(x: 0.02, y: 0.78, width: 0.17, height: 0.17),
+                            label: "MODUS", kind: .tap(keyCode: 126)),
+                TouchButton(id: 13, relativeRect: CGRect(x: 0.40, y: 0.76, width: 0.20, height: 0.19),
+                            label: "START", kind: .tap(keyCode: 36)),
+                TouchButton(id: 14, relativeRect: CGRect(x: 0.85, y: 0.78, width: 0.13, height: 0.17),
+                            label: "INFO", kind: .typeChar("i")),
             ]
 
-        // ── Initialen-Eingabe ──────────────────────────────────────────────────────
         case .nameEntry:
             // Buchstaben-/Zahlen-Grid (A–Z, 0–9), DEL und OK.
-            // Landscape: 9 Spalten × 4 Reihen; Buchstaben A–Z (26) + Ziffern 0–9 (10) = 36 Felder.
             var result: [TouchButton] = []
             let chars: [String] = (65...90).map { String(UnicodeScalar($0)!) }   // A–Z
                                  + (0...9).map { String($0) }                      // 0–9
             let cols = 9
             let cellW = 0.78 / CGFloat(cols)
-            let cellH = 0.42 / 4.0  // 4 Reihen
+            let cellH = 0.42 / 4.0      // 4 Reihen
             for (idx, ch) in chars.enumerated() {
                 let col = idx % cols
                 let row = idx / cols
-                let x = 0.02 + CGFloat(col) * cellW
-                let y = 0.10 + CGFloat(row) * cellH
                 result.append(TouchButton(
                     id: 20 + idx,
-                    relativeRect: CGRect(x: x, y: y, width: cellW * 0.90, height: cellH * 0.85),
+                    relativeRect: CGRect(x: 0.02 + CGFloat(col) * cellW,
+                                         y: 0.10 + CGFloat(row) * cellH,
+                                         width:  cellW * 0.90,
+                                         height: cellH * 0.82),
                     label: ch,
-                    kind: .typeChar(ch)
-                ))
+                    kind: .typeChar(ch)))
             }
-            // DEL (Backspace) und OK (Enter)
-            result.append(TouchButton(id: 90,
-                relativeRect: CGRect(x: 0.84, y: 0.55, width: 0.14, height: 0.35),
-                label: "DEL", kind: .tap(keyCode: 51)))
-            result.append(TouchButton(id: 91,
-                relativeRect: CGRect(x: 0.84, y: 0.10, width: 0.14, height: 0.35),
-                label: "OK", kind: .tap(keyCode: 36)))
+            result.append(TouchButton(id: 90, relativeRect: CGRect(x: 0.84, y: 0.55, width: 0.14, height: 0.30),
+                                      label: "DEL", kind: .tap(keyCode: 51)))
+            result.append(TouchButton(id: 91, relativeRect: CGRect(x: 0.84, y: 0.12, width: 0.14, height: 0.30),
+                                      label: "OK", kind: .tap(keyCode: 36)))
             return result
 
-        // ── Game Over ─────────────────────────────────────────────────────────────
         case .gameOver:
             return [
-                TouchButton(id: 100, relativeRect: CGRect(x: 0.30, y: 0.25, width: 0.20, height: 0.50),
-                            label: "REPLAY", kind: .tap(keyCode: 49)), // Space = Replay
-                TouchButton(id: 101, relativeRect: CGRect(x: 0.55, y: 0.25, width: 0.18, height: 0.50),
-                            label: "ZURÜCK", kind: .tap(keyCode: 53)), // Esc = zurück zum Start
+                TouchButton(id: 100, relativeRect: CGRect(x: 0.28, y: 0.80, width: 0.20, height: 0.16),
+                            label: "REPLAY", kind: .tap(keyCode: 49)),
+                TouchButton(id: 101, relativeRect: CGRect(x: 0.52, y: 0.80, width: 0.20, height: 0.16),
+                            label: "ZURÜCK", kind: .tap(keyCode: 53)),
             ]
 
-        // ── Quit-Bestätigung ───────────────────────────────────────────────────────
-        // Tasten aus handleKeyDown case .quitConfirmation:
-        //   Esc(53) = resume (weiterspielen), "y" = startScreen (bestätigen+beenden)
+        // Esc(53) = weiterspielen, „y" = beenden (zur Startseite).
         case .quitConfirmation:
             return [
-                TouchButton(id: 110, relativeRect: CGRect(x: 0.28, y: 0.25, width: 0.20, height: 0.50),
-                            label: "WEITER", kind: .tap(keyCode: 53)),   // Esc = resume
-                TouchButton(id: 111, relativeRect: CGRect(x: 0.54, y: 0.25, width: 0.20, height: 0.50),
-                            label: "BEENDEN", kind: .typeChar("y")),      // "y" = zur Startseite
+                TouchButton(id: 110, relativeRect: CGRect(x: 0.28, y: 0.62, width: 0.20, height: 0.20),
+                            label: "WEITER", kind: .tap(keyCode: 53)),
+                TouchButton(id: 111, relativeRect: CGRect(x: 0.52, y: 0.62, width: 0.20, height: 0.20),
+                            label: "BEENDEN", kind: .typeChar("y")),
             ]
 
-        // ── Glossar ───────────────────────────────────────────────────────────────
-        // Tasten aus handleKeyDown case .glossary:
-        //   Esc(53) oder "i" = zurück zum Titel
-        //   Up(126)/W(13) = nach oben scrollen
-        //   Down(125)/S(1) = nach unten scrollen
+        // Esc(53) = zurück, Up(126)/Down(125) = scrollen.
         case .glossary:
             return [
-                TouchButton(id: 120, relativeRect: CGRect(x: 0.88, y: 0.04, width: 0.10, height: 0.22),
-                            label: "✕", kind: .tap(keyCode: 53)),         // Esc = zurück
-                TouchButton(id: 121, relativeRect: CGRect(x: 0.88, y: 0.30, width: 0.10, height: 0.28),
-                            label: "▲", kind: .tap(keyCode: 126)),        // Up = nach oben scrollen
-                TouchButton(id: 122, relativeRect: CGRect(x: 0.88, y: 0.62, width: 0.10, height: 0.28),
-                            label: "▼", kind: .tap(keyCode: 125)),        // Down = nach unten scrollen
+                TouchButton(id: 120, relativeRect: CGRect(x: 0.88, y: 0.04, width: 0.10, height: 0.18),
+                            label: "✕", kind: .tap(keyCode: 53)),
+                TouchButton(id: 121, relativeRect: CGRect(x: 0.88, y: 0.30, width: 0.10, height: 0.24),
+                            label: "▲", kind: .tap(keyCode: 126)),
+                TouchButton(id: 122, relativeRect: CGRect(x: 0.88, y: 0.62, width: 0.10, height: 0.24),
+                            label: "▼", kind: .tap(keyCode: 125)),
+            ]
+
+        // Eigene Highscore-Ansicht: nur ein Zurück-Knopf oben rechts.
+        case .highScores:
+            return [
+                TouchButton(id: 130, relativeRect: CGRect(x: 0.86, y: 0.04, width: 0.11, height: 0.16),
+                            label: "✕", kind: .tap(keyCode: 53)),
             ]
         }
     }

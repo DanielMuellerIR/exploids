@@ -27,6 +27,9 @@ public enum GameState: Sendable {
     case gameOver
     case quitConfirmation
     case glossary
+    /// Eigene Highscore-Ansicht (mit Zurück). Wird nur auf iOS angesteuert, wenn die
+    /// Highscore-Liste vom Startbildschirm in eine separate Ansicht ausgelagert ist.
+    case highScores
 }
 
 /// Auswählbarer Spielmodus.
@@ -144,7 +147,19 @@ public final class GameScene: SKScene {
     
     /// Persistent high scores.
     public private(set) var highScores: [HighScore] = []
-    
+
+    // MARK: - Plattform-Layout-Konfiguration (vom Host gesetzt)
+    // Defaults erhalten das bisherige macOS-Verhalten 1:1. Der iOS-Host schaltet sie um.
+
+    /// true = kompaktes, touch-orientiertes Menü-Layout fürs iPhone-Breitformat
+    /// (Titel sichtbar positioniert, keyboard-zentrierte Hinweise ausgeblendet).
+    /// false (Default) = unverändertes 4:3-Layout (macOS).
+    public var isCompactLayout: Bool = false
+
+    /// true (Default) = Highscore-Liste erscheint am Startbildschirm (macOS).
+    /// false = Liste ist ausgelagert in die eigene `.highScores`-Ansicht (iOS).
+    public var showsHighScoresOnStartScreen: Bool = true
+
     /// Temporary storage for initials entry.
     private var typedInitials: String = ""
     
@@ -446,8 +461,13 @@ public final class GameScene: SKScene {
             } else if keyCode == 126 || keyCode == 125 { // Up or Down arrow -> toggle game mode
                 selectedMode = (selectedMode == .ancientAsteroids) ? .madMeteoroids : .ancientAsteroids
                 updateModeSelectionLabel()
-            } else if let characters = characters?.lowercased(), characters == "i" {
-                transitionTo(.glossary)
+            } else if let characters = characters?.lowercased() {
+                if characters == "i" {
+                    transitionTo(.glossary)
+                } else if characters == "h", !showsHighScoresOnStartScreen {
+                    // Nur wenn die Liste ausgelagert ist (iOS): eigene Highscore-Ansicht öffnen.
+                    transitionTo(.highScores)
+                }
             }
 
         case .playing:
@@ -521,6 +541,12 @@ public final class GameScene: SKScene {
                 if characters == "i" {
                     transitionTo(.startScreen)
                 }
+            }
+
+        case .highScores:
+            // Eigene Highscore-Ansicht: einzige Aktion ist Zurück zum Startbildschirm.
+            if keyCode == 53 { // Escape
+                transitionTo(.startScreen)
             }
         }
     }
@@ -1163,7 +1189,7 @@ public final class GameScene: SKScene {
             
             self.activeLasers = remainingLasers
             
-        case .nameEntry, .gameOver, .quitConfirmation, .glossary:
+        case .nameEntry, .gameOver, .quitConfirmation, .glossary, .highScores:
             break
         }
         
@@ -1904,12 +1930,15 @@ public final class GameScene: SKScene {
             titleLabel.isHidden = false
             startPromptLabel.isHidden = false
             instructionsLabel.isHidden = false
-            highScoresTitleLabel.isHidden = false
-            updateHighScoreLabels()
-            for label in highScoreLineLabels {
-                label.isHidden = false
+            // Highscore-Liste nur am Startbildschirm zeigen, wenn nicht ausgelagert (macOS).
+            if showsHighScoresOnStartScreen {
+                highScoresTitleLabel.isHidden = false
+                updateHighScoreLabels()
+                for label in highScoreLineLabels {
+                    label.isHidden = false
+                }
             }
-            
+
             updateLevelSelectionLabel()
             levelSelectionLabel.isHidden = false
 
@@ -1934,14 +1963,17 @@ public final class GameScene: SKScene {
             let glossaryBlink = SKAction.sequence([glossaryFadeOut, glossaryFadeIn])
             glossaryPromptLabel.run(SKAction.repeatForever(glossaryBlink), withKey: "blink")
             
+            // iOS-Breitformat: kompaktes Startlayout (Titel sichtbar, Tastatur-Hinweise aus).
+            if isCompactLayout { applyCompactStartScreenLayout() }
+
             // Clean active entities
             clearGameEntities()
-            
+
             // Keep at least 3 asteroids drifting peacefully in the background
             while activeAsteroids.count < 3 {
                 spawnAsteroid()
             }
-            
+
         case .playing:
             if previousState == .quitConfirmation {
                 // Resume game
@@ -2047,7 +2079,9 @@ public final class GameScene: SKScene {
             for label in highScoreLineLabels {
                 label.isHidden = false
             }
-            
+            // iOS: Highscore-Liste kompakt halten, damit sie ins Breitformat passt.
+            if isCompactLayout { applyCompactHighScoresLayout() }
+
             // Blink "PRESS R TO REPLAY"
             restartLabel.removeAction(forKey: "blink")
             let fadeOut = SKAction.fadeOut(withDuration: 0.5)
@@ -2069,18 +2103,74 @@ public final class GameScene: SKScene {
             glossaryContainer.position.y = glossaryScrollBottom
             glossaryContainer.isHidden = false
             glossaryStaticContainer.isHidden = false
+
+        case .highScores:
+            // Eigene Highscore-Ansicht (iOS): Liste mittig, Zurück über das Touch-Overlay.
+            ship.isHidden = true
+            ship.velocity = .zero
+            ship.isShieldActive = false
+
+            clearGameEntities()
+
+            highScoresTitleLabel.isHidden = false
+            updateHighScoreLabels()
+            for label in highScoreLineLabels {
+                label.isHidden = false
+            }
+            if isCompactLayout { applyCompactHighScoresLayout() }
+        }
+    }
+
+    /// iOS-Breitformat: positioniert die Startbildschirm-Labels passend zur aktuellen Bildhöhe
+    /// und blendet die tastatur-zentrierten Hinweise aus (die Touch-Buttons übernehmen das).
+    /// Idempotent – wird auch bei Größenänderung (didChangeSize) erneut aufgerufen.
+    private func applyCompactStartScreenLayout() {
+        let topY = size.height / 2
+        titleLabel.fontSize = 40
+        titleLabel.position = CGPoint(x: 0, y: topY - 44)
+        modeSelectionLabel.position = CGPoint(x: 0, y: 24)
+        levelSelectionLabel.position = CGPoint(x: 0, y: -24)
+        startPromptLabel.isHidden = true
+        instructionsLabel.isHidden = true
+        glossaryPromptLabel.isHidden = true
+        musicHintLabel.isHidden = true
+    }
+
+    /// iOS-Breitformat: Highscore-Liste kompakt unter einem Titel oben anordnen.
+    private func applyCompactHighScoresLayout() {
+        let topY = size.height / 2
+        highScoresTitleLabel.position = CGPoint(x: 0, y: topY - 50)
+        let firstLineY = topY - 95
+        for (i, label) in highScoreLineLabels.enumerated() {
+            label.fontSize = 16
+            label.position = CGPoint(x: 0, y: firstLineY - CGFloat(i) * 28)
+        }
+    }
+
+    /// iOS-Breitformat: aktualisiert das kompakte Menü-Layout nach einer Größenänderung.
+    /// Wird aus der bestehenden didChangeSize-Override aufgerufen. Auf macOS (isCompactLayout
+    /// = false) ein No-op – das 4:3-Layout bleibt unverändert.
+    private func refreshCompactLayoutForCurrentState() {
+        guard isCompactLayout else { return }
+        switch gameState {
+        case .startScreen: applyCompactStartScreenLayout()
+        case .highScores, .gameOver: applyCompactHighScoresLayout()
+        default: break
         }
     }
     
     private func updateLevelSelectionLabel() {
         let isCompleted = selectedStartLevel < maxLevelReached
         let starStr = isCompleted ? " ★" : ""
-        levelSelectionLabel.text = "STARTING LEVEL: \(selectedStartLevel)\(starStr)  (◀/▶ TO SELECT)"
+        // Auf Touch-Geräten übernehmen die Buttons die Auswahl -> Tastatur-Hinweis weglassen.
+        let hint = isCompactLayout ? "" : "  (◀/▶ TO SELECT)"
+        levelSelectionLabel.text = "STARTING LEVEL: \(selectedStartLevel)\(starStr)\(hint)"
     }
 
     private func updateModeSelectionLabel() {
         let modeName = (selectedMode == .madMeteoroids) ? "MAD METEOROIDS" : "ANCIENT ASTEROIDS"
-        modeSelectionLabel.text = "MODE: \(modeName)  (▲/▼ TO SELECT)"
+        let hint = isCompactLayout ? "" : "  (▲/▼ TO SELECT)"
+        modeSelectionLabel.text = "MODE: \(modeName)\(hint)"
     }
 
     private func updateMusicHintLabel() {
@@ -2474,6 +2564,8 @@ public final class GameScene: SKScene {
         let halfHeight = size.height / 2
         scoreLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 40)
         hiScoreLabel.position = CGPoint(x: halfWidth - 20, y: halfHeight - 40)
+        // iOS-Breitformat: kompaktes Menü-Layout nach Größenänderung neu setzen.
+        refreshCompactLayoutForCurrentState()
     }
     
     // MARK: - High Score Storage
