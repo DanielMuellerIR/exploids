@@ -875,6 +875,19 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(scene.ship.shieldLevel, 2, "Ein Treffer verbraucht genau eine Schild-Stufe")
     }
 
+    /// Die „F"-Taste schaltet Auto-Feuer um (Einstellungen / global).
+    func testAutoFireToggle() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
+        view.presentScene(scene)
+
+        XCTAssertFalse(scene.autoFire, "Engine-Default ist aus")
+        scene.simulateTypeCharacter("f")
+        XCTAssertTrue(scene.autoFire)
+        scene.simulateTypeCharacter("f")
+        XCTAssertFalse(scene.autoFire)
+    }
+
     /// Beim Revive (Extra Life) gehen alle aktiven Power-ups verloren.
     func testReviveLosesAllPowerUps() {
         let scene = GameScene(size: CGSize(width: 1000, height: 1000))

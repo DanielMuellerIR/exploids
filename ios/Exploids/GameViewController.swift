@@ -189,6 +189,7 @@ private func statesEqual(_ a: GameState, _ b: GameState) -> Bool {
     case (.quitConfirmation, .quitConfirmation): return true
     case (.glossary,         .glossary):         return true
     case (.highScores,       .highScores):       return true
+    case (.settings,         .settings):         return true
     default:                                     return false
     }
 }

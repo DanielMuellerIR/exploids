@@ -363,14 +363,10 @@ final class TouchControlsView: UIView {
                             label: "LVL-", kind: .tap(keyCode: 123)),
                 TouchButton(id: 11, relativeRect: CGRect(x: 0.68, y: 0.49, width: 0.13, height: 0.15),
                             label: "LVL+", kind: .tap(keyCode: 124)),
-                // Obere Ecke links: Musik an/aus (nur iOS; auf macOS dient die „M"-Taste).
-                // „m" löst in der Scene denselben globalen Musik-Toggle aus.
-                TouchButton(id: 16, relativeRect: CGRect(x: 0.02, y: 0.06, width: 0.14, height: 0.16),
-                            label: "MUSIK", kind: .typeChar("m")),
-                // Darunter: SFX-Stil umschalten (prozedural <-> generierte Samples). „n" löst in der
-                // Scene den globalen Toggle aus und spielt sofort einen Bestätigungs-Sound.
-                TouchButton(id: 17, relativeRect: CGRect(x: 0.02, y: 0.24, width: 0.14, height: 0.16),
-                            label: "SFX", kind: .typeChar("n")),
+                // Obere Ecke links: Einstellungen öffnen (Musik / SFX-Stil / Auto-Feuer gebündelt).
+                // „o" öffnet in der Scene den .settings-State.
+                TouchButton(id: 16, relativeRect: CGRect(x: 0.02, y: 0.06, width: 0.16, height: 0.16),
+                            label: "SETTINGS", kind: .typeChar("o")),
                 // Obere Ecke rechts: Highscore-Ansicht
                 TouchButton(id: 15, relativeRect: CGRect(x: 0.84, y: 0.06, width: 0.14, height: 0.16),
                             label: "HISCORE", kind: .typeChar("h")),
@@ -422,6 +418,20 @@ final class TouchControlsView: UIView {
         case .highScores:
             return [
                 TouchButton(id: 130, relativeRect: CGRect(x: 0.86, y: 0.04, width: 0.11, height: 0.16),
+                            label: "✕", kind: .tap(keyCode: 53)),
+            ]
+
+        // Einstellungen: drei Umschalt-Buttons (lösen dieselben globalen Toggles wie M/N/F aus)
+        // plus Zurück. Die aktuellen Werte zeigt die Scene als Textzeilen darüber an.
+        case .settings:
+            return [
+                TouchButton(id: 140, relativeRect: CGRect(x: 0.10, y: 0.72, width: 0.22, height: 0.17),
+                            label: "MUSIC", kind: .typeChar("m")),
+                TouchButton(id: 141, relativeRect: CGRect(x: 0.39, y: 0.72, width: 0.22, height: 0.17),
+                            label: "SFX", kind: .typeChar("n")),
+                TouchButton(id: 142, relativeRect: CGRect(x: 0.68, y: 0.72, width: 0.22, height: 0.17),
+                            label: "AUTO-FIRE", kind: .typeChar("f")),
+                TouchButton(id: 143, relativeRect: CGRect(x: 0.88, y: 0.04, width: 0.10, height: 0.16),
                             label: "✕", kind: .tap(keyCode: 53)),
             ]
         }

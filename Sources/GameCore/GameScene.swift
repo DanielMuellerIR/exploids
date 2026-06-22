@@ -30,6 +30,8 @@ public enum GameState: Sendable {
     /// Eigene Highscore-Ansicht (mit Zurück). Wird nur auf iOS angesteuert, wenn die
     /// Highscore-Liste vom Startbildschirm in eine separate Ansicht ausgelagert ist.
     case highScores
+    /// Einstellungen (Musik / SFX-Stil / Auto-Feuer). Erreichbar vom Startbildschirm.
+    case settings
 }
 
 /// Auswählbarer Spielmodus.
@@ -325,6 +327,12 @@ public final class GameScene: SKScene {
     /// Zeigt am Startbildschirm den aktuellen SFX-Stil (prozedural vs. Samples) und – auf macOS –
     /// die Umschalt-Taste. Wird beim Umschalten (N / iOS-„SFX"-Button) aktualisiert.
     private let sfxModeLabel = SKLabelNode(fontNamed: "Courier")
+    // Einstellungen-Ansicht: Titel + drei Umschalt-Zeilen + Bedien-Hinweis.
+    private let settingsTitleLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    private let settingsMusicLabel = SKLabelNode(fontNamed: "Courier")
+    private let settingsSfxLabel = SKLabelNode(fontNamed: "Courier")
+    private let settingsAutoFireLabel = SKLabelNode(fontNamed: "Courier")
+    private let settingsHintLabel = SKLabelNode(fontNamed: "Courier")
     private let levelClearedLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private let prepareNextLevelLabel = SKLabelNode(fontNamed: "Courier")
     
@@ -455,6 +463,7 @@ public final class GameScene: SKScene {
         if gameState != .nameEntry, charactersIgnoringModifiers?.lowercased() == "m" {
             MusicPlayer.shared.toggle()
             updateMusicHintLabel()
+            updateSettingsLabels()
             return
         }
 
@@ -464,7 +473,15 @@ public final class GameScene: SKScene {
         if gameState != .nameEntry, charactersIgnoringModifiers?.lowercased() == "n" {
             SoundManager.shared.useSampledSFX.toggle()
             updateSfxModeLabel()   // Anzeige am Startbildschirm sofort mitführen
+            updateSettingsLabels()
             SoundManager.shared.playPowerUp()
+            return
+        }
+
+        // „F" schaltet Auto-Feuer um (global außer bei der Initialen-Eingabe).
+        if gameState != .nameEntry, charactersIgnoringModifiers?.lowercased() == "f" {
+            autoFire.toggle()
+            updateSettingsLabels()
             return
         }
 
@@ -492,6 +509,8 @@ public final class GameScene: SKScene {
                 } else if characters == "h", !showsHighScoresOnStartScreen {
                     // Nur wenn die Liste ausgelagert ist (iOS): eigene Highscore-Ansicht öffnen.
                     transitionTo(.highScores)
+                } else if characters == "o" {
+                    transitionTo(.settings)
                 }
             }
 
@@ -569,6 +588,12 @@ public final class GameScene: SKScene {
 
         case .highScores:
             // Eigene Highscore-Ansicht: einzige Aktion ist Zurück zum Startbildschirm.
+            if keyCode == 53 { // Escape
+                transitionTo(.startScreen)
+            }
+
+        case .settings:
+            // Umschalten passiert global (M/N/F, oben); hier nur Zurück.
             if keyCode == 53 { // Escape
                 transitionTo(.startScreen)
             }
@@ -1194,7 +1219,7 @@ public final class GameScene: SKScene {
             
             self.activeLasers = remainingLasers
             
-        case .nameEntry, .gameOver, .quitConfirmation, .glossary, .highScores:
+        case .nameEntry, .gameOver, .quitConfirmation, .glossary, .highScores, .settings:
             break
         }
         
@@ -1960,6 +1985,11 @@ public final class GameScene: SKScene {
         modeSelectionLabel.isHidden = true
         musicHintLabel.isHidden = true
         sfxModeLabel.isHidden = true
+        settingsTitleLabel.isHidden = true
+        settingsMusicLabel.isHidden = true
+        settingsSfxLabel.isHidden = true
+        settingsAutoFireLabel.isHidden = true
+        settingsHintLabel.isHidden = true
         levelClearedLabel.isHidden = true
         prepareNextLevelLabel.isHidden = true
         
@@ -1999,11 +2029,7 @@ public final class GameScene: SKScene {
             updateModeSelectionLabel()
             modeSelectionLabel.isHidden = false
 
-            updateMusicHintLabel()
-            musicHintLabel.isHidden = false
-
-            updateSfxModeLabel()
-            sfxModeLabel.isHidden = false
+            // Musik-/SFX-Anzeige liegt jetzt in den Einstellungen (Startscreen bleibt ruhig).
 
             // Blink "PRESS SPACE TO START"
             startPromptLabel.removeAction(forKey: "blink")
@@ -2179,6 +2205,19 @@ public final class GameScene: SKScene {
                 label.isHidden = false
             }
             if isCompactLayout { applyCompactHighScoresLayout() }
+
+        case .settings:
+            // Einstellungen: Schiff/Spielfeld weg, die Umschalt-Zeilen zeigen.
+            ship.isHidden = true
+            ship.velocity = .zero
+            ship.shieldLevel = 0
+            clearGameEntities()
+            updateSettingsLabels()
+            settingsTitleLabel.isHidden = false
+            settingsMusicLabel.isHidden = false
+            settingsSfxLabel.isHidden = false
+            settingsAutoFireLabel.isHidden = false
+            settingsHintLabel.isHidden = false
         }
     }
 
@@ -2280,6 +2319,15 @@ public final class GameScene: SKScene {
     private func updateSfxModeLabel() {
         let mode = SoundManager.shared.useSampledSFX ? "SAMPLE" : "PROCEDURAL"
         sfxModeLabel.text = isCompactLayout ? "SFX: \(mode)" : "SFX: \(mode)   (PRESS N)"
+    }
+
+    /// Aktualisiert die drei Umschalt-Zeilen der Einstellungen mit dem aktuellen Stand.
+    private func updateSettingsLabels() {
+        settingsMusicLabel.text = "MUSIC: \(MusicPlayer.shared.isEnabled ? "ON" : "OFF")"
+        settingsSfxLabel.text = "SFX STYLE: \(SoundManager.shared.useSampledSFX ? "SAMPLE" : "PROCEDURAL")"
+        settingsAutoFireLabel.text = "AUTO-FIRE: \(autoFire ? "ON" : "OFF")"
+        settingsHintLabel.text = isCompactLayout ? "TAP TO TOGGLE   X: BACK"
+                                                 : "M: MUSIC   N: SFX   F: AUTO-FIRE   ESC: BACK"
     }
     
     private func shouldSpawnImploding() -> Bool {
@@ -2530,6 +2578,38 @@ public final class GameScene: SKScene {
         sfxModeLabel.isHidden = true
         self.addChild(sfxModeLabel)
         updateSfxModeLabel()
+
+        // Einstellungen-Ansicht
+        settingsTitleLabel.text = "SETTINGS"
+        settingsTitleLabel.fontName = RetroFont.pixel
+        settingsTitleLabel.fontSize = 32
+        settingsTitleLabel.fontColor = SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
+        settingsTitleLabel.position = CGPoint(x: 0, y: 120)
+        settingsTitleLabel.zPosition = 100
+        settingsTitleLabel.isHidden = true
+        self.addChild(settingsTitleLabel)
+
+        let settingsRows: [(SKLabelNode, CGFloat)] = [
+            (settingsMusicLabel, 50), (settingsSfxLabel, 10), (settingsAutoFireLabel, -30)
+        ]
+        for (label, y) in settingsRows {
+            label.fontSize = 22
+            label.fontColor = .white
+            label.horizontalAlignmentMode = .center
+            label.position = CGPoint(x: 0, y: y)
+            label.zPosition = 100
+            label.isHidden = true
+            self.addChild(label)
+        }
+
+        settingsHintLabel.fontSize = 16
+        settingsHintLabel.fontColor = .lightGray
+        settingsHintLabel.horizontalAlignmentMode = .center
+        settingsHintLabel.position = CGPoint(x: 0, y: -110)
+        settingsHintLabel.zPosition = 100
+        settingsHintLabel.isHidden = true
+        self.addChild(settingsHintLabel)
+        updateSettingsLabels()
 
         // Level Cleared Overlay
         levelClearedLabel.fontSize = 40
