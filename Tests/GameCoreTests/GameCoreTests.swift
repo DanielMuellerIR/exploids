@@ -483,6 +483,46 @@ final class GameCoreTests: XCTestCase {
         XCTAssertLessThan(maxX, 18.0 * 0.5, "Kollisionspunkte müssen mit der Skalierung schrumpfen")
     }
 
+    /// Screen Bomb wendet auf JEDES Objekt genau einen Schuss-Treffer an (wie ein Laser):
+    /// kleine Asteroiden verschwinden, große splitten (Original weg, Kinder da), implodierende
+    /// wachsen beim ersten Treffer statt zu verschwinden.
+    func testScreenBombHitsEveryAsteroidOnceLikeAShot() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.transitionTo(.playing)
+        scene.clearAllEntitiesForTesting()
+
+        // Kleiner normaler Asteroid -> verschwindet bei einem Treffer.
+        let small = Asteroid(sizeClass: .small)
+        small.position = CGPoint(x: -200, y: 0)
+        scene.addAsteroidForTesting(small)
+
+        // Großer normaler Asteroid -> splittet (Original weg, mittlere Kinder kommen rein).
+        let large = Asteroid(sizeClass: .large)
+        large.position = CGPoint(x: 200, y: 0)
+        scene.addAsteroidForTesting(large)
+
+        // Implodierender Asteroid -> wächst, kollabiert erst beim 4. Treffer, bleibt also erhalten.
+        let imploding = Asteroid(sizeClass: .large, isImplodingType: true)
+        imploding.position = CGPoint(x: 0, y: 200)
+        scene.addAsteroidForTesting(imploding)
+
+        scene.collectPowerUpForTesting(type: .bomb)
+
+        // Der gemeldete Bug war, dass Objekte unangetastet heil blieben. Jeder Typ muss reagieren:
+        XCTAssertFalse(scene.activeAsteroids.contains(small),
+                       "Kleiner Asteroid muss durch die Bombe verschwinden")
+        XCTAssertFalse(scene.activeAsteroids.contains(large),
+                       "Großer Asteroid muss durch die Bombe gesplittet (entfernt) werden")
+        XCTAssertTrue(scene.activeAsteroids.contains { $0.sizeClass == .medium },
+                      "Der große Asteroid muss mittlere Splitter hinterlassen")
+        XCTAssertTrue(scene.activeAsteroids.contains(imploding),
+                      "Implodierender Asteroid wächst beim ersten Treffer, verschwindet nicht")
+        XCTAssertEqual(imploding.hitCount, 1,
+                       "Implodierender Asteroid muss genau einen Bomben-Treffer registrieren")
+    }
+
     /// Rear Laser feuert zusätzlich nach hinten.
     func testRearLaserFiresBackward() {
         let scene = GameScene(size: CGSize(width: 1000, height: 800))

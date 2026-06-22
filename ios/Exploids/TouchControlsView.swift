@@ -335,18 +335,21 @@ final class TouchControlsView: UIView {
         // das Loslassen des einen den anderen aufhebt.
         case .playing:
             return [
-                // Links: redundanter Schub über den Dreh-Buttons
-                TouchButton(id: 6, relativeRect: CGRect(x: 0.02, y: 0.40, width: 0.31, height: 0.16),
+                // Links: großer Schub-Button – füllt fast die ganze linke Spalte ÜBER den
+                // Dreh-Pfeilen (von knapp unter ESC bis kurz über die Pfeile). So lässt sich
+                // Schub geben, egal wo man oben links tippt.
+                TouchButton(id: 6, relativeRect: CGRect(x: 0.02, y: 0.03, width: 0.31, height: 0.54),
                             label: "SCHUB", kind: .hold(keyCode: 126)),
                 // Links unten: drehen (große Kontur-Pfeile)
                 TouchButton(id: 1, relativeRect: CGRect(x: 0.02, y: 0.59, width: 0.15, height: 0.36),
                             label: "◄", kind: .hold(keyCode: 123)),   // gegen den Uhrzeigersinn
                 TouchButton(id: 2, relativeRect: CGRect(x: 0.18, y: 0.59, width: 0.15, height: 0.36),
                             label: "►", kind: .hold(keyCode: 124)),   // im Uhrzeigersinn
-                // Rechts: Schub oben, Feuer unten (übereinander)
-                TouchButton(id: 3, relativeRect: CGRect(x: 0.83, y: 0.40, width: 0.15, height: 0.27),
+                // Rechts: zwei große Buttons übereinander, die die ganze rechte Spalte füllen –
+                // Schub oben (bis ganz oben), Feuer unten (bis ganz unten).
+                TouchButton(id: 3, relativeRect: CGRect(x: 0.83, y: 0.03, width: 0.15, height: 0.46),
                             label: "SCHUB", kind: .hold(keyCode: 126)),
-                TouchButton(id: 4, relativeRect: CGRect(x: 0.83, y: 0.69, width: 0.15, height: 0.26),
+                TouchButton(id: 4, relativeRect: CGRect(x: 0.83, y: 0.51, width: 0.15, height: 0.46),
                             label: "FEUER", kind: .hold(keyCode: 49)),  // halten = Charge-Shot
                 // Oben Mitte: ESC (Quit-Bestätigung)
                 TouchButton(id: 5, relativeRect: CGRect(x: 0.45, y: 0.0, width: 0.10, height: 0.10),
@@ -360,6 +363,10 @@ final class TouchControlsView: UIView {
                             label: "LVL-", kind: .tap(keyCode: 123)),
                 TouchButton(id: 11, relativeRect: CGRect(x: 0.68, y: 0.49, width: 0.13, height: 0.15),
                             label: "LVL+", kind: .tap(keyCode: 124)),
+                // Obere Ecke links: Musik an/aus (nur iOS; auf macOS dient die „M"-Taste).
+                // „m" löst in der Scene denselben globalen Musik-Toggle aus.
+                TouchButton(id: 16, relativeRect: CGRect(x: 0.02, y: 0.06, width: 0.14, height: 0.16),
+                            label: "MUSIK", kind: .typeChar("m")),
                 // Obere Ecke rechts: Highscore-Ansicht
                 TouchButton(id: 15, relativeRect: CGRect(x: 0.84, y: 0.06, width: 0.14, height: 0.16),
                             label: "HISCORE", kind: .typeChar("h")),
@@ -373,30 +380,9 @@ final class TouchControlsView: UIView {
             ]
 
         case .nameEntry:
-            // Buchstaben-/Zahlen-Grid (A–Z, 0–9), DEL und OK.
-            var result: [TouchButton] = []
-            let chars: [String] = (65...90).map { String(UnicodeScalar($0)!) }   // A–Z
-                                 + (0...9).map { String($0) }                      // 0–9
-            let cols = 9
-            let cellW = 0.78 / CGFloat(cols)
-            let cellH = 0.42 / 4.0      // 4 Reihen
-            for (idx, ch) in chars.enumerated() {
-                let col = idx % cols
-                let row = idx / cols
-                result.append(TouchButton(
-                    id: 20 + idx,
-                    relativeRect: CGRect(x: 0.02 + CGFloat(col) * cellW,
-                                         y: 0.10 + CGFloat(row) * cellH,
-                                         width:  cellW * 0.90,
-                                         height: cellH * 0.82),
-                    label: ch,
-                    kind: .typeChar(ch)))
-            }
-            result.append(TouchButton(id: 90, relativeRect: CGRect(x: 0.84, y: 0.55, width: 0.14, height: 0.30),
-                                      label: "DEL", kind: .tap(keyCode: 51)))
-            result.append(TouchButton(id: 91, relativeRect: CGRect(x: 0.84, y: 0.12, width: 0.14, height: 0.30),
-                                      label: "OK", kind: .tap(keyCode: 36)))
-            return result
+            // Keine eigenen Buttons: Die Initialen-Eingabe nutzt die native iOS-Bildschirmtastatur
+            // (eingeblendet vom GameViewController via UIKeyInput). Daher ist das Overlay hier leer.
+            return []
 
         case .gameOver:
             return [
@@ -415,15 +401,17 @@ final class TouchControlsView: UIView {
                             label: "BEENDEN", kind: .typeChar("y")),
             ]
 
-        // Esc(53) = zurück, Up(126)/Down(125) = scrollen.
+        // Esc(53) = zurück. Scroll-Buttons nach Scrollbar-Logik: ▼ fährt im Text weiter nach
+        // unten (Text läuft hoch – wie der Auto-Scroll, keyCode 126), ▲ fährt zurück (keyCode 125).
+        // Auf macOS bleiben die echten Pfeiltasten unverändert (dort steuert die Engine 126/125).
         case .glossary:
             return [
                 TouchButton(id: 120, relativeRect: CGRect(x: 0.88, y: 0.04, width: 0.10, height: 0.18),
                             label: "✕", kind: .tap(keyCode: 53)),
                 TouchButton(id: 121, relativeRect: CGRect(x: 0.88, y: 0.30, width: 0.10, height: 0.24),
-                            label: "▲", kind: .tap(keyCode: 126)),
+                            label: "▲", kind: .tap(keyCode: 125)),
                 TouchButton(id: 122, relativeRect: CGRect(x: 0.88, y: 0.62, width: 0.10, height: 0.24),
-                            label: "▼", kind: .tap(keyCode: 125)),
+                            label: "▼", kind: .tap(keyCode: 126)),
             ]
 
         // Eigene Highscore-Ansicht: nur ein Zurück-Knopf oben rechts.

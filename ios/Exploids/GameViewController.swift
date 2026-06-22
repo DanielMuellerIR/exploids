@@ -92,7 +92,26 @@ final class GameViewController: UIViewController {
         if case .some(let last) = lastKnownState, statesEqual(last, current) { return }
         lastKnownState = current
         overlay.update(for: current)
+        updateKeyboard(for: current)
     }
+
+    // MARK: - System-Tastatur für die Initialen-Eingabe
+
+    /// Blendet bei `.nameEntry` die native iOS-Tastatur ein (statt eines selbstgezeichneten
+    /// Buchstaben-Grids) und versteckt sie in allen anderen Zuständen wieder.
+    /// Technik: Der ViewController wird zum First Responder und konformt zu `UIKeyInput` –
+    /// dadurch zeigt UIKit automatisch die Bildschirmtastatur. Die getippten Zeichen leiten wir
+    /// an dieselbe Scene-API weiter, die auch die macOS-Tastatur bedient.
+    private func updateKeyboard(for state: GameState) {
+        if case .nameEntry = state {
+            becomeFirstResponder()      // Tastatur einblenden
+        } else if isFirstResponder {
+            resignFirstResponder()      // Tastatur ausblenden, sobald die Eingabe vorbei ist
+        }
+    }
+
+    /// Nur als First Responder erscheint die Tastatur – Default bei ViewControllern ist `false`.
+    override var canBecomeFirstResponder: Bool { true }
 
     // MARK: - Interface-Konfiguration
 
@@ -118,6 +137,44 @@ final class GameViewController: UIViewController {
         displayLink?.invalidate()
         displayLink = nil
     }
+}
+
+// MARK: - Tastatur-Eingabe (UIKeyInput / UITextInputTraits)
+
+/// Macht den ViewController zu einer Texteingabe-Senke für die System-Tastatur.
+/// Jeder Tastendruck wird in die plattformneutrale Scene-Eingabe übersetzt – exakt dieselben
+/// Aufrufe, die auch die macOS-Tastatur auslöst (Buchstabe tippen, löschen, Eingabe abschließen).
+extension GameViewController: UIKeyInput, UITextInputTraits {
+
+    /// Steuert die Löschtaste der Tastatur: solange Initialen da sind, ist „Text vorhanden".
+    var hasText: Bool { (scene?.enteredInitialsCount ?? 0) > 0 }
+
+    /// Eingetippte Zeichen. Die „Done"-Taste liefert ein Newline – das werten wir als Eingabe-Ende
+    /// (Return/keyCode 36). Sonst wird jedes Zeichen einzeln an die Scene gereicht; die Scene
+    /// filtert selbst (nur Buchstaben/Ziffern) und begrenzt auf drei Initialen.
+    func insertText(_ text: String) {
+        if text.contains("\n") {
+            scene?.simulateKeyDown(keyCode: 36)   // Return → Highscore eintragen
+            return
+        }
+        for ch in text {
+            scene?.simulateTypeCharacter(String(ch))
+        }
+    }
+
+    /// Löschtaste → Backspace (keyCode 51), entfernt die zuletzt eingegebene Initiale.
+    func deleteBackward() {
+        scene?.simulateKeyDown(keyCode: 51)
+    }
+
+    // UITextInputTraits: Großbuchstaben (Initialen sind Versalien), keine Autokorrektur/Vorschläge,
+    // dunkles Tastatur-Design passend zum schwarzen Spiel, „Done" als Bestätigungstaste.
+    var autocapitalizationType: UITextAutocapitalizationType { get { .allCharacters } set {} }
+    var autocorrectionType: UITextAutocorrectionType { get { .no } set {} }
+    var spellCheckingType: UITextSpellCheckingType { get { .no } set {} }
+    var keyboardType: UIKeyboardType { get { .asciiCapable } set {} }
+    var keyboardAppearance: UIKeyboardAppearance { get { .dark } set {} }
+    var returnKeyType: UIReturnKeyType { get { .done } set {} }
 }
 
 /// Hilfsfunktion: vergleicht zwei GameState-Werte auf Gleichheit.

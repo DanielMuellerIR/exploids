@@ -45,6 +45,10 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
     /// Startet die Wiedergabe (falls aktiviert und noch nicht laufend).
     public func start() {
         guard isEnabled, !isSuppressed, !tracks.isEmpty else { return }
+        #if os(iOS)
+        // Ohne aktive AVAudioSession bleibt der AVAudioPlayer auf iOS stumm.
+        AudioSessionConfig.activate()
+        #endif
         if player?.isPlaying == true { return }
         if let existing = player {
             existing.play() // aus Pause fortsetzen

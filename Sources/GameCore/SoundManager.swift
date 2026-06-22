@@ -58,7 +58,12 @@ public final class SoundManager: @unchecked Sendable {
     public func start() {
         guard !isMuted else { return }
         guard !audioEngine.isRunning else { return }
-        
+
+        #if os(iOS)
+        // Ohne aktive AVAudioSession bleibt die AVAudioEngine auf iOS stumm.
+        AudioSessionConfig.activate()
+        #endif
+
         do {
             if sfxNode == nil || engineNode == nil {
                 setupAudioGraph()

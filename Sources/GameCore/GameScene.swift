@@ -162,6 +162,10 @@ public final class GameScene: SKScene {
 
     /// Temporary storage for initials entry.
     private var typedInitials: String = ""
+
+    /// Anzahl der bereits eingegebenen Initialen (0…3). Nur lesend – wird von der iOS-Tastatur
+    /// (UIKeyInput.hasText) gebraucht, damit die Löschtaste korrekt arbeitet. macOS nutzt das nicht.
+    public var enteredInitialsCount: Int { typedInitials.count }
     
     // Spielmodus-Auswahl
     /// Der aktuell laufende Spielmodus.
@@ -1629,7 +1633,9 @@ public final class GameScene: SKScene {
         showPowerUpNotification(text: text, color: color)
     }
     
-    /// Triggers a screen clearing bomb explosion.
+    /// Zündet die Screen Bomb: legt einen einzelnen Schuss-Treffer auf JEDES Objekt am Bildschirm
+    /// (alle Asteroiden + UFOs) – über dieselbe Treffer-Logik wie ein Laser. Plus Schockwelle,
+    /// Kamera-Wackeln und Bomben-Sound; gegnerische Laser werden gelöscht.
     private func detonateBomb() {
         SoundManager.shared.playBomb()
         shakeCamera(amplitude: 11.0, numberOfShakes: 11, durationPerShake: 0.035)
@@ -1648,32 +1654,40 @@ public final class GameScene: SKScene {
         let remove = SKAction.removeFromParent()
         shockwave.run(SKAction.sequence([group, remove]))
         
-        // Destruct/split all asteroids on screen
-        let currentAsteroids = activeAsteroids
-        activeAsteroids.removeAll()
-        
-        var splitList: [Asteroid] = []
-        for asteroid in currentAsteroids {
-            createExplosion(at: asteroid.position, sizeClass: asteroid.sizeClass)
-            
-            let points: Int
-            switch asteroid.sizeClass {
-            case .large:
-                points = 20
-                let children = createSplitChildren(for: asteroid)
-                splitList.append(contentsOf: children)
-            case .medium:
-                points = 50
-                let children = createSplitChildren(for: asteroid)
-                splitList.append(contentsOf: children)
-            case .small:
-                points = 100
-            }
-            self.score += points
-            asteroid.removeFromParent()
+        // Jeden Asteroiden GENAU EINMAL treffen – exakt so, als würde ein Laserschuss ihn treffen
+        // (dieselbe processPlayerHitOnAsteroid-Logik wie bei der Laser-Kollision). Damit verhalten
+        // sich alle Typen konsistent: normale splitten, IMPLODIERENDE wachsen (kollabieren erst beim
+        // 4. Treffer), WOBBELNDE geben Punkte und verschwinden. Commit wie bei der Laser-Kollision:
+        // verbrauchte Asteroiden raus, neue Splitter rein.
+        var hitAsteroids = Set<Asteroid>()
+        var newAsteroids: [Asteroid] = []
+        for asteroid in activeAsteroids {
+            processPlayerHitOnAsteroid(asteroid, hitPosition: asteroid.position,
+                                       hitAsteroids: &hitAsteroids, newAsteroids: &newAsteroids)
         }
-        self.activeAsteroids = splitList
-        
+        if !hitAsteroids.isEmpty {
+            activeAsteroids = activeAsteroids.filter { asteroid in
+                if hitAsteroids.contains(asteroid) {
+                    asteroid.removeFromParent()
+                    return false
+                }
+                return true
+            }
+        }
+        activeAsteroids.append(contentsOf: newAsteroids)
+
+        // Ebenso jedes UFO einmal treffen – ein Schuss zerstört ein UFO sofort (Punkte,
+        // mögliche Power-up-Beute, Explosion). Gleiche Wirkung wie ein Laser-Treffer.
+        for ufo in activeUFOs {
+            self.score += ufo.pointValue
+            if Double.random(in: 0...1) <= 0.20 {
+                spawnPowerUp(at: ufo.position)
+            }
+            createShipExplosion(at: ufo.position)
+            ufo.removeFromParent()
+        }
+        activeUFOs.removeAll()
+
         scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
         
         // Clear enemy lasers
@@ -2079,15 +2093,18 @@ public final class GameScene: SKScene {
             for label in highScoreLineLabels {
                 label.isHidden = false
             }
-            // iOS: Highscore-Liste kompakt halten, damit sie ins Breitformat passt.
-            if isCompactLayout { applyCompactHighScoresLayout() }
-
-            // Blink "PRESS R TO REPLAY"
-            restartLabel.removeAction(forKey: "blink")
-            let fadeOut = SKAction.fadeOut(withDuration: 0.5)
-            let fadeIn = SKAction.fadeIn(withDuration: 0.5)
-            let blink = SKAction.sequence([fadeOut, fadeIn])
-            restartLabel.run(SKAction.repeatForever(blink), withKey: "blink")
+            if isCompactLayout {
+                // iOS-Breitformat: alle Game-Over-Labels kompakt stapeln, Tastatur-Hinweis aus
+                // (die Touch-Buttons REPLAY/ZURÜCK unten übernehmen das).
+                applyCompactGameOverLayout()
+            } else {
+                // Desktop: "PRESS R TO REPLAY"-Hinweis blinken lassen.
+                restartLabel.removeAction(forKey: "blink")
+                let fadeOut = SKAction.fadeOut(withDuration: 0.5)
+                let fadeIn = SKAction.fadeIn(withDuration: 0.5)
+                let blink = SKAction.sequence([fadeOut, fadeIn])
+                restartLabel.run(SKAction.repeatForever(blink), withKey: "blink")
+            }
             
         case .quitConfirmation:
             quitPromptLabel.isHidden = false
@@ -2136,15 +2153,48 @@ public final class GameScene: SKScene {
         musicHintLabel.isHidden = true
     }
 
-    /// iOS-Breitformat: Highscore-Liste kompakt unter einem Titel oben anordnen.
+    /// iOS-Breitformat: Highscore-Liste kompakt unter einem Titel oben anordnen (eigene
+    /// `.highScores`-Ansicht). Setzt die Schriftgrößen explizit zurück, falls zuvor das
+    /// kompaktere Game-Over-Layout (kleinere Titel-Schrift) aktiv war – dieselben Label-Objekte.
     private func applyCompactHighScoresLayout() {
         let topY = size.height / 2
+        highScoresTitleLabel.verticalAlignmentMode = .baseline
+        highScoresTitleLabel.fontSize = 24
         highScoresTitleLabel.position = CGPoint(x: 0, y: topY - 50)
         let firstLineY = topY - 95
         for (i, label) in highScoreLineLabels.enumerated() {
+            label.verticalAlignmentMode = .baseline
             label.fontSize = 16
             label.position = CGPoint(x: 0, y: firstLineY - CGFloat(i) * 28)
         }
+    }
+
+    /// iOS-Breitformat: kompakte Game-Over-Anordnung. Stapelt GAME OVER, Punktzahl, Highscore-Titel
+    /// und -Liste platzsparend von oben nach unten – damit nichts überlappt (im Querformat ist
+    /// wenig Höhe da). Blendet den Tastatur-Hinweis aus; die Touch-Buttons REPLAY/ZURÜCK am unteren
+    /// Rand übernehmen diese Funktion. macOS nutzt unverändert das feste 4:3-Layout.
+    private func applyCompactGameOverLayout() {
+        let topY = size.height / 2
+        // Alle Labels mittig ausrichten (verticalAlignmentMode .center): Bei der Default-Baseline
+        // wächst der Text über die Position hinaus nach oben – dadurch ragte „GAME OVER" oben raus.
+        // Mit .center ist die y-Position der Mittelpunkt, das Stapeln wird vorhersagbar.
+        gameOverLabel.verticalAlignmentMode = .center
+        gameOverLabel.fontSize = 32
+        gameOverLabel.position = CGPoint(x: 0, y: topY - 30)
+        finalScoreLabel.verticalAlignmentMode = .center
+        finalScoreLabel.fontSize = 16
+        finalScoreLabel.position = CGPoint(x: 0, y: topY - 62)
+        highScoresTitleLabel.verticalAlignmentMode = .center
+        highScoresTitleLabel.fontSize = 18
+        highScoresTitleLabel.position = CGPoint(x: 0, y: topY - 92)
+        let firstLineY = topY - 120
+        for (i, label) in highScoreLineLabels.enumerated() {
+            label.verticalAlignmentMode = .center
+            label.fontSize = 15
+            label.position = CGPoint(x: 0, y: firstLineY - CGFloat(i) * 24)
+        }
+        // Tastatur-Hinweis ("PRESS R …") ausblenden – auf iOS gibt es nur die Touch-Buttons.
+        restartLabel.isHidden = true
     }
 
     /// iOS-Breitformat: aktualisiert das kompakte Menü-Layout nach einer Größenänderung.
@@ -2154,7 +2204,8 @@ public final class GameScene: SKScene {
         guard isCompactLayout else { return }
         switch gameState {
         case .startScreen: applyCompactStartScreenLayout()
-        case .highScores, .gameOver: applyCompactHighScoresLayout()
+        case .highScores: applyCompactHighScoresLayout()
+        case .gameOver: applyCompactGameOverLayout()
         default: break
         }
     }
@@ -3271,7 +3322,7 @@ public final class GameScene: SKScene {
             (.option, "OPTION DRONE [O]", SKColor(red: 0.8, green: 0.0, blue: 1.0, alpha: 1.0),
              "A wingman that fires with you. Stack up to two."),
             (.bomb, "SCREEN BOMB [B]", SKColor(red: 1.0, green: 0.0, blue: 0.2, alpha: 1.0),
-             "Detonates at once: big rocks split, small ones blow up."),
+             "Hits every object on screen once, just like a direct shot."),
             (.beam, "LASER BEAM [L]", SKColor(red: 0.3, green: 1.0, blue: 0.3, alpha: 1.0),
              "Hold fire for a sweeping beam. Spin to win!"),
             (.rear, "REAR LASER [T]", SKColor(red: 0.4, green: 0.7, blue: 1.0, alpha: 1.0),
