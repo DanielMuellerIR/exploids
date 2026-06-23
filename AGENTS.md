@@ -115,3 +115,45 @@ Also fixed: asteroids could spawn mid-screen because off-screen spawns were imme
 - **Turrican-style power-up voice samples**: Generate short, bitcrushed announcer samples ("Power Up!", "Extra Life!", "Game Over!") locally via TTS + post-processing. Full workflow (Qwen3-TTS / F5-TTS on MLX, then `pedalboard` bitcrush) is documented in `turrican-like-powerup-tts.md`. Would replace/augment the current procedural SFX for power-up pickups.
 - **Scroll mode (3rd game mode)**: Ship stays centered, the world scrolls so the player can never reach the screen edge (infinite-scroller feel). Core is camera-follow (`cameraNode.position = ship.position`); the work is HUD re-anchoring to the camera node, ship-relative wrapping (to avoid a seam pop), starfield tiling, and shake offset. Estimated ~half a day as a standalone third mode (alongside Ancient Asteroids / Mad Meteoroids). Decide later whether/how it combines with Mad rotation (rotation pivot would need to follow the ship).
 - **iOS port + free App Store release** (wanted, first-time App Store submission): The renderer is SpriteKit, so the entire game logic (`GameScene`, all entities, collision, the AVFoundation audio) runs on iOS unchanged — roughly 70% of the code is reusable as-is. What needs rewriting (~30%): the entry point (`Main.swift`, `NSApplication` → UIKit/SwiftUI app lifecycle), `GameWindow.swift` (`NSWindow` → `UIViewController` hosting an `SKView`), the input layer (`keyDown`/`keyUp` → touch), and an `NSColor` → `SKColor` sweep (~21 sites, trivial). Suggested architecture: split `GameCore` into a platform-independent **library target** + thin macOS and iOS app targets (one codebase). **Done (steps 1+2):** `GameCore` is now a platform-independent **library target** (the AppKit shell lives in a separate `ExploidsMac` executable target) and is **verified to compile for iOS** (`swiftc -typecheck` against the iOS simulator SDK, Swift 6). The `NSEvent` `keyDown`/`keyUp` overrides are thin macOS-only bridges behind `#if canImport(AppKit)` over platform-independent `handleKeyDown`/`handleKeyUp`; `simulateKeyDown`/`Up`/`TypeCharacter` call those directly (no synthetic `NSEvent`) and are the iOS input entry point. `NSApp.terminate` → `onQuit` callback (set by the shell); `NSColor` → `SKColor` everywhere; `Package.swift` declares `.iOS(.v17)`. macOS app unchanged: `swift build`/54 tests/`build-app.sh` all green. **Remaining for iOS (step 3):** add an Xcode iOS app target (SwiftPM alone can't produce a device-signable iOS `.app`) that links `GameCore`, hosts an `SKView` in a `UIViewController`, and adds the touch-control overlay; wire it to `simulateKeyDown`/`Up`. **Controls**: input is already abstracted via `simulateKeyDown`/`simulateKeyUp` (`GameScene.swift`), so touch buttons/gamepad just drive the same flags — no logic change. Plan: on-screen buttons (rotate L/R bottom-left, thrust + fire bottom-right; the charge-shot maps perfectly to touch-and-hold) **plus** MFi/Bluetooth `GameController` support (low effort, console-quality for serious players). Risk is purely control *feel* (needs on-device tuning), not technical feasibility. **Prerequisites**: (a) a paid Apple Developer account ($99/yr); (b) **replace the two musely.ai music tracks first** — Free-Plan terms forbid commercial use *and* explicitly list "distribution on … Apple Music"; a free no-IAP app is a gray area, and a retroactive paid upgrade does NOT cover already-generated tracks. Cleanest fix: regenerate own tracks via the local ACE-Step `musicgen` skill (fully owned). First-time submission → expect a learning curve (provisioning profiles, app icons/asset catalog, launch screen, App Store Connect metadata, privacy nutrition labels).
+
+### Gegner-Erweiterung: Boss + Miniboss (geplant, in Design)
+
+Stand: 2026-06-23. Entwurf aus Brainstorming; noch nicht implementiert. Andockpunkte im Code:
+UFOs sind `SKShapeNode`-Subklassen in `activeUFOs[]` (Spawn aktuell auf max. 2 gedeckelt,
+Startposition am Bildschirmrand erzwungen); Mehrfach-Treffer kennt bisher nur der Asteroid.
+Der Kopf wäre der **erste Gegner mit Lebenspunkten + Zustandsautomat**.
+
+**Kopf-Boss „Der Götze" (echter Boss).** Geschnitzter Greisen-Totem: wilde Mähne, buschige
+überhängende Brauen, tief liegende stiere Augen (rote Pupillen folgen dem Schiff), große
+knollige Hakennase, mächtiger wallender Bart mit markantem Kinn. Steinton-Vektor (Bone/Bronze)
+mit **gelbem, animiert öffnendem Mund** (geschlossen: dicke Lippen, KEINE Zähne; offen: gelb
+umrandeter Schlund mit unregelmäßigen Fängen). Look Zardoz-inspiriert, aber bewusst eigen.
+*Status: Verhalten festgezurrt, Lippen-Look noch in Abstimmung.*
+- **Reiner Spawner** — schießt nie selbst. Größe ~Radius 80 (größter Asteroid = 40).
+- **Auftreten:** zufällig einmal in **Level 5–7**, erneut in **Level 10**; in L10 (letztes Level)
+  danach **alle 4–7 Min** per Timer. Bewusst selten (nutzt sich sonst ab).
+- **3 Treffer**, jeder mit sichtbarem Feedback: kurzer Weiß-Flash + bleibender Vektor-Schaden
+  (1: ein Auge zerspringt, 2: Kiefer/Outline reißt, 3: Explosion).
+- **Zustandsautomat:** Einschweben (Augen tracken sofort) → **Lauern 5–8 s (zufällig)** =
+  Tötungsfenster → **Mund auf (animiert, SKAction)** → **10 UFOs** (Mix aus großen + kleinen,
+  zufällig) **gestaffelt über ~2,5 s** ausgespien, dabei **das `activeUFOs`-Limit von 2 umgangen**
+  → Rückzug (Einmal-Bedrohung, kein Zyklus).
+- **UFO-Spawn-Ursprung = Mund-Mittelpunkt**, mit kurzem Materialisier-Effekt; dann ziehen sie heraus.
+- **Kill während des Ausstoßes stoppt die restlichen UFOs sofort.**
+- Schiff-Kontakt = Tod. Kopf **wrappt nicht**. In **Mad-Meteoroids rotiert er mit dem Feld** mit.
+- **2000 Punkte** fürs Zerstören. Strategie: schnell vor dem Mund-Öffnen töten, sonst wenigstens
+  die Armada beim Rauskommen abfangen; Ignorieren kann übel ausgehen.
+
+**Weltraumkatzen (Minibosse).** Kleiner als der Kopf-Boss; agieren völlig gezielt, kein sinnloses
+Herumtreiben.
+- **Verhalten:** pirschen sich an den Spieler heran, **suchen Deckung hinter anderen Objekten**
+  (v.a. großen Asteroiden), um Spielerschüssen zu entgehen, und **weichen Objekten aus**. Soll
+  fordernd, aber nicht zu schwer sein.
+- **Angriff (Laseraugen):** **Zwillings-Laser** — immer **zwei parallele, längere Laserstreifen**
+  (deutlich anders als die Spielerschüsse), mit **sehr geringer Frequenz**. **Predictive Aim:**
+  extrapolieren die Flugbahn des Spielers — ändert er seine Bewegungsrichtung nicht, treffen sie.
+  Ausgleich: die Schüsse fliegen **langsam (halbe Spielerschuss-Geschwindigkeit)**.
+- **Ablauf:** **dreimal** je ein Trefferversuch (ein Doppelstrahl pro Versuch), **dazwischen jeweils
+  ausweichen**; danach **Flucht zum Bildschirmrand — kein Wrap, sie verschwinden** (kommen nicht
+  auf der anderen Seite zurück).
+- *Offen:* HP (1–2 Treffer?), genaues Vektor-Design, Auslöser/Häufigkeit.
