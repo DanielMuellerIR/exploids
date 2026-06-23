@@ -175,10 +175,14 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
   - **Prozedural: ERLEDIGT** — `SoundManager.setHeadVoice(active:openness:)` (tiefer, aufsteigender
     Sägezahn-Vokal mit openness-gesteuertem Tiefpass); GameScene triggert es während der Spawn-Phase
     mit `mouthOpenness`.
-  - **Sample-Variante: in Kuration** — 5 Varianten via `sfxgen` erzeugt (Purpose „Kopf-Boss Mooo"),
-    liegen in Number One (🔊 Effekte) auf M3. Gallery-IDs: `178222068521100`–`…104`. Nach Daniels
-    ⭐-Auswahl holen mit `sfxgen-cli.py --export --favorites --ids <…> --out assets/sfx/`, nach
-    `.m4a` wandeln, ins Manifest + `useSampledSFX`-Pfad einbinden.
+  - **Timing-Anforderung:** Sample startet, sobald sich der Mund zu öffnen beginnt, und läuft
+    weiter, bis ALLE 10 UFOs erschienen sind (~3 s Spawn-Phase). Deshalb **lange Samples** (großzügig)
+    mit **Ausfaden am Ende** (Fade wird beim Konvertieren nach `.m4a` via `ffmpeg afade` gesetzt).
+  - **Sample-Variante: in Kuration (LANGER Satz maßgeblich).**
+    - Lang (7 s, Purpose „Kopf-Boss Mooo lang"): Gallery-IDs `178222118321500`–`…504` ← **diese nehmen**.
+    - Kurz (3 s, Purpose „Kopf-Boss Mooo"): `178222068521100`–`…104` (Erstversuch, vermutlich zu kurz).
+    Nach Daniels ⭐-Auswahl: `sfxgen-cli.py --export --favorites --ids <…> --out assets/sfx/`, dann
+    nach `.m4a` wandeln (mit End-Fade), ins Manifest + `useSampledSFX`-Pfad als Boss-Stimme einbinden.
 
 **Weltraumkatzen (Minibosse).** Kleiner als der Kopf-Boss; agieren völlig gezielt, kein sinnloses
 Herumtreiben.
