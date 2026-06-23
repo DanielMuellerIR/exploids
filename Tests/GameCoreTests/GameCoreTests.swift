@@ -1493,6 +1493,28 @@ final class GameCoreTests: XCTestCase {
         XCTAssertTrue(finished, "Der Kopf soll sich nach dem Ausstoß zurückziehen und verschwinden")
     }
 
+    func testBombDropsDoNotOrphanPowerups() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+
+        scene.simulateKeyDown(keyCode: 49)   // Space -> Spiel startet (Schiff bei (0,0))
+        XCTAssertEqual(scene.gameState, .playing)
+
+        // Viele UFOs ABSEITS vom Schiff: die Bombe zerstört sie alle und droppt (20% je UFO)
+        // Power-ups an deren Position – weit genug weg, dass das Schiff nicht stirbt/einsammelt.
+        for _ in 0..<50 { scene.addUFOForTesting(at: CGPoint(x: 300, y: 300)) }
+        // Bombe genau beim Schiff -> wird eingesammelt -> detonateBomb -> Drops WÄHREND des Einsammelns.
+        scene.addPowerUpForTesting(PowerUp(type: .bomb, position: .zero))
+
+        scene.update(0.0)    // initialisiert lastUpdateTime (früher Return)
+        scene.update(0.1)    // Einsammeln + Detonation + Drops
+
+        // Invariante: KEIN Power-up darf verwaist im Szenengraph liegen (Anzahl Nodes == Tracking-Array).
+        XCTAssertEqual(scene.powerUpNodeCountInSceneForTesting, scene.activePowerUps.count,
+                       "Von der Bombe gedroppte Power-ups dürfen nicht aus activePowerUps fallen")
+    }
+
     func testFloatingHeadArmadaBypassesUFOLimit() {
         let scene = GameScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))

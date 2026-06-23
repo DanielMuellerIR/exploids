@@ -1031,17 +1031,23 @@ public final class GameScene: SKScene {
             // Schiff) praktisch nicht mehr einsammelbar und bleiben „hängen".
             if !ship.isHidden {
                 let collectRadius: CGFloat = 30.0
-                var remainingPowerUps: [PowerUp] = []
-                for powerUp in activePowerUps {
-                    if distanceBetween(ship.position, powerUp.position) <= collectRadius {
-                        SoundManager.shared.playPowerUp()
-                        collectPowerUp(powerUp)
-                        powerUp.removeFromParent()
-                    } else {
-                        remainingPowerUps.append(powerUp)
-                    }
+                // WICHTIG: erst die einzusammelnden bestimmen, DANN einsammeln und gezielt aus dem
+                // Array entfernen. Nicht „remainingPowerUps neu bauen und activePowerUps überschreiben":
+                // collectPowerUp kann (Bombe -> detonateBomb -> spawnPowerUp) WÄHRENDDESSEN neue
+                // Power-ups an activePowerUps anhängen; ein Überschreiben würde die verlieren — sie
+                // blieben als verwaiste Nodes im Szenengraph (uneinsammelbar, laufen nie ab, überleben
+                // jeden Clear). Identitäts-basiertes Entfernen bewahrt die neu gespawnten.
+                let collected = activePowerUps.filter {
+                    distanceBetween(ship.position, $0.position) <= collectRadius
                 }
-                self.activePowerUps = remainingPowerUps
+                for powerUp in collected {
+                    SoundManager.shared.playPowerUp()
+                    collectPowerUp(powerUp)
+                    powerUp.removeFromParent()
+                }
+                if !collected.isEmpty {
+                    activePowerUps.removeAll { p in collected.contains { $0 === p } }
+                }
             }
             
             // Collision detection: Player Lasers vs. Asteroids
@@ -3323,6 +3329,21 @@ public final class GameScene: SKScene {
     public func addPowerUpForTesting(_ powerUp: PowerUp) {
         self.addChild(powerUp)
         self.activePowerUps.append(powerUp)
+    }
+
+    /// For testing: fügt ein UFO an einer Position hinzu (z.B. um Bomben-Treffer zu provozieren).
+    @discardableResult
+    public func addUFOForTesting(at position: CGPoint) -> UFO {
+        let ufo = UFO(isSmall: false, startOnLeft: true, screenSize: size)
+        ufo.position = position
+        self.addChild(ufo)
+        self.activeUFOs.append(ufo)
+        return ufo
+    }
+
+    /// For testing: Anzahl der PowerUp-Knoten im Szenengraph (zur Erkennung verwaister Nodes).
+    public var powerUpNodeCountInSceneForTesting: Int {
+        return self.children.compactMap { $0 as? PowerUp }.count
     }
     
     /// For testing: returns the triple shot end time.

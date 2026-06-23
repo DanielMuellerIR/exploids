@@ -116,15 +116,18 @@ Also fixed: asteroids could spawn mid-screen because off-screen spawns were imme
 - **Scroll mode (3rd game mode)**: Ship stays centered, the world scrolls so the player can never reach the screen edge (infinite-scroller feel). Core is camera-follow (`cameraNode.position = ship.position`); the work is HUD re-anchoring to the camera node, ship-relative wrapping (to avoid a seam pop), starfield tiling, and shake offset. Estimated ~half a day as a standalone third mode (alongside Ancient Asteroids / Mad Meteoroids). Decide later whether/how it combines with Mad rotation (rotation pivot would need to follow the ship).
 - **iOS port + free App Store release** (wanted, first-time App Store submission): The renderer is SpriteKit, so the entire game logic (`GameScene`, all entities, collision, the AVFoundation audio) runs on iOS unchanged — roughly 70% of the code is reusable as-is. What needs rewriting (~30%): the entry point (`Main.swift`, `NSApplication` → UIKit/SwiftUI app lifecycle), `GameWindow.swift` (`NSWindow` → `UIViewController` hosting an `SKView`), the input layer (`keyDown`/`keyUp` → touch), and an `NSColor` → `SKColor` sweep (~21 sites, trivial). Suggested architecture: split `GameCore` into a platform-independent **library target** + thin macOS and iOS app targets (one codebase). **Done (steps 1+2):** `GameCore` is now a platform-independent **library target** (the AppKit shell lives in a separate `ExploidsMac` executable target) and is **verified to compile for iOS** (`swiftc -typecheck` against the iOS simulator SDK, Swift 6). The `NSEvent` `keyDown`/`keyUp` overrides are thin macOS-only bridges behind `#if canImport(AppKit)` over platform-independent `handleKeyDown`/`handleKeyUp`; `simulateKeyDown`/`Up`/`TypeCharacter` call those directly (no synthetic `NSEvent`) and are the iOS input entry point. `NSApp.terminate` → `onQuit` callback (set by the shell); `NSColor` → `SKColor` everywhere; `Package.swift` declares `.iOS(.v17)`. macOS app unchanged: `swift build`/54 tests/`build-app.sh` all green. **Remaining for iOS (step 3):** add an Xcode iOS app target (SwiftPM alone can't produce a device-signable iOS `.app`) that links `GameCore`, hosts an `SKView` in a `UIViewController`, and adds the touch-control overlay; wire it to `simulateKeyDown`/`Up`. **Controls**: input is already abstracted via `simulateKeyDown`/`simulateKeyUp` (`GameScene.swift`), so touch buttons/gamepad just drive the same flags — no logic change. Plan: on-screen buttons (rotate L/R bottom-left, thrust + fire bottom-right; the charge-shot maps perfectly to touch-and-hold) **plus** MFi/Bluetooth `GameController` support (low effort, console-quality for serious players). Risk is purely control *feel* (needs on-device tuning), not technical feasibility. **Prerequisites**: (a) a paid Apple Developer account ($99/yr); (b) **replace the two musely.ai music tracks first** — Free-Plan terms forbid commercial use *and* explicitly list "distribution on … Apple Music"; a free no-IAP app is a gray area, and a retroactive paid upgrade does NOT cover already-generated tracks. Cleanest fix: regenerate own tracks via the local ACE-Step `musicgen` skill (fully owned). First-time submission → expect a learning curve (provisioning profiles, app icons/asset catalog, launch screen, App Store Connect metadata, privacy nutrition labels).
 
-### BUG (offen): Compress-Powerup [C] bleibt uneinsammelbar liegen
+### BUG (BEHOBEN 2026-06-23): verwaiste Power-ups (z.B. [C]) — uneinsammelbar, unsterblich
 
-In Aufnahme `Bildschirmaufnahme 2026-06-23 um 22.30.01.mov` ab **3:27** sichtbar: Ein
-**Compress-Powerup [C]** lässt sich nicht mehr einsammeln und **verschwindet nie** (kein
-Ablauf der Lifetime, keine Distanz-Kollision). Früher gab es einen ähnlichen „Compress-Hänger",
-der via distanzbasiertem Einsammeln gefixt wurde — evtl. Regression oder Sonderfall (z.B. Powerup
-außerhalb erreichbarer Zone / Lifetime wird nicht dekrementiert / Compress-spezifisch). Zu prüfen:
-`collectPowerUp`, `activePowerUps`-Update (Lifetime/`update`), distanzbasierte Sammel-Logik in
-`GameScene.update` (collectRadius), und ob `compressLevel`/Compress-State das Einsammeln blockt.
+Symptom: ein Power-up lag fest, ließ sich nicht einsammeln, lief nie ab und überlebte sogar
+Game-Over + ESC + Level-Wechsel. **Ursache:** Die Einsammel-Schleife in `GameScene.update`
+baute `remainingPowerUps` aus einem Schnappschuss und **überschrieb** danach `activePowerUps`.
+Sammelt man eine **Bombe** ein, ruft `collectPowerUp` → `detonateBomb` → `spawnPowerUp` (20%
+UFO-Beute), das *während* der Schleife neue Power-ups an `activePowerUps` anhängt — die gingen
+beim Überschreiben verloren und blieben als **verwaiste SKNodes** im Szenengraph (nicht in
+`activePowerUps` → kein Lifetime-Update, keine Kollision, kein Clear). **Fix:** erst die
+einzusammelnden per `filter` bestimmen, dann einsammeln und **identitäts-basiert** aus dem Array
+entfernen (`removeAll { $0 === … }`) — bewahrt gleichzeitig gespawnte Power-ups. Regressionstest:
+`testBombDropsDoNotOrphanPowerups` (Invariante: PowerUp-Nodes im Szenengraph == `activePowerUps`).
 
 ### Promo-GIF einer spannenden Spielszene (TODO)
 
