@@ -90,6 +90,8 @@ public final class GameScene: SKScene {
         case ufoLaser
         case gravityWell
         case bossHead
+        case spaceCat        // von einer Weltraumkatze gerammt
+        case spaceCatLaser   // von den Laseraugen einer Weltraumkatze getroffen
     }
     
     public var lastDeathCause: DeathCause = .largeAsteroid
@@ -273,7 +275,18 @@ public final class GameScene: SKScene {
     private var nextBossTimeLevel10: TimeInterval = 0.0
     /// Flanken-Erkennung: war der Kopf im letzten Frame in der Spawn-Phase? (für den Sample-Trigger)
     private var headWasSpawning: Bool = false
-    
+
+    /// Aktive Weltraumkatzen (Minibosse), die gerade im Bild sind.
+    public private(set) var activeCats: [SpaceCat] = []
+    /// Ab diesem Level können Katzen auftauchen (vor dem Kopf-Boss in 5–7).
+    private let catFirstLevel: Int = 3
+    /// Wie viele Katzen gleichzeitig erlaubt sind (bewusst klein – sie sollen besonders bleiben).
+    private let maxActiveCats: Int = 1
+    /// Ob der Katzen-Timer schon scharfgestellt wurde (erst ab Eignung).
+    private var catTimerArmed: Bool = false
+    /// Zeitpunkt des nächsten Katzen-Spawns (absolute Spielzeit).
+    private var nextCatTime: TimeInterval = 0.0
+
     // Power-up durations
     private var tripleShotEndTime: TimeInterval = 0.0
     private var rapidFireEndTime: TimeInterval = 0.0
@@ -876,6 +889,7 @@ public final class GameScene: SKScene {
             // Kopf-Boss (Boss-Welle) auslösen und aktualisieren – nur im laufenden Spiel.
             if !isLevelClearing {
                 updateFloatingHead(currentTime: currentTime, deltaTime: deltaTime)
+                updateSpaceCats(currentTime: currentTime, deltaTime: deltaTime)
             }
 
             // Determine input states
@@ -1026,6 +1040,18 @@ public final class GameScene: SKScene {
                 }
             }
 
+            // Collision detection: Ship vs. Weltraumkatzen (Kontakt = Tod). Die Katze überlebt das
+            // (Miniboss) – nur das Schiff nimmt Schaden. Kleiner Radius-Zuschlag für faires Rammen.
+            if !ship.isHidden && !isInvincible {
+                for cat in activeCats {
+                    if distanceBetween(ship.position, cat.position) <= cat.collisionRadius + 8.0 {
+                        lastDeathCause = .spaceCat
+                        damageShip()
+                        break
+                    }
+                }
+            }
+
             // Collision detection: Ship vs. Power-ups – distanzbasiert (Abstand der Mittelpunkte),
             // NICHT über das Schiff-Polygon. Sonst sind Power-ups bei aktivem Compress (winziges
             // Schiff) praktisch nicht mehr einsammelbar und bleiben „hängen".
@@ -1056,11 +1082,11 @@ public final class GameScene: SKScene {
             var newAsteroids: [Asteroid] = []
             
             for laser in activeLasers {
-                if laser.type == .enemy {
+                if laser.type != .normal {   // Gegner-Schüsse (UFO + Katze) treffen keine Asteroiden
                     remainingLasers.append(laser)
                     continue
                 }
-                
+
                 var laserHit = false
                 for asteroid in activeAsteroids {
                     if !hitAsteroids.contains(asteroid) && CollisionHelper.laserIntersectsAsteroid(laser, asteroid) {
@@ -1169,14 +1195,14 @@ public final class GameScene: SKScene {
             var remainingLasers2: [Laser] = []
             
             for laser in remainingLasers {
-                if laser.type == .enemy {
+                if laser.type != .normal {   // Gegner-Schüsse (UFO + Katze) treffen keine UFOs
                     remainingLasers2.append(laser)
                     continue
                 }
-                
+
                 var laserHit = false
                 let (start, end) = laser.getWorldSegment()
-                
+
                 for ufo in activeUFOs {
                     let ufoPoly = ufo.getWorldVertices()
                     let hit = CollisionHelper.isPointInPolygon(start, polygon: ufoPoly) || CollisionHelper.isPointInPolygon(end, polygon: ufoPoly)
@@ -1230,8 +1256,8 @@ public final class GameScene: SKScene {
                 var lasersAfterHead: [Laser] = []
                 var headAlive = true
                 for laser in remainingLasers {
-                    // Gegner-Schüsse ignorieren; nach dem Tod des Bosses Rest unverändert behalten.
-                    if !headAlive || laser.type == .enemy {
+                    // Gegner-Schüsse (UFO + Katze) ignorieren; nach dem Tod des Bosses Rest behalten.
+                    if !headAlive || laser.type != .normal {
                         lasersAfterHead.append(laser)
                         continue
                     }
@@ -1262,16 +1288,60 @@ public final class GameScene: SKScene {
                 remainingLasers = lasersAfterHead
             }
 
-            // Collision detection: Enemy Lasers vs. Ship
+            // Collision detection: Player Lasers vs. Weltraumkatzen (Miniboss mit HP)
+            if !activeCats.isEmpty {
+                var lasersAfterCats: [Laser] = []
+                var deadCats = Set<SpaceCat>()
+                for laser in remainingLasers {
+                    if laser.type != .normal {   // nur Spielerschüsse treffen die Katzen
+                        lasersAfterCats.append(laser)
+                        continue
+                    }
+                    let (start, end) = laser.getWorldSegment()
+                    var consumed = false
+                    for cat in activeCats where !deadCats.contains(cat) {
+                        let hit = distanceBetween(start, cat.position) <= cat.collisionRadius
+                               || distanceBetween(end, cat.position) <= cat.collisionRadius
+                        guard hit else { continue }
+                        let destroyed = cat.registerHit()
+                        SoundManager.shared.playExplosion()
+                        createShipExplosion(at: laser.position)
+                        shakeCamera(amplitude: 4.0, numberOfShakes: 5, durationPerShake: 0.025)
+                        consumed = true   // Schuss verbraucht (kein Durchschlag)
+                        if destroyed {
+                            self.score += cat.pointValue
+                            scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
+                            createShipExplosion(at: cat.position)
+                            shakeCamera(amplitude: 6.0, numberOfShakes: 7, durationPerShake: 0.03)
+                            // Miniboss: etwas großzügigere Beute als ein normales UFO.
+                            if Double.random(in: 0...1) <= 0.5 {
+                                spawnPowerUp(at: cat.position)
+                            }
+                            deadCats.insert(cat)
+                        }
+                        break
+                    }
+                    if consumed { laser.removeFromParent() } else { lasersAfterCats.append(laser) }
+                }
+                remainingLasers = lasersAfterCats
+                if !deadCats.isEmpty {
+                    activeCats = activeCats.filter { cat in
+                        if deadCats.contains(cat) { cat.removeFromParent(); return false }
+                        return true
+                    }
+                }
+            }
+
+            // Collision detection: Enemy Lasers vs. Ship (UFO-Schüsse UND Katzen-Augenlaser)
             if !ship.isHidden && !isInvincible {
                 let shipPoly = ship.getWorldVertices()
                 var remainingLasers3: [Laser] = []
                 for laser in remainingLasers {
-                    if laser.type == .enemy {
+                    if laser.type != .normal {
                         let (start, end) = laser.getWorldSegment()
                         if CollisionHelper.isPointInPolygon(start, polygon: shipPoly) || CollisionHelper.isPointInPolygon(end, polygon: shipPoly) {
                             laser.removeFromParent()
-                            lastDeathCause = .ufoLaser
+                            lastDeathCause = (laser.type == .catEye) ? .spaceCatLaser : .ufoLaser
                             damageShip()
                             continue
                         }
@@ -1280,7 +1350,7 @@ public final class GameScene: SKScene {
                 }
                 remainingLasers = remainingLasers3
             }
-            
+
             self.activeLasers = remainingLasers
             
         case .nameEntry, .gameOver, .quitConfirmation, .glossary, .highScores, .settings:
@@ -1816,12 +1886,30 @@ public final class GameScene: SKScene {
         }
         activeUFOs.removeAll()
 
+        // Weltraumkatzen: ein Bomben-Treffer = ein direkter Schuss (eine Stufe Schaden), nicht
+        // zwangsläufig tödlich (Katzen haben mehrere HP). Zerstörte geben Punkte + mögliche Beute.
+        var survivingCats: [SpaceCat] = []
+        for cat in activeCats {
+            let destroyed = cat.registerHit()
+            createShipExplosion(at: cat.position)
+            if destroyed {
+                self.score += cat.pointValue
+                if Double.random(in: 0...1) <= 0.5 {
+                    spawnPowerUp(at: cat.position)
+                }
+                cat.removeFromParent()
+            } else {
+                survivingCats.append(cat)
+            }
+        }
+        activeCats = survivingCats
+
         scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
-        
-        // Clear enemy lasers
+
+        // Clear enemy lasers (UFO-Schüsse UND Katzen-Augenlaser)
         var remainingLasers: [Laser] = []
         for laser in activeLasers {
-            if laser.type == .enemy {
+            if laser.type != .normal {
                 laser.removeFromParent()
             } else {
                 remainingLasers.append(laser)
@@ -2162,6 +2250,10 @@ public final class GameScene: SKScene {
                 bossLevel10Done = false
                 nextBossTimeLevel10 = 0.0
 
+                // Weltraumkatzen-Timer pro Spiel zurücksetzen.
+                catTimerArmed = false
+                nextCatTime = 0.0
+
                 // Remove previous session objects
                 clearGameEntities()
 
@@ -2419,6 +2511,9 @@ public final class GameScene: SKScene {
         activeHead = nil
         SoundManager.shared.stopAllHeadSounds()
         headWasSpawning = false
+
+        for cat in activeCats { cat.removeFromParent() }
+        activeCats.removeAll()
     }
 
     private func triggerImplosionCollapse(asteroid: Asteroid) {
@@ -2512,7 +2607,7 @@ public final class GameScene: SKScene {
         }
         // Spieler-Schüsse als Ausweich-Bedrohungen übergeben (nur eigene, nicht die der Gegner).
         let threats: [(position: CGPoint, velocity: CGPoint)] = activeLasers
-            .filter { $0.type != .enemy }
+            .filter { $0.type == .normal }
             .map { ($0.position, $0.velocity) }
         let emit = head.update(deltaTime: deltaTime, shipPosition: ship.position, laserThreats: threats)
         if emit > 0 {
@@ -2556,6 +2651,67 @@ public final class GameScene: SKScene {
         self.activeUFOs.append(ufo)
     }
 
+    /// Löst Weltraumkatzen aus und schreitet ihre KI voran. Eine Katze taucht ab `catFirstLevel` und
+    /// nur dann auf, wenn gerade kein Kopf-Boss im Bild ist (sie sollen sich nicht überlagern).
+    private func updateSpaceCats(currentTime: TimeInterval, deltaTime: TimeInterval) {
+        // Auslösen (zeitgesteuert, gedeckelt).
+        if isSpawningEnabled && activeHead == nil && currentLevel >= catFirstLevel
+            && activeCats.count < maxActiveCats {
+            if !catTimerArmed {
+                catTimerArmed = true
+                nextCatTime = currentTime + Double.random(in: 12.0...25.0)   // erster Auftritt
+            } else if currentTime >= nextCatTime {
+                spawnSpaceCat()
+                nextCatTime = currentTime + Double.random(in: 35.0...60.0)   // Abstand danach
+            }
+        }
+
+        guard !activeCats.isEmpty else { return }
+
+        // Deckungsobjekte (große/mittlere Asteroiden) und Spielerschüsse einmal aufbereiten.
+        let cover: [(position: CGPoint, radius: CGFloat)] = activeAsteroids
+            .filter { $0.sizeClass != .small }
+            .map { ($0.position, $0.sizeClass.rawValue) }
+        let threats: [(position: CGPoint, velocity: CGPoint)] = activeLasers
+            .filter { $0.type == .normal }
+            .map { ($0.position, $0.velocity) }
+
+        var survivors: [SpaceCat] = []
+        for cat in activeCats {
+            let shot = cat.update(deltaTime: deltaTime, shipPosition: ship.position,
+                                  shipVelocity: ship.isHidden ? .zero : ship.velocity,
+                                  coverObjects: cover, laserThreats: threats)
+            // Nur auf ein sichtbares Schiff feuern (kein Schuss auf ein „totes"/verstecktes).
+            if let shot = shot, !ship.isHidden {
+                fireCatTwinLaser(shot)
+                SoundManager.shared.playUfoSound()
+            }
+            if cat.isFinished {
+                cat.removeFromParent()
+            } else {
+                survivors.append(cat)
+            }
+        }
+        activeCats = survivors
+    }
+
+    /// Baut aus einem Doppelschuss zwei parallele `.catEye`-Laser (halbe Spielerschuss-Geschwindigkeit,
+    /// längere Lebensdauer, damit sie aus Schuss-Distanz auch ankommen).
+    private func fireCatTwinLaser(_ shot: SpaceCat.TwinLaserShot) {
+        for origin in shot.origins {
+            let laser = Laser(position: origin, angle: shot.angle, type: .catEye,
+                              speed: SpaceCat.laserSpeed, lifetime: 2.6)
+            self.addChild(laser)
+            self.activeLasers.append(laser)
+        }
+    }
+
+    private func spawnSpaceCat() {
+        let cat = SpaceCat(screenSize: size, startOnLeft: Bool.random())
+        self.addChild(cat)
+        self.activeCats.append(cat)
+    }
+
     private func clearGameEntities() {
         for ast in activeAsteroids {
             ast.removeFromParent()
@@ -2591,8 +2747,11 @@ public final class GameScene: SKScene {
         activeHead = nil
         SoundManager.shared.stopAllHeadSounds()
         headWasSpawning = false
+
+        for cat in activeCats { cat.removeFromParent() }
+        activeCats.removeAll()
     }
-    
+
     // MARK: - UI Configuration
     
     private func setupUIElements() {
@@ -2952,6 +3111,10 @@ public final class GameScene: SKScene {
             message = "Crushed in a black hole on Level \(currentLevel)"
         case .bossHead:
             message = "Devoured by the floating idol on Level \(currentLevel)"
+        case .spaceCat:
+            message = "Pounced by a space cat on Level \(currentLevel)"
+        case .spaceCatLaser:
+            message = "Zapped by space cat eye-beams on Level \(currentLevel)"
         }
         
         let newEntry = HighScore(initials: initials, score: score, date: Date(), deathMessage: message)
@@ -3301,6 +3464,15 @@ public final class GameScene: SKScene {
         self.addChild(head)
         self.activeHead = head
         return head
+    }
+
+    /// For testing: erzeugt sofort eine Weltraumkatze, hängt sie ein und gibt sie zurück.
+    @discardableResult
+    public func spawnSpaceCatForTesting(startOnLeft: Bool = true) -> SpaceCat {
+        let cat = SpaceCat(screenSize: size, startOnLeft: startOnLeft)
+        self.addChild(cat)
+        self.activeCats.append(cat)
+        return cat
     }
     
     /// For testing: directly adds an asteroid.

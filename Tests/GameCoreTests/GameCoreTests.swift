@@ -1538,5 +1538,95 @@ final class GameCoreTests: XCTestCase {
         // Reguläre Spawns sind auf 2 gedeckelt; die Armada muss das überschreiten.
         XCTAssertGreaterThan(maxUFOs, 2, "Die Armada soll das reguläre 2er-UFO-Limit überschreiten")
     }
+
+    // MARK: - Weltraumkatzen (SpaceCat)
+
+    func testSpaceCatStartsEntering() {
+        let cat = SpaceCat(screenSize: CGSize(width: 1024, height: 768), startOnLeft: true)
+        XCTAssertEqual(cat.phase, .entering)
+        XCTAssertEqual(cat.hitsRemaining, SpaceCat.hitsToDestroy)
+        XCTAssertFalse(cat.isFinished)
+    }
+
+    func testSpaceCatHitsToDestroy() {
+        let cat = SpaceCat(screenSize: CGSize(width: 1024, height: 768), startOnLeft: true)
+        let n = cat.hitsRemaining
+        XCTAssertGreaterThanOrEqual(n, 2)
+        for _ in 0..<(n - 1) {
+            XCTAssertFalse(cat.registerHit())   // noch nicht zerstört
+        }
+        XCTAssertTrue(cat.registerHit())        // letzter Treffer zerstört
+        XCTAssertEqual(cat.hitsRemaining, 0)
+        XCTAssertTrue(cat.registerHit())        // bleibt zerstört
+    }
+
+    func testSpaceCatFiresThreeTwinShotsThenFlees() {
+        let cat = SpaceCat(screenSize: CGSize(width: 1024, height: 768), startOnLeft: true)
+        cat.beginStalkingForTesting()
+        cat.aimDuration = 0.05
+        cat.repositionDuration = 0.05
+
+        var shots = 0
+        var finished = false
+        for _ in 0..<5000 {
+            if let shot = cat.update(deltaTime: 0.05, shipPosition: CGPoint(x: 0, y: 300),
+                                     shipVelocity: .zero) {
+                shots += 1
+                XCTAssertEqual(shot.origins.count, 2, "Doppelschuss = zwei Laser-Ursprünge")
+            }
+            if cat.isFinished { finished = true; break }
+        }
+        XCTAssertEqual(shots, 3, "Die Katze soll genau drei Doppelschuss-Versuche abgeben")
+        XCTAssertTrue(finished, "Nach dem dritten Versuch soll sie zum Rand fliehen und verschwinden")
+    }
+
+    func testSpaceCatTwinLaserIsParallelAndLeadsMovingTarget() {
+        let cat = SpaceCat(screenSize: CGSize(width: 1024, height: 768), startOnLeft: true)
+        cat.beginStalkingForTesting()
+        cat.aimDuration = 0.0   // sofort feuern (kaum Eigenbewegung)
+
+        // Schiff genau ÜBER der Katze, aber nach rechts fliegend -> Voraushalten muss nach rechts
+        // zielen (cos des Winkels deutlich > 0), nicht senkrecht nach oben (cos ~ 0).
+        let shipPos = CGPoint(x: cat.position.x, y: cat.position.y + 300)
+        let shot = cat.update(deltaTime: 0.016, shipPosition: shipPos,
+                              shipVelocity: CGPoint(x: 300, y: 0))
+        XCTAssertNotNil(shot)
+        guard let shot = shot else { return }
+
+        XCTAssertEqual(shot.origins.count, 2)
+        let gap = hypot(shot.origins[0].x - shot.origins[1].x,
+                        shot.origins[0].y - shot.origins[1].y)
+        XCTAssertGreaterThan(gap, 8.0, "Die zwei Laser sollen sichtbar parallel versetzt sein")
+        XCTAssertGreaterThan(cos(shot.angle), 0.1, "Predictive Aim soll dem Ziel vorhalten")
+    }
+
+    func testPlayerLaserDestroysSpaceCatAfterTwoHits() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+
+        scene.simulateKeyDown(keyCode: 49)   // Space -> Spiel startet (Schiff bei (0,0))
+        XCTAssertEqual(scene.gameState, .playing)
+
+        // Deterministisch: keine weiteren Spawns, Spielfeld leerräumen, damit kein Asteroid die
+        // Spielerschüsse abfängt, bevor sie die Katze treffen.
+        scene.isSpawningEnabled = false
+        scene.clearAllEntitiesForTesting()
+
+        let cat = scene.spawnSpaceCatForTesting(startOnLeft: true)
+        cat.position = CGPoint(x: 220, y: 0)   // abseits vom Schiff, damit es nicht rammt
+        let scoreBefore = scene.score
+
+        // Zwei überlappende Spielerschüsse -> zwei Treffer -> Katze (2 HP) zerstört.
+        scene.addLaserForTesting(Laser(position: CGPoint(x: 220, y: 0), angle: 0, type: .normal))
+        scene.addLaserForTesting(Laser(position: CGPoint(x: 220, y: 0), angle: 0, type: .normal))
+
+        scene.update(1.0)    // initialisiert lastUpdateTime (früher Return; nicht 0, sonst Sentinel)
+        scene.update(1.05)   // Bewegung + Kollision + Zerstörung
+
+        XCTAssertTrue(scene.activeCats.isEmpty, "Die Katze soll nach zwei Treffern zerstört sein")
+        XCTAssertGreaterThanOrEqual(scene.score - scoreBefore, cat.pointValue,
+                                    "Das Zerstören soll Punkte geben")
+    }
 }
 

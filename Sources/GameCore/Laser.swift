@@ -4,6 +4,9 @@ import SpriteKit
 public enum LaserType: Sendable {
     case normal
     case enemy
+    /// Augen-Laser der Weltraumkatze: optisch deutlich anders (zwei parallele, **längere** Streifen),
+    /// langsamer als Spielerschüsse. Wirkt wie ein Gegner-Schuss (tötet das Schiff bei Kontakt).
+    case catEye
 }
 
 /// A subclass of `SKShapeNode` representing a high-velocity laser projectile.
@@ -42,7 +45,7 @@ public final class Laser: SKShapeNode {
         
         // Define physics properties based on type
         switch type {
-        case .normal, .enemy:
+        case .normal, .enemy, .catEye:
             self.pierceLimit = 1
         }
 
@@ -52,6 +55,10 @@ public final class Laser: SKShapeNode {
             actualSpeed = speed
         case .enemy:
             actualSpeed = speed * 0.65
+        case .catEye:
+            // Katzen-Laser nutzen die übergebene Geschwindigkeit direkt (Aufrufer gibt die halbe
+            // Spielerschuss-Geschwindigkeit vor).
+            actualSpeed = speed
         }
         
         self.velocity = CGPoint(
@@ -95,6 +102,15 @@ public final class Laser: SKShapeNode {
             self.path = linePath
             self.strokeColor = SKColor(red: 1.0, green: 0.15, blue: 0.15, alpha: 1.0)
             self.lineWidth = 2.0
+
+        case .catEye:
+            // Langer, dicker oranger Streifen – passend zu den glühenden Katzenaugen und bewusst
+            // deutlich anders als der schmale rote UFO-Schuss und der gelbe Spielerschuss.
+            linePath.move(to: CGPoint(x: -16, y: 0))
+            linePath.addLine(to: CGPoint(x: 16, y: 0))
+            self.path = linePath
+            self.strokeColor = SKColor(red: 1.0, green: 0.55, blue: 0.1, alpha: 1.0)
+            self.lineWidth = 2.8
         }
         
         self.fillColor = .clear
@@ -123,6 +139,7 @@ public final class Laser: SKShapeNode {
         switch type {
         case .normal: halfLength = 6.0
         case .enemy: halfLength = 5.0
+        case .catEye: halfLength = 16.0
         }
         
         let start = CGPoint(
