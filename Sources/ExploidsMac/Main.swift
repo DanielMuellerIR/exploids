@@ -10,6 +10,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var aboutWindow: NSWindow?
 
+    /// App-Version – Single Source of Truth ist die gebaute Bundle-Version (CFBundleShortVersionString,
+    /// von build-app.sh gesetzt). Fallback fürs nicht-gebündelte `swift run`.
+    static func appVersion() -> String {
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.8.2"
+    }
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Create and display the game window
         let gameWindow = GameWindow()
@@ -123,35 +129,40 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 460),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         window.title = "About Exploids"
+        // WICHTIG: Wir halten das Fenster selbst stark (aboutWindow) und geben es im
+        // windowWillClose frei. Ohne isReleasedWhenClosed=false würde AppKit es zusätzlich beim
+        // Schließen freigeben -> Use-after-free (Crash in einer NSWindow-Animation, siehe
+        // Crash-Report 2026-06-23: _NSWindowTransformAnimation dealloc / objc_release).
+        window.isReleasedWhenClosed = false
         window.center()
         window.appearance = NSAppearance(named: .darkAqua)
-        
+
         // Semi-translucent visual effect HUD backdrop
-        let visualEffectView = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 520, height: 380))
+        let visualEffectView = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 520, height: 460))
         visualEffectView.material = .hudWindow
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 380))
-        
-        // Retro C64 Courier Header
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 460))
+
+        // Retro C64 Courier Header (AppKit-Koordinaten: y=0 ist UNTEN)
         let titleLabel = NSTextField(labelWithString: "EXPLOIDS")
         titleLabel.font = NSFont(name: "Courier-Bold", size: 40)
         titleLabel.textColor = .cyan
-        titleLabel.frame = NSRect(x: 20, y: 300, width: 480, height: 50)
+        titleLabel.frame = NSRect(x: 20, y: 395, width: 480, height: 50)
         titleLabel.alignment = .center
         container.addSubview(titleLabel)
-        
-        let versionLabel = NSTextField(labelWithString: "Version 0.6.1 - retro vectors")
+
+        let versionLabel = NSTextField(labelWithString: "Version \(AppDelegate.appVersion()) — retro vectors")
         versionLabel.font = NSFont(name: "Courier", size: 14)
         versionLabel.textColor = .orange
-        versionLabel.frame = NSRect(x: 20, y: 270, width: 480, height: 20)
+        versionLabel.frame = NSRect(x: 20, y: 366, width: 480, height: 20)
         versionLabel.alignment = .center
         container.addSubview(versionLabel)
         
@@ -172,7 +183,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         - Alphanumeric high scores leaderboard persisted in UserDefaults
         """
         
-        let descLabel = NSTextView(frame: NSRect(x: 30, y: 20, width: 460, height: 230))
+        let descLabel = NSTextView(frame: NSRect(x: 30, y: 20, width: 460, height: 335))
         descLabel.string = descText
         descLabel.font = NSFont(name: "Courier", size: 12)
         descLabel.textColor = .white
@@ -212,7 +223,7 @@ struct Main {
         
         // 1. Check for --version or -v
         if arguments.contains("--version") || arguments.contains("-v") {
-            print("Exploids version 0.6.1")
+            print("Exploids version \(AppDelegate.appVersion())")
             exit(0)
         }
         
