@@ -16,10 +16,16 @@ public final class UFO: SKShapeNode {
         return isSmall ? 500 : 200
     }
     
-    // Wavy sinusoidal movement parameters
+    // Bewegungs-Parameter: leichtes seitliches Schlingern + sanfte Verfolgung des Spielers.
     private var wavyTime: TimeInterval = 0.0
-    private let wavyAmplitude: CGFloat = 80.0
     private let wavyFrequency: CGFloat = 3.5
+    /// Sanfte Beschleunigung Richtung Spieler (px/s²) – bewusst klein, damit es nicht zu schwer wird:
+    /// die horizontale Grund-Bewegung trägt das UFO trotzdem über den Schirm und wieder hinaus.
+    private let homingAccel: CGFloat = 72.0
+    /// Stärke des seitlichen Schlingerns (Retro-Charakter, summiert sich nicht zu Drift auf).
+    private let wobbleAccel: CGFloat = 240.0
+    /// Maximale Geschwindigkeit (gedeckelt): klein/wendig vs. groß/träge.
+    private var maxSpeed: CGFloat { isSmall ? 235.0 : 155.0 }
     
     // Local outline vertices (unscaled)
     public let baseVertices: [CGPoint] = [
@@ -106,14 +112,42 @@ public final class UFO: SKShapeNode {
     
     // MARK: - Updates
     
-    /// Updates position and wavy trajectory.
-    public func update(deltaTime: TimeInterval) {
+    /// Aktualisiert Position und Flugbahn. `target` (Schiffsposition) wird – falls vorhanden – für
+    /// eine **sanfte Verfolgung** genutzt: Das UFO beschleunigt leicht in Spielerrichtung, sodass es
+    /// nicht stumpf seitlich wegfliegt, sondern „ein bisschen auf uns zu" kommt. Der Effekt ist
+    /// gedeckelt (siehe `homingAccel`/`maxSpeed`), damit es nicht zu schwer wird.
+    public func update(deltaTime: TimeInterval, target: CGPoint? = nil) {
         let dt = CGFloat(deltaTime)
-        
         wavyTime += deltaTime
-        // Apply sinusoidal fluctuation to vertical velocity
-        velocity.y = wavyAmplitude * sin(CGFloat(wavyTime) * wavyFrequency)
-        
+
+        // Sanfte Verfolgung: leicht Richtung Spieler beschleunigen.
+        if let target = target {
+            let dx = target.x - position.x
+            let dy = target.y - position.y
+            let d = hypot(dx, dy)
+            if d > 0.001 {
+                velocity.x += dx / d * homingAccel * dt
+                velocity.y += dy / d * homingAccel * dt
+            }
+        }
+
+        // Seitliches Schlingern senkrecht zur Flugrichtung (Charakter, ohne Netto-Drift).
+        let speedNow = hypot(velocity.x, velocity.y)
+        if speedNow > 0.001 {
+            let perpX = -velocity.y / speedNow
+            let perpY = velocity.x / speedNow
+            let wob = sin(CGFloat(wavyTime) * wavyFrequency) * wobbleAccel * dt
+            velocity.x += perpX * wob
+            velocity.y += perpY * wob
+        }
+
+        // Geschwindigkeit deckeln.
+        let speed = hypot(velocity.x, velocity.y)
+        if speed > maxSpeed {
+            velocity.x *= maxSpeed / speed
+            velocity.y *= maxSpeed / speed
+        }
+
         position.x += velocity.x * dt
         position.y += velocity.y * dt
     }

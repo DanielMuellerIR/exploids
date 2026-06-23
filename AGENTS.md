@@ -146,13 +146,20 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
   danach **alle 4–7 Min** per Timer. Bewusst selten (nutzt sich sonst ab).
 - **3 Treffer**, jeder mit sichtbarem Feedback: kurzer Weiß-Flash + bleibender Vektor-Schaden
   (1: ein Auge zerspringt, 2: Kiefer/Outline reißt, 3: Explosion).
-- **Zustandsautomat:** Einschweben (Augen tracken sofort) → **Lauern 5–8 s (zufällig)** =
-  Tötungsfenster → **Mund auf (animiert, SKAction)** → **10 UFOs** (Mix aus großen + kleinen,
+- **Zustandsautomat:** Einschweben (Augen tracken sofort) → **Lauern ~3–5 s (zufällig, ø 4)** =
+  Tötungsfenster → **Mund auf (animiert)** → **10 UFOs** (Mix aus großen + kleinen,
   zufällig) **gestaffelt über ~2,5 s** ausgespien, dabei **das `activeUFOs`-Limit von 2 umgangen**
   → Rückzug (Einmal-Bedrohung, kein Zyklus).
-- **UFO-Spawn-Ursprung = Mund-Mittelpunkt**, mit kurzem Materialisier-Effekt; dann ziehen sie heraus.
+- **Der Kopf bleibt nicht stehen:** er schwebt während Lauern/Spawnen langsam hin und her (Wander),
+  damit er nicht trivial zu treffen ist. Hitbox-Radius bewusst eng (~68, etwa Sichtgröße).
+- **UFO-Spawn-Ursprung = Mund-Mittelpunkt**, mit kurzem Materialisier-Blitz; dann ziehen sie heraus.
+- **Sanfte UFO-Verfolgung (gilt für ALLE UFOs, regulär + Armada):** UFOs beschleunigen leicht und
+  gedeckelt Richtung Spieler (`UFO.homingAccel`/`maxSpeed`), statt nur seitlich wegzufliegen — sie
+  kommen „ein bisschen auf uns zu", bleiben aber durch die horizontale Grund-Bewegung killbar und
+  verlassen den Schirm. Bewusst moderat, damit es mit vielen Objekten nicht zu schwer wird.
 - **Kill während des Ausstoßes stoppt die restlichen UFOs sofort.**
-- Schiff-Kontakt = Tod. Kopf **wrappt nicht**. In **Mad-Meteoroids rotiert er mit dem Feld** mit.
+- Schiff-Kontakt = Tod. Kopf **wrappt nicht**. In **Mad-Meteoroids** überlagert sich die Mad-Feld-
+  Rotation mit der Wander-Bewegung.
 - **2000 Punkte** fürs Zerstören. Strategie: schnell vor dem Mund-Öffnen töten, sonst wenigstens
   die Armada beim Rauskommen abfangen; Ignorieren kann übel ausgehen.
 - **Sound (TODO, noch NICHT umgesetzt):** Beim Mund-Öffnen ein gruseliges, tiefes, sonores

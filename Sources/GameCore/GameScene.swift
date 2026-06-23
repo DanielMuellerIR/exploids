@@ -1331,8 +1331,9 @@ public final class GameScene: SKScene {
         // Update active UFOs
         var remainingUFOs: [UFO] = []
         for ufo in activeUFOs {
-            ufo.update(deltaTime: deltaTime)
-            
+            // Sanfte Verfolgung nur auf das sichtbare Schiff (kein Homing auf ein „totes"/verstecktes).
+            ufo.update(deltaTime: deltaTime, target: ship.isHidden ? nil : ship.position)
+
             // Shoot at player ship
             if !ship.isHidden {
                 if let laser = ufo.shoot(target: ship.position, currentTime: currentTime) {

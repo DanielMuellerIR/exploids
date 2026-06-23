@@ -32,12 +32,12 @@ public final class FloatingHead: SKNode {
 
     /// Ungefährer Kollisionsradius (Kreis) in Szenen-Einheiten – etwas größer als der größte
     /// Asteroid (Radius 40).
-    public let collisionRadius: CGFloat = 88.0
+    public let collisionRadius: CGFloat = 68.0
 
     // MARK: - Tuning (für Tests überschreibbar)
 
-    /// Lauer-Dauer in Sekunden, bis der Mund aufgeht (im Spiel zufällig 5–8 s).
-    public var lurkDuration: TimeInterval = Double.random(in: 5.0...8.0)
+    /// Lauer-Dauer in Sekunden, bis der Mund aufgeht (im Spiel zufällig ~3–5 s, ø 4).
+    public var lurkDuration: TimeInterval = Double.random(in: 3.0...5.0)
     /// Dauer des Mund-Öffnens bzw. -Schließens.
     public var mouthMoveDuration: TimeInterval = 0.45
     /// Abstand zwischen zwei ausgespienen UFOs.
@@ -55,6 +55,17 @@ public final class FloatingHead: SKNode {
     private var stateTime: TimeInterval = 0.0
     private var spawnsDone: Int = 0
     private var spawnAccumulator: TimeInterval = 0.0
+
+    // Wander: der Kopf bleibt nicht stehen (schwerer zu treffen). Als Delta auf die Position
+    // angewandt, damit er sich mit einer eventuellen Mad-Feld-Rotation überlagert statt sie zu
+    // überschreiben.
+    private var wanderTime: TimeInterval = 0.0
+    private var prevWanderX: CGFloat = 0.0
+    private var prevWanderY: CGFloat = 0.0
+    private let wanderAmpX: CGFloat = 260.0
+    private let wanderFreqX: CGFloat = 0.75
+    private let wanderAmpY: CGFloat = 42.0
+    private let wanderFreqY: CGFloat = 1.15
     /// 0 = Mund zu, 1 = Mund ganz offen.
     private var mouthProgress: CGFloat = 0.0
 
@@ -133,6 +144,7 @@ public final class FloatingHead: SKNode {
             }
 
         case .lurking:
+            applyWander(dt: deltaTime)
             stateTime += deltaTime
             if stateTime >= lurkDuration {
                 phase = .spawning
@@ -142,6 +154,7 @@ public final class FloatingHead: SKNode {
             }
 
         case .spawning:
+            applyWander(dt: deltaTime)
             // Mund öffnen.
             advanceMouth(toward: 1.0, dt: deltaTime)
             // Erst speien, wenn der Mund weit genug offen ist.
@@ -220,6 +233,18 @@ public final class FloatingHead: SKNode {
 
     private func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
         return hypot(a.x - b.x, a.y - b.y)
+    }
+
+    /// Lässt den Kopf gemächlich hin- und herschweben (kein stehendes Ziel). Wird als Delta
+    /// angewandt, damit eine eventuelle Mad-Feld-Rotation der GameScene erhalten bleibt.
+    private func applyWander(dt: TimeInterval) {
+        wanderTime += dt
+        let nx = sin(CGFloat(wanderTime) * wanderFreqX) * wanderAmpX
+        let ny = sin(CGFloat(wanderTime) * wanderFreqY) * wanderAmpY
+        position.x += nx - prevWanderX
+        position.y += ny - prevWanderY
+        prevWanderX = nx
+        prevWanderY = ny
     }
 
     private func advanceMouth(toward target: CGFloat, dt: TimeInterval) {
