@@ -39,6 +39,12 @@ final class GameViewController: UIViewController {
         setupScene()
         setupOverlay()
         setupDisplayLink()
+
+        // Hintergrundmusik starten – das Pendant zu macOS (Main.swift:29 ruft dasselbe auf).
+        // Ohne diesen Aufruf bleibt die App auf iOS stumm (SFX laufen, weil sie bei Spiel-Events
+        // on-demand abgespielt werden; Musik muss dagegen aktiv gestartet werden). MusicPlayer.start()
+        // aktiviert intern die AVAudioSession und respektiert den Musik-Schalter aus den Einstellungen.
+        MusicPlayer.shared.start()
     }
 
     // MARK: - Setup
