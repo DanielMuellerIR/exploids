@@ -65,9 +65,42 @@ public final class SoundManager: @unchecked Sendable {
     // MARK: - Initialization
     
     private init() {
+        #if os(iOS)
+        // iOS meldet über diese Notification, dass sich die Audio-Konfiguration geändert hat
+        // (z.B. wenn sich beim Kaltstart die Audio-Route/Session erst einpendelt oder Kopfhörer
+        // ein-/ausgesteckt werden). Dabei STOPPT die AVAudioEngine sich selbst – ohne Neustart
+        // bleibt der Ton sonst im kaputten/verzerrten Zustand. Wir starten daher neu und lassen
+        // den MusicPlayer seinen Knoten neu einplanen (dessen Planung geht beim Stopp verloren).
+        NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: audioEngine,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
+        }
+        #endif
         // Automatically set up and start the audio engine
         start()
     }
+
+    #if os(iOS)
+    /// Wird aufgerufen, nachdem die Engine neu gestartet wurde (Konfigurationswechsel) – damit der
+    /// MusicPlayer seinen Musik-Knoten neu einplanen kann. Wird vom MusicPlayer gesetzt.
+    public var onEngineReset: (@Sendable () -> Void)?
+
+    /// Reagiert auf AVAudioEngineConfigurationChange: Engine neu starten und Abnehmer benachrichtigen.
+    private func handleConfigurationChange() {
+        guard !isMuted else { return }
+        do {
+            if !audioEngine.isRunning {
+                try audioEngine.start()
+            }
+        } catch {
+            print("SoundManager: Neustart nach ConfigurationChange fehlgeschlagen: \(error.localizedDescription)")
+        }
+        onEngineReset?()
+    }
+    #endif
     
     // MARK: - Public API
     

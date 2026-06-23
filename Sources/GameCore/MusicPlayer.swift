@@ -121,7 +121,23 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
         node.volume = 0.8
         started = true
 
+        // Nach einem Engine-Neustart (Konfigurationswechsel) muss der Knoten neu eingeplant werden –
+        // die Engine hat beim Stopp alle geplanten Daten verworfen.
+        SoundManager.shared.onEngineReset = { [weak self] in
+            self?.handleEngineReset()
+        }
+
         scheduleCurrentLocked()
+        node.play()
+    }
+
+    /// Nach einem Engine-Neustart: den (noch attachten) Knoten neu einplanen und weiterspielen.
+    private func handleEngineReset() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard started, let node = musicNode, isEnabled, !isSuppressed else { return }
+        node.stop()              // verwirft Reste, setzt den Knoten zurück
+        scheduleCurrentLocked()  // aktuellen Track neu anhängen
         node.play()
     }
 
