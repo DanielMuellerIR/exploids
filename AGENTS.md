@@ -162,12 +162,16 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
   Rotation mit der Wander-Bewegung.
 - **2000 Punkte** fürs Zerstören. Strategie: schnell vor dem Mund-Öffnen töten, sonst wenigstens
   die Armada beim Rauskommen abfangen; Ignorieren kann übel ausgehen.
-- **Sound (TODO, noch NICHT umgesetzt):** Beim Mund-Öffnen ein gruseliges, tiefes, sonores
-  menschliches **„Moooooo"**. Der Ton beginnt bereits mit **geschlossenen Lippen** (gedämpftes
-  Ansetzen wie beim Sprechbeginn) und **ändert sich hörbar im Moment des Öffnens** (Klang wird
-  offen/voller) — dieser Übergang soll nachgeahmt werden. Läuft in **Schleife, solange der Kopf
-  UFOs ausspuckt**, danach Stop → Mund zu → Rückzug. Erzeugung über den **`sfxgen`-Skill** als
-  Sample(s), passend zum vorhandenen Sample-SFX-Set (`Sources/GameCore/SFX/*.m4a`, `useSampledSFX`).
+- **Sound:** Beim Mund-Öffnen ein gruseliges, tiefes, sonores menschliches **„Moooooo"** —
+  beginnt gedämpft (Lippen zu) und öffnet sich hörbar (voller), läuft solange UFOs ausgespien
+  werden, dann Stop → Mund zu → Rückzug.
+  - **Prozedural: ERLEDIGT** — `SoundManager.setHeadVoice(active:openness:)` (tiefer, aufsteigender
+    Sägezahn-Vokal mit openness-gesteuertem Tiefpass); GameScene triggert es während der Spawn-Phase
+    mit `mouthOpenness`.
+  - **Sample-Variante: in Kuration** — 5 Varianten via `sfxgen` erzeugt (Purpose „Kopf-Boss Mooo"),
+    liegen in Number One (🔊 Effekte) auf M3. Gallery-IDs: `178222068521100`–`…104`. Nach Daniels
+    ⭐-Auswahl holen mit `sfxgen-cli.py --export --favorites --ids <…> --out assets/sfx/`, nach
+    `.m4a` wandeln, ins Manifest + `useSampledSFX`-Pfad einbinden.
 
 **Weltraumkatzen (Minibosse).** Kleiner als der Kopf-Boss; agieren völlig gezielt, kein sinnloses
 Herumtreiben.
