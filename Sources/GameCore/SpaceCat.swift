@@ -75,8 +75,11 @@ public final class SpaceCat: SKNode {
     private let approachStrength: CGFloat = 520.0
     private let coverStrength: CGFloat = 360.0    // Sog Richtung „hinter einem Asteroiden"
     private let coverSearchRange: CGFloat = 360.0 // nur Asteroiden in dieser Nähe als Deckung nutzen
-    private let coverMargin: CGFloat = 14.0       // Sicherheitsabstand hinter der Deckung
     private let avoidBuffer: CGFloat = 18.0       // Abstand, ab dem Objekten ausgewichen wird
+    // Sicherheitsabstand hinter der Deckung. MUSS größer als `avoidBuffer` sein, sonst läge der
+    // angesteuerte Deckungspunkt INNERHALB des Abstoßungs-Radius → die Ausweich-Kraft würde die
+    // Katze sofort wieder wegdrücken (Dauer-Oszillation). Daher bewusst > avoidBuffer.
+    private let coverMargin: CGFloat = 28.0
     private let avoidStrength: CGFloat = 900.0
     private let dodgeStrength: CGFloat = 1100.0   // Ausweichen vor Spielerschüssen
     private let dodgeRadius: CGFloat = 70.0       // seitlicher Gefahren-Korridor um einen Schuss
@@ -87,6 +90,7 @@ public final class SpaceCat: SKNode {
     // Augen-Geometrie (lokale Koordinaten) – Ursprung der Laser liegt vor den Augen.
     private let eyeSpacing: CGFloat = 7.0         // halber Augenabstand (parallele Laser)
     private let muzzleAhead: CGFloat = 18.0       // Laser-Ursprung etwas vor den Körper legen
+    private let maxLeadTime: CGFloat = 2.0        // Deckel für die Predictive-Aim-Vorhaltezeit (s)
 
     // Farben (Retro-Vektor, Violett-Körper mit glühenden Orange-Augen – klar verschieden von
     // den grün/pinken UFOs und dem Stein-Boss).
@@ -137,11 +141,15 @@ public final class SpaceCat: SKNode {
     /// - Parameter coverObjects: Positionen + Radien geeigneter Deckungsobjekte (große/mittlere
     ///   Asteroiden), hinter die sich die Katze stellt.
     /// - Parameter laserThreats: Position + Geschwindigkeit der Spielerschüsse (zum Ausweichen).
+    /// - Parameter canFire: Ob die Katze feuern darf (i.d.R. nur bei sichtbarem Schiff). Ist sie
+    ///   `false`, hält die Katze den Ziel-Countdown an und bewegt sich nur – so wird kein Angriffs-
+    ///   versuch „verschwendet", während der Spieler tot/im Respawn ist.
     /// - Returns: Einen `TwinLaserShot`, falls die Katze **in diesem Frame** feuert, sonst `nil`.
     @discardableResult
     public func update(deltaTime: TimeInterval, shipPosition: CGPoint, shipVelocity: CGPoint,
                        coverObjects: [(position: CGPoint, radius: CGFloat)] = [],
-                       laserThreats: [(position: CGPoint, velocity: CGPoint)] = []) -> TwinLaserShot? {
+                       laserThreats: [(position: CGPoint, velocity: CGPoint)] = [],
+                       canFire: Bool = true) -> TwinLaserShot? {
         var shot: TwinLaserShot? = nil
 
         switch phase {
@@ -155,15 +163,18 @@ public final class SpaceCat: SKNode {
         case .stalking:
             updateMovement(dt: deltaTime, shipPos: shipPosition, cover: coverObjects,
                            threats: laserThreats, seekCover: true)
-            stateTime += deltaTime
-            if stateTime >= aimDuration {
-                shot = makeTwinShot(shipPos: shipPosition, shipVel: shipVelocity)
-                flashEyes()
-                attacksRemaining -= 1
-                if attacksRemaining > 0 {
-                    enterRepositioning(awayFrom: shipPosition)
-                } else {
-                    enterFleeing(awayFrom: shipPosition)
+            // Ziel-Countdown nur fortschreiten lassen, wenn auch wirklich gefeuert werden darf.
+            if canFire {
+                stateTime += deltaTime
+                if stateTime >= aimDuration {
+                    shot = makeTwinShot(shipPos: shipPosition, shipVel: shipVelocity)
+                    flashEyes()
+                    attacksRemaining -= 1
+                    if attacksRemaining > 0 {
+                        enterRepositioning(awayFrom: shipPosition)
+                    } else {
+                        enterFleeing(awayFrom: shipPosition)
+                    }
                 }
             }
 
@@ -230,11 +241,14 @@ public final class SpaceCat: SKNode {
     // MARK: - Schuss (Predictive Aim, Zwillings-Laser)
 
     private func makeTwinShot(shipPos: CGPoint, shipVel: CGPoint) -> TwinLaserShot {
-        // Flugzeit iterativ schätzen und das Ziel entsprechend voraushalten.
-        var t = distance(position, shipPos) / SpaceCat.laserSpeed
+        // Flugzeit iterativ schätzen und das Ziel entsprechend voraushalten. Die Vorhaltezeit wird
+        // gedeckelt: Ist das Schiff schneller als der Laser (Ship.maxVelocity 350 > laserSpeed 300),
+        // gibt es keinen exakten Abfangpunkt – ohne Deckel würde `t` davonlaufen und der Schuss
+        // sinnlos weit ins Leere zielen. Der Deckel hält die Vorhaltung in plausiblem Rahmen.
+        var t = min(maxLeadTime, distance(position, shipPos) / SpaceCat.laserSpeed)
         for _ in 0..<2 {
             let pred = CGPoint(x: shipPos.x + shipVel.x * t, y: shipPos.y + shipVel.y * t)
-            t = distance(position, pred) / SpaceCat.laserSpeed
+            t = min(maxLeadTime, distance(position, pred) / SpaceCat.laserSpeed)
         }
         let predicted = CGPoint(x: shipPos.x + shipVel.x * t, y: shipPos.y + shipVel.y * t)
         let angle = atan2(predicted.y - position.y, predicted.x - position.x)

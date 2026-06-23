@@ -2575,8 +2575,10 @@ public final class GameScene: SKScene {
     /// Löst den Kopf-Boss bei Bedarf aus und schreitet ihn voran. Auftreten: zufällig einmal in
     /// Level 5–7, erneut in Level 10, danach in Level 10 alle 4–7 Minuten (es gibt kein weiteres Level).
     private func updateFloatingHead(currentTime: TimeInterval, deltaTime: TimeInterval) {
-        // Auslösen (immer nur ein Kopf gleichzeitig).
-        if activeHead == nil && isSpawningEnabled {
+        // Auslösen (immer nur ein Kopf gleichzeitig). Nicht spawnen, solange eine Weltraumkatze
+        // im Bild ist – Boss und Miniboss sollen sich nie überlagern. Verworfene Auslöser gehen
+        // nicht verloren: Die Bedingung greift im nächsten Frame erneut, sobald die Katze weg ist.
+        if activeHead == nil && activeCats.isEmpty && isSpawningEnabled {
             var spawn = false
             if !bossFirstDone && currentLevel >= bossFirstTargetLevel && currentLevel <= 7 {
                 spawn = true
@@ -2678,11 +2680,13 @@ public final class GameScene: SKScene {
 
         var survivors: [SpaceCat] = []
         for cat in activeCats {
+            // Nur auf ein sichtbares Schiff feuern; canFire hält sonst den Ziel-Countdown an,
+            // damit kein Angriffsversuch während Spielertod/Respawn verfällt.
             let shot = cat.update(deltaTime: deltaTime, shipPosition: ship.position,
                                   shipVelocity: ship.isHidden ? .zero : ship.velocity,
-                                  coverObjects: cover, laserThreats: threats)
-            // Nur auf ein sichtbares Schiff feuern (kein Schuss auf ein „totes"/verstecktes).
-            if let shot = shot, !ship.isHidden {
+                                  coverObjects: cover, laserThreats: threats,
+                                  canFire: !ship.isHidden)
+            if let shot = shot {
                 fireCatTwinLaser(shot)
                 SoundManager.shared.playUfoSound()
             }
@@ -2699,8 +2703,10 @@ public final class GameScene: SKScene {
     /// längere Lebensdauer, damit sie aus Schuss-Distanz auch ankommen).
     private func fireCatTwinLaser(_ shot: SpaceCat.TwinLaserShot) {
         for origin in shot.origins {
+            // Lebensdauer großzügig (3.0 s ≈ 900 px Reichweite bei 300 px/s), damit die Schüsse
+            // das Ziel auch aus größerer Distanz noch erreichen, bevor sie ablaufen.
             let laser = Laser(position: origin, angle: shot.angle, type: .catEye,
-                              speed: SpaceCat.laserSpeed, lifetime: 2.6)
+                              speed: SpaceCat.laserSpeed, lifetime: 3.0)
             self.addChild(laser)
             self.activeLasers.append(laser)
         }

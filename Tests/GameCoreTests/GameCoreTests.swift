@@ -1628,5 +1628,50 @@ final class GameCoreTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(scene.score - scoreBefore, cat.pointValue,
                                     "Das Zerstören soll Punkte geben")
     }
+
+    func testSpaceCatLaserKillsShipWithOwnDeathCause() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+
+        scene.simulateKeyDown(keyCode: 49)
+        XCTAssertEqual(scene.gameState, .playing)
+        scene.isSpawningEnabled = false
+        scene.clearAllEntitiesForTesting()
+
+        // Katzen-Augenlaser (.catEye) direkt auf das Schiff (bei (0,0)).
+        scene.addLaserForTesting(Laser(position: .zero, angle: 0, type: .catEye,
+                                       speed: SpaceCat.laserSpeed, lifetime: 3.0))
+        scene.update(1.0)
+        scene.update(1.05)
+
+        XCTAssertEqual(scene.lastDeathCause, .spaceCatLaser,
+                       "Treffer durch Katzen-Augenlaser soll die eigene Todesursache setzen")
+    }
+
+    func testCatEyeLaserDoesNotHitAsteroidsOrUFOs() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+
+        scene.simulateKeyDown(keyCode: 49)
+        XCTAssertEqual(scene.gameState, .playing)
+        scene.isSpawningEnabled = false
+        scene.clearAllEntitiesForTesting()
+
+        let ast = Asteroid(sizeClass: .large, isImplodingType: false, isWobblingType: false)
+        ast.position = CGPoint(x: 120, y: 0)
+        scene.addAsteroidForTesting(ast)
+        scene.addUFOForTesting(at: CGPoint(x: 120, y: 0))
+
+        // Katzen-Augenlaser über Asteroid + UFO – er ist ein Gegner-Schuss und darf keines treffen.
+        scene.addLaserForTesting(Laser(position: CGPoint(x: 120, y: 0), angle: 0, type: .catEye,
+                                       speed: SpaceCat.laserSpeed, lifetime: 3.0))
+        scene.update(1.0)
+        scene.update(1.05)
+
+        XCTAssertEqual(scene.activeAsteroids.count, 1, "Katzen-Augenlaser darf keine Asteroiden zerstören")
+        XCTAssertEqual(scene.activeUFOs.count, 1, "Katzen-Augenlaser darf keine UFOs zerstören")
+    }
 }
 
