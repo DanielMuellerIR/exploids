@@ -126,9 +126,10 @@ Der Kopf wäre der **erste Gegner mit Lebenspunkten + Zustandsautomat**.
 **Kopf-Boss „Der Götze" (echter Boss).** Geschnitzter Greisen-Totem: wilde Mähne, buschige
 überhängende Brauen, tief liegende stiere Augen (rote Pupillen folgen dem Schiff), große
 knollige Hakennase, mächtiger wallender Bart mit markantem Kinn. Steinton-Vektor (Bone/Bronze)
-mit **gelbem, animiert öffnendem Mund** (geschlossen: dicke Lippen, KEINE Zähne; offen: gelb
-umrandeter Schlund mit unregelmäßigen Fängen). Look Zardoz-inspiriert, aber bewusst eigen.
-*Status: Verhalten festgezurrt, Lippen-Look noch in Abstimmung.*
+mit **animiert öffnendem Mund**. Geschlossen: geschwungene **Doppelbogen-Lippen** (zwei Bögen
+oben, ein Bogen unten) in **derselben Linienfarbe wie der restliche Kopf** (kein Sondergelb),
+KEINE Zähne. Offen: Schlund mit **gelben Linien** + unregelmäßigen Fängen, UFO materialisiert
+mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
 - **Reiner Spawner** — schießt nie selbst. Größe ~Radius 80 (größter Asteroid = 40).
 - **Auftreten:** zufällig einmal in **Level 5–7**, erneut in **Level 10**; in L10 (letztes Level)
   danach **alle 4–7 Min** per Timer. Bewusst selten (nutzt sich sonst ab).
