@@ -7,8 +7,28 @@ Exploids is a native macOS Asteroids clone with a C-64 inspired vector aesthetic
 - **Language**: Swift 6 (strict concurrency compliant).
 - **GUI & Windowing**: AppKit (`NSApplication`, `NSWindow`, `NSAppearance`).
 - **Render Engine**: SpriteKit (`SKView`, `SKScene`, `SKShapeNode`). Coordinates are centered around `(0, 0)` with standard wrap-around physics boundaries.
-- **Audio Engine**: AVFoundation (`AVAudioEngine`, `AVAudioSourceNode`). Procedural synth sounds calculated in real-time on the audio render thread.
+- **Audio Engine**: AVFoundation (`AVAudioEngine`, `AVAudioSourceNode`). Procedural synth sounds calculated in real-time on the audio render thread. On **iOS** the background music is **not** played via a separate `AVAudioPlayer` but as an `AVAudioPlayerNode` on the *same* `AVAudioEngine` as the SFX (`SoundManager.makeMusicNode`), so there is a single render path; `SoundManager` also restarts the engine on `AVAudioEngineConfigurationChange` (e.g. plugging/unplugging headphones). On macOS the music keeps using `AVAudioPlayer` (no such issue there).
 - **Build System**: Swift Package Manager (SPM) executable package.
+
+---
+
+## iOS Audio: distorted sound under the Xcode debugger (gotcha)
+
+**Symptom:** On a physical iPhone, the background music (and SFX) sound **completely
+distorted / unrecognizable** when the app is launched from Xcode with **CMD+R**. Quitting the
+app and relaunching it by tapping its icon makes the sound perfectly clean.
+
+**Cause:** The attached **LLDB debugger perturbs the real-time audio render thread** on device.
+This is *not* an app bug — every Xcode `CMD+R` reinstalls *and* attaches the debugger, so it
+always reproduces; an icon-launch runs without the debugger and is fine. **The shipped/Release
+build is unaffected.** The iOS Simulator does **not** reproduce it (audio formats all line up at
+48 kHz there).
+
+**How to verify audio from Xcode without the artifact:** Edit Scheme → **Run** → **Info** tab →
+uncheck **"Debug executable"**, then run. Audio is clean. Re-enable it for normal debugging.
+
+Do **not** "fix" this in code (it cost a long debugging detour once): all playback formats are
+already consistent, and `AVAudioEngineConfigurationChange` does *not* fire in this case.
 
 ---
 
