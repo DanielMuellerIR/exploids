@@ -33,6 +33,8 @@ public final class SoundManager: @unchecked Sendable {
     /// Pool von Player-Knoten für überlappende Wiedergabe (Round-Robin).
     private var samplePlayers: [AVAudioPlayerNode] = []
     private var samplePlayerIndex = 0
+    /// Eigener Knoten für die lange Kopf-Boss-Stimme (damit sie gezielt gestoppt werden kann).
+    private var bossHeadPlayer: AVAudioPlayerNode?
     /// Zähler je Effekt für das reihum-Abspielen der Varianten.
     private var sampleVariantIndex: [String: Int] = [:]
     private var samplesLoaded = false
@@ -494,7 +496,7 @@ public final class SoundManager: @unchecked Sendable {
         // Stereo/sampleRate – passt zum Format der generierten .m4a-Dateien, daher ist beim Laden
         // keine Format-Konvertierung nötig (Puffer werden direkt verwendet).
         guard let canonical = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else { return }
-        let names = ["laser", "explosion", "powerup", "bomb", "chargeshot", "ufo", "levelcomplete", "implosion"]
+        let names = ["laser", "explosion", "powerup", "bomb", "chargeshot", "ufo", "levelcomplete", "implosion", "bosshead"]
         for n in names {
             var variants: [AVAudioPCMBuffer] = []
             var idx = 0
@@ -514,6 +516,39 @@ public final class SoundManager: @unchecked Sendable {
             audioEngine.connect(node, to: audioEngine.mainMixerNode, format: canonical)
             samplePlayers.append(node)
         }
+
+        // Eigener Knoten für die lange Kopf-Boss-Stimme.
+        let bhNode = AVAudioPlayerNode()
+        audioEngine.attach(bhNode)
+        audioEngine.connect(bhNode, to: audioEngine.mainMixerNode, format: canonical)
+        bossHeadPlayer = bhNode
+    }
+
+    /// Spielt die gesampelte Kopf-Boss-Stimme einmal ab (langes „Moooo" mit End-Fade). Nur sinnvoll
+    /// im Sample-Modus; im prozeduralen Modus übernimmt stattdessen `setHeadVoice(...)`.
+    public func playBossHead() {
+        guard !isMuted else { return }
+        if !audioEngine.isRunning { start() }
+        loadSamplesIfNeeded()
+        sampleLock.lock()
+        let buf = sampleBuffers["bosshead"]?.first
+        let node = bossHeadPlayer
+        sampleLock.unlock()
+        guard let buffer = buf, let player = node else { return }
+        player.stop()
+        player.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+        player.play()
+    }
+
+    /// Stoppt die gesampelte Kopf-Boss-Stimme sofort (z.B. wenn der Boss zerstört wird).
+    public func stopBossHead() {
+        bossHeadPlayer?.stop()
+    }
+
+    /// Stoppt beide Kopf-Stimm-Varianten (prozedural + Sample) – für sichere Übergänge.
+    public func stopAllHeadSounds() {
+        setHeadVoice(active: false, openness: 0)
+        stopBossHead()
     }
 
     /// Spielt ein Sample des Effekts ab (reihum die nächste Variante, Round-Robin über den Player-Pool).

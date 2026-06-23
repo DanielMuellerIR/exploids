@@ -271,6 +271,8 @@ public final class GameScene: SKScene {
     private var bossLevel10Done: Bool = false
     /// Nächster zeitgesteuerter Auftritt in Level 10 (alle 4–7 Min, da es kein weiteres Level gibt).
     private var nextBossTimeLevel10: TimeInterval = 0.0
+    /// Flanken-Erkennung: war der Kopf im letzten Frame in der Spawn-Phase? (für den Sample-Trigger)
+    private var headWasSpawning: Bool = false
     
     // Power-up durations
     private var tripleShotEndTime: TimeInterval = 0.0
@@ -2065,7 +2067,8 @@ public final class GameScene: SKScene {
         // Stop sound engine hum
         SoundManager.shared.setThrustActive(false)
         SoundManager.shared.setChargingActive(false)
-        SoundManager.shared.setHeadVoice(active: false, openness: 0)
+        SoundManager.shared.stopAllHeadSounds()
+        headWasSpawning = false
         
         switch newState {
         case .startScreen:
@@ -2431,7 +2434,8 @@ public final class GameScene: SKScene {
 
         activeHead?.removeFromParent()
         activeHead = nil
-        SoundManager.shared.setHeadVoice(active: false, openness: 0)
+        SoundManager.shared.stopAllHeadSounds()
+        headWasSpawning = false
     }
 
     private func triggerImplosionCollapse(asteroid: Asteroid) {
@@ -2518,7 +2522,9 @@ public final class GameScene: SKScene {
 
         // Voranschreiten + UFO-Armada ausspeien.
         guard let head = activeHead else {
-            SoundManager.shared.setHeadVoice(active: false, openness: 0)
+            if headWasSpawning { SoundManager.shared.stopBossHead() }
+            headWasSpawning = false
+            SoundManager.shared.stopAllHeadSounds()
             return
         }
         // Spieler-Schüsse als Ausweich-Bedrohungen übergeben (nur eigene, nicht die der Gegner).
@@ -2537,12 +2543,24 @@ public final class GameScene: SKScene {
             activeHead = nil
         }
 
-        // Boss-Stimme: tiefes, aufsteigendes „Moooo", solange der Kopf den Mund öffnet/UFOs ausspeit.
-        if let head = activeHead, head.phase == .spawning {
-            SoundManager.shared.setHeadVoice(active: true, openness: Double(head.mouthOpenness))
-        } else {
+        // Boss-Stimme während Mund-auf/Spawn: im Sample-Modus das lange Mooo-Sample (einmal, mit Fade),
+        // sonst die prozedurale Stimme (kontinuierlich, openness-gesteuert).
+        let spawningNow = (activeHead?.phase == .spawning)
+        if SoundManager.shared.useSampledSFX {
+            if spawningNow && !headWasSpawning {
+                SoundManager.shared.playBossHead()       // Start beim Mund-Öffnen
+            } else if !spawningNow && headWasSpawning {
+                SoundManager.shared.stopBossHead()        // Spawn vorbei -> Sample stoppen
+            }
             SoundManager.shared.setHeadVoice(active: false, openness: 0)
+        } else {
+            if let head = activeHead, head.phase == .spawning {
+                SoundManager.shared.setHeadVoice(active: true, openness: Double(head.mouthOpenness))
+            } else {
+                SoundManager.shared.setHeadVoice(active: false, openness: 0)
+            }
         }
+        headWasSpawning = spawningNow
     }
 
     /// Erzeugt ein einzelnes Armada-UFO am Mund-Mittelpunkt (Mix groß/klein) – umgeht bewusst das
@@ -2588,7 +2606,8 @@ public final class GameScene: SKScene {
 
         activeHead?.removeFromParent()
         activeHead = nil
-        SoundManager.shared.setHeadVoice(active: false, openness: 0)
+        SoundManager.shared.stopAllHeadSounds()
+        headWasSpawning = false
     }
     
     // MARK: - UI Configuration

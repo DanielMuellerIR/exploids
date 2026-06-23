@@ -54,6 +54,13 @@
         "implosion_0.m4a",
         "implosion_1.m4a"
       ]
+    },
+    {
+      "name": "bosshead",
+      "files": [
+        "bosshead_0.m4a"
+      ],
+      "prompt": "tiefes, aufsteigendes monstroeses Mooo (Kopf-Boss), lang mit End-Fade (gewaehlt)"
     }
   ]
 }

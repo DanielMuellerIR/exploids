@@ -178,11 +178,11 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
   - **Timing-Anforderung:** Sample startet, sobald sich der Mund zu öffnen beginnt, und läuft
     weiter, bis ALLE 10 UFOs erschienen sind (~3 s Spawn-Phase). Deshalb **lange Samples** (großzügig)
     mit **Ausfaden am Ende** (Fade wird beim Konvertieren nach `.m4a` via `ffmpeg afade` gesetzt).
-  - **Sample-Variante: in Kuration (LANGER Satz maßgeblich).**
-    - Lang (7 s, Purpose „Kopf-Boss Mooo lang"): Gallery-IDs `178222118321500`–`…504` ← **diese nehmen**.
-    - Kurz (3 s, Purpose „Kopf-Boss Mooo"): `178222068521100`–`…104` (Erstversuch, vermutlich zu kurz).
-    Nach Daniels ⭐-Auswahl: `sfxgen-cli.py --export --favorites --ids <…> --out assets/sfx/`, dann
-    nach `.m4a` wandeln (mit End-Fade), ins Manifest + `useSampledSFX`-Pfad als Boss-Stimme einbinden.
+  - **Sample-Variante: ERLEDIGT** — Daniels ⭐-Wahl (Gallery-ID `178222118321504`, 7 s) exportiert,
+    nach `Sources/GameCore/SFX/bosshead_0.m4a` (44,1 kHz Stereo, End-Fade via `ffmpeg afade`) gewandelt,
+    im Manifest eingetragen. Im **Sample-Modus** (`useSampledSFX`) spielt `SoundManager.playBossHead()`
+    das lange Mooo **einmal beim Mund-Öffnen** (Flanke in `GameScene.updateFloatingHead`), `stopBossHead()`
+    bei Spawn-Ende/Kill/Statuswechsel; im prozeduralen Modus weiter `setHeadVoice(...)`.
 
 **Weltraumkatzen (Minibosse).** Kleiner als der Kopf-Boss; agieren völlig gezielt, kein sinnloses
 Herumtreiben.
