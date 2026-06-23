@@ -68,6 +68,10 @@ public final class FloatingHead: SKNode {
     private let rightSocketCenter = CGPoint(x: 48, y: -18)
     private var closedLips: SKNode!
     private var openMaw: SKNode!
+    // Schadens-Risse (anfangs versteckt, je Treffer eine Stufe sichtbar).
+    private var leftEyeCrack: SKShapeNode!
+    private var rightEyeCrack: SKShapeNode!
+    private var jawCrack: SKShapeNode!
     /// y-Position des Mund-Mittelpunkts in Mockup-Koordinaten (Spawn-Ursprung der UFOs).
     private let mouthLocalY: CGFloat = 108.0
 
@@ -79,6 +83,7 @@ public final class FloatingHead: SKNode {
     private let mouthYellow = SKColor(red: 1.0, green: 0.8, blue: 0.27, alpha: 1.0)
     private let fangCol = SKColor(red: 0.91, green: 0.86, blue: 0.71, alpha: 1.0)
     private let throatCol = SKColor(red: 0.03, green: 0.03, blue: 0.02, alpha: 1.0)
+    private let crackRed = SKColor(red: 1.0, green: 0.23, blue: 0.42, alpha: 1.0)
 
     // MARK: - Init
 
@@ -148,6 +153,7 @@ public final class FloatingHead: SKNode {
                     emit += 1
                 }
             }
+            if emit > 0 { showMouthSpawnFlash() }
             if spawnsDone >= totalSpawns {
                 phase = .retreating
                 stateTime = 0.0
@@ -172,6 +178,7 @@ public final class FloatingHead: SKNode {
         guard hitsRemaining > 0 else { return true }
         hitsRemaining -= 1
         showHitFeedback()
+        updateDamageVisual()
         return hitsRemaining <= 0
     }
 
@@ -269,9 +276,42 @@ public final class FloatingHead: SKNode {
         for node in art.children {
             guard let shape = node as? SKShapeNode else { continue }
             if shape.strokeColor != .clear {
-                shape.strokeColor = color ?? (shape.name == "yellow" ? mouthYellow : stone)
+                shape.strokeColor = color ?? originalColor(for: shape)
             }
         }
+    }
+
+    private func originalColor(for shape: SKShapeNode) -> SKColor {
+        switch shape.name {
+        case "yellow": return mouthYellow
+        case "red":    return crackRed
+        default:       return stone
+        }
+    }
+
+    /// Zeigt die Schadens-Risse passend zur Trefferzahl (Stufe 1: ein Auge, Stufe 2: zweites Auge + Kiefer).
+    private func updateDamageVisual() {
+        let stage = 3 - hitsRemaining   // 1, 2 oder 3
+        if stage >= 1 { leftEyeCrack.isHidden = false }
+        if stage >= 2 {
+            rightEyeCrack.isHidden = false
+            jawCrack.isHidden = false
+        }
+    }
+
+    /// Kurzer Materialisier-Blitz (Ring) im Mund-Mittelpunkt, wenn ein UFO ausgespien wird.
+    private func showMouthSpawnFlash() {
+        guard scene != nil else { return }
+        let ring = SKShapeNode(circleOfRadius: 8)
+        ring.position = CGPoint(x: 0, y: mouthLocalY)
+        ring.strokeColor = eyeGlow
+        ring.fillColor = .clear
+        ring.lineWidth = 2
+        art.addChild(ring)
+        ring.run(.sequence([
+            .group([.scale(to: 2.6, duration: 0.25), .fadeOut(withDuration: 0.25)]),
+            .removeFromParent()
+        ]))
     }
 
     // MARK: - Grafik-Aufbau (Mockup-Koordinaten, y nach unten)
@@ -335,6 +375,25 @@ public final class FloatingHead: SKNode {
         rightPupil = circleNode(pupilCol, filled: true, center: rightSocketCenter, r: 3.8)
         art.addChild(leftPupil)
         art.addChild(rightPupil)
+
+        // Schadens-Risse (versteckt; je Treffer eine Stufe sichtbar).
+        leftEyeCrack = strokeNode(crackRed, 2.0, segments: [
+            [P(-60,-26),P(-50,-18),P(-58,-12),P(-46,-10)], [P(-48,-20),P(-40,-28)]
+        ])
+        leftEyeCrack.name = "red"; leftEyeCrack.isHidden = true
+        art.addChild(leftEyeCrack)
+
+        rightEyeCrack = strokeNode(crackRed, 2.0, segments: [
+            [P(60,-26),P(50,-18),P(58,-12),P(46,-10)], [P(48,-20),P(40,-28)]
+        ])
+        rightEyeCrack.name = "red"; rightEyeCrack.isHidden = true
+        art.addChild(rightEyeCrack)
+
+        jawCrack = strokeNode(crackRed, 2.0, segments: [
+            [P(-118,10),P(-98,4),P(-108,20),P(-90,16)], [P(40,34),P(56,40),P(46,54)], [P(-44,70),P(-28,92)]
+        ])
+        jawCrack.name = "red"; jawCrack.isHidden = true
+        art.addChild(jawCrack)
 
         // Hakennase
         let nose = SKShapeNode(path: nosePath())
