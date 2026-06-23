@@ -390,7 +390,9 @@ public final class SoundManager: @unchecked Sendable {
 
                 // 3. Synthesize Head Voice (tiefes, aufsteigendes „Moooo")
                 let headTarget = headActive ? 0.45 : 0.0
-                self.headVoiceVolume += (headTarget - self.headVoiceVolume) * 0.0008
+                // Schneller Einsatz, aber sanftes AUSFADEN am Ende (~0,4 s Release statt abruptem Stopp).
+                let headRamp = headActive ? 0.0008 : 0.00006
+                self.headVoiceVolume += (headTarget - self.headVoiceVolume) * headRamp
                 if headActive || self.headVoiceVolume > 0.0008 {
                     self.headVoiceTime += 1.0 / localSampleRate
                     // Grundton steigt von ~70 Hz auf ~135 Hz über ~1.6 s und hält dann.
