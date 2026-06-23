@@ -3,8 +3,6 @@ import SpriteKit
 /// Predefined projectile types for exploids.
 public enum LaserType: Sendable {
     case normal
-    case charge1
-    case chargeMax
     case enemy
 }
 
@@ -46,20 +44,12 @@ public final class Laser: SKShapeNode {
         switch type {
         case .normal, .enemy:
             self.pierceLimit = 1
-        case .charge1:
-            self.pierceLimit = 2
-        case .chargeMax:
-            self.pierceLimit = 9999
         }
-        
+
         let actualSpeed: CGFloat
         switch type {
         case .normal:
             actualSpeed = speed
-        case .charge1:
-            actualSpeed = speed * 1.15
-        case .chargeMax:
-            actualSpeed = speed * 1.3
         case .enemy:
             actualSpeed = speed * 0.65
         }
@@ -97,23 +87,7 @@ public final class Laser: SKShapeNode {
             self.path = linePath
             self.strokeColor = SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
             self.lineWidth = 2.0
-            
-        case .charge1:
-            // Glowing cyan wide line segment
-            linePath.move(to: CGPoint(x: -12, y: 0))
-            linePath.addLine(to: CGPoint(x: 12, y: 0))
-            self.path = linePath
-            self.strokeColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0)
-            self.lineWidth = 4.0
-            
-        case .chargeMax:
-            // Heavy bright orange/red double-thick segment
-            linePath.move(to: CGPoint(x: -20, y: 0))
-            linePath.addLine(to: CGPoint(x: 20, y: 0))
-            self.path = linePath
-            self.strokeColor = SKColor(red: 1.0, green: 0.35, blue: 0.0, alpha: 1.0)
-            self.lineWidth = 8.0
-            
+
         case .enemy:
             // Red warning line segment
             linePath.move(to: CGPoint(x: -5, y: 0))
@@ -148,8 +122,6 @@ public final class Laser: SKShapeNode {
         let halfLength: CGFloat
         switch type {
         case .normal: halfLength = 6.0
-        case .charge1: halfLength = 12.0
-        case .chargeMax: halfLength = 20.0
         case .enemy: halfLength = 5.0
         }
         

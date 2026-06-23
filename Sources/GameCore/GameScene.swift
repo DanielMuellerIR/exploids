@@ -337,10 +337,6 @@ public final class GameScene: SKScene {
     private let livesLabel = SKLabelNode(fontNamed: "Courier")
     private let levelSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private let modeSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let musicHintLabel = SKLabelNode(fontNamed: "Courier")
-    /// Zeigt am Startbildschirm den aktuellen SFX-Stil (prozedural vs. Samples) und – auf macOS –
-    /// die Umschalt-Taste. Wird beim Umschalten (N / iOS-„SFX"-Button) aktualisiert.
-    private let sfxModeLabel = SKLabelNode(fontNamed: "Courier")
     // Einstellungen-Ansicht: Titel + drei Umschalt-Zeilen + Bedien-Hinweis.
     private let settingsTitleLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private let settingsMusicLabel = SKLabelNode(fontNamed: "Courier")
@@ -476,7 +472,6 @@ public final class GameScene: SKScene {
         // Initialen-Eingabe (dort ist „M" ein einzugebender Buchstabe).
         if gameState != .nameEntry, charactersIgnoringModifiers?.lowercased() == "m" {
             MusicPlayer.shared.toggle()
-            updateMusicHintLabel()
             updateSettingsLabels()
             return
         }
@@ -486,7 +481,6 @@ public final class GameScene: SKScene {
         // Ebenfalls überall außer bei der Initialen-Eingabe (dort ist „N" ein Buchstabe).
         if gameState != .nameEntry, charactersIgnoringModifiers?.lowercased() == "n" {
             SoundManager.shared.useSampledSFX.toggle()
-            updateSfxModeLabel()   // Anzeige am Startbildschirm sofort mitführen
             updateSettingsLabels()
             SoundManager.shared.playPowerUp()
             return
@@ -2048,8 +2042,6 @@ public final class GameScene: SKScene {
         beamNode.isHidden = true
         levelSelectionLabel.isHidden = true
         modeSelectionLabel.isHidden = true
-        musicHintLabel.isHidden = true
-        sfxModeLabel.isHidden = true
         settingsTitleLabel.isHidden = true
         settingsMusicLabel.isHidden = true
         settingsSfxLabel.isHidden = true
@@ -2306,9 +2298,6 @@ public final class GameScene: SKScene {
         startPromptLabel.isHidden = true
         instructionsLabel.isHidden = true
         glossaryPromptLabel.isHidden = true
-        musicHintLabel.isHidden = true
-        // SFX-Stil-Anzeige bleibt auf iOS sichtbar (zwischen Level-Auswahl und unteren Buttons).
-        sfxModeLabel.position = CGPoint(x: 0, y: -70)
     }
 
     /// iOS-Breitformat: Highscore-Liste kompakt unter einem Titel oben anordnen (eigene
@@ -2380,18 +2369,6 @@ public final class GameScene: SKScene {
         let modeName = (selectedMode == .madMeteoroids) ? "MAD METEOROIDS" : "ANCIENT ASTEROIDS"
         let hint = isCompactLayout ? "" : "  (▲/▼ TO SELECT)"
         modeSelectionLabel.text = "MODE: \(modeName)\(hint)"
-    }
-
-    private func updateMusicHintLabel() {
-        let state = MusicPlayer.shared.isEnabled ? "ON" : "OFF"
-        musicHintLabel.text = "PRESS M TO TOGGLE MUSIC ON/OFF  (\(state))"
-    }
-
-    /// Aktualisiert die Startbildschirm-Anzeige des SFX-Stils. Auf macOS mit Tasten-Hinweis,
-    /// auf iOS (kompakt) ohne (dort gibt es den „SFX"-Button).
-    private func updateSfxModeLabel() {
-        let mode = SoundManager.shared.useSampledSFX ? "SAMPLE" : "PROCEDURAL"
-        sfxModeLabel.text = isCompactLayout ? "SFX: \(mode)" : "SFX: \(mode)   (PRESS N)"
     }
 
     /// Aktualisiert die drei Umschalt-Zeilen der Einstellungen mit dem aktuellen Stand.
@@ -2721,27 +2698,6 @@ public final class GameScene: SKScene {
         modeSelectionLabel.zPosition = 100
         modeSelectionLabel.isHidden = true
         self.addChild(modeSelectionLabel)
-
-        // Music toggle hint (Start Screen)
-        musicHintLabel.fontSize = 14
-        musicHintLabel.fontColor = .lightGray
-        musicHintLabel.horizontalAlignmentMode = .center
-        musicHintLabel.position = CGPoint(x: 0, y: -300)
-        musicHintLabel.zPosition = 100
-        musicHintLabel.isHidden = true
-        self.addChild(musicHintLabel)
-        updateMusicHintLabel()
-
-        // SFX-Stil-Anzeige (Start Screen). Default-Position für macOS (unter dem Musik-Hinweis);
-        // iOS verschiebt sie in applyCompactStartScreenLayout an eine im Querformat sichtbare Stelle.
-        sfxModeLabel.fontSize = 14
-        sfxModeLabel.fontColor = .lightGray
-        sfxModeLabel.horizontalAlignmentMode = .center
-        sfxModeLabel.position = CGPoint(x: 0, y: -330)
-        sfxModeLabel.zPosition = 100
-        sfxModeLabel.isHidden = true
-        self.addChild(sfxModeLabel)
-        updateSfxModeLabel()
 
         // Einstellungen-Ansicht
         settingsTitleLabel.text = "SETTINGS"
