@@ -34,6 +34,9 @@ public final class FloatingHead: SKNode {
     /// Asteroid (Radius 40).
     public let collisionRadius: CGFloat = 68.0
 
+    /// Aktueller Mund-Öffnungsgrad (0 = zu, 1 = ganz offen) – steuert u.a. die Boss-Stimme.
+    public var mouthOpenness: CGFloat { mouthProgress }
+
     // MARK: - Tuning (für Tests überschreibbar)
 
     /// Lauer-Dauer in Sekunden, bis der Mund aufgeht (im Spiel zufällig ~3–5 s, ø 4).

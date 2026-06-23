@@ -42,7 +42,14 @@ public final class SoundManager: @unchecked Sendable {
     private var isThrustActive: Bool = false
     private var isChargingActive: Bool = false
     private var currentChargeProgress: Double = 0.0
-    
+
+    // Kopf-Boss-Stimme: ein tiefes, aufsteigendes „Moooo" (vokal-artig). Gesteuert über
+    // setHeadVoice(active:openness:); `openness` (0=Lippen zu/gedämpft, 1=Mund offen/voller) wird
+    // vom Mund-Öffnungsgrad gespeist. Diese drei Felder werden vom Main-Thread unter engineLock gesetzt.
+    private var isHeadVoiceActive: Bool = false
+    private var headVoiceOpenness: Double = 0.0
+    private var headVoiceRestart: Bool = false
+
     // Engine Hum Synthesis State (only mutated on the audio render thread)
     private var enginePhase: Double = 0.0
     private var engineLfoPhase: Double = 0.0
@@ -52,7 +59,14 @@ public final class SoundManager: @unchecked Sendable {
     
     // Charge Hum Synthesis State (only mutated on the audio render thread)
     private var chargePhase: Double = 0.0
-    
+
+    // Head Voice Synthesis State (only mutated on the audio render thread)
+    private var headVoicePhase: Double = 0.0       // Grundton-Phase
+    private var headVoiceVolume: Double = 0.0      // gerampte Lautstärke (sanftes Ein-/Ausblenden)
+    private var headVoiceTime: Double = 0.0        // Zeit seit Stimm-Start (für das Aufsteigen)
+    private var headVoiceLP: Double = 0.0          // Tiefpass-Zustand (Vokal-Öffnung „m" -> „oo")
+    private var headVoiceVibPhase: Double = 0.0    // Vibrato-Phase
+
     /// Mute state of the synthesizer. If true, audio engine setup/start is skipped and no sounds are generated.
     public var isMuted: Bool = CommandLine.arguments.contains("--no-sound") {
         didSet {
@@ -195,7 +209,24 @@ public final class SoundManager: @unchecked Sendable {
         currentChargeProgress = progress
         engineLock.unlock()
     }
-    
+
+    /// Steuert die Kopf-Boss-Stimme (tiefes, aufsteigendes „Moooo").
+    /// - active: ob die Stimme klingen soll (typisch: während der Kopf den Mund öffnet + UFOs ausspeit).
+    /// - openness: 0 = Lippen geschlossen (gedämpftes „m"), 1 = Mund offen (volleres „oo").
+    public func setHeadVoice(active: Bool, openness: Double) {
+        guard !isMuted else { return }
+        if active && !audioEngine.isRunning {
+            start()
+        }
+        engineLock.lock()
+        if active && !isHeadVoiceActive {
+            headVoiceRestart = true   // beim (Wieder-)Einsetzen das Aufsteigen von vorn beginnen
+        }
+        isHeadVoiceActive = active
+        headVoiceOpenness = max(0.0, min(1.0, openness))
+        engineLock.unlock()
+    }
+
     // MARK: - Private Setup
     
     private func setupAudioGraph() {
@@ -266,8 +297,17 @@ public final class SoundManager: @unchecked Sendable {
             let thrustActive = self.isThrustActive
             let charging = self.isChargingActive
             let chargeProg = self.currentChargeProgress
+            let headActive = self.isHeadVoiceActive
+            let headOpen = self.headVoiceOpenness
+            let headRestart = self.headVoiceRestart
+            if headRestart { self.headVoiceRestart = false }
             self.engineLock.unlock()
-            
+
+            if headRestart {
+                self.headVoiceTime = 0.0
+                self.headVoicePhase = 0.0
+            }
+
             let targetFreq: Double = thrustActive ? 120.0 : 50.0
             let targetVol: Double = thrustActive ? 0.35 : 0.0
             
@@ -280,9 +320,11 @@ public final class SoundManager: @unchecked Sendable {
                 }
             }
             
-            if self.engineCurrentVolume < 0.001 && !thrustActive && !charging {
+            if self.engineCurrentVolume < 0.001 && !thrustActive && !charging
+                && !headActive && self.headVoiceVolume < 0.001 {
                 isSilence.pointee = true
                 self.engineCurrentVolume = 0.0
+                self.headVoiceVolume = 0.0
                 return noErr
             }
             
@@ -345,7 +387,32 @@ public final class SoundManager: @unchecked Sendable {
                         self.chargePhase -= 2.0 * .pi
                     }
                 }
-                
+
+                // 3. Synthesize Head Voice (tiefes, aufsteigendes „Moooo")
+                let headTarget = headActive ? 0.45 : 0.0
+                self.headVoiceVolume += (headTarget - self.headVoiceVolume) * 0.0008
+                if headActive || self.headVoiceVolume > 0.0008 {
+                    self.headVoiceTime += 1.0 / localSampleRate
+                    // Grundton steigt von ~70 Hz auf ~135 Hz über ~1.6 s und hält dann.
+                    let rise = min(1.0, self.headVoiceTime / 1.6)
+                    let baseFreq = 70.0 + 65.0 * rise
+                    // leichtes Vibrato
+                    self.headVoiceVibPhase += 2.0 * .pi * 5.2 / localSampleRate
+                    if self.headVoiceVibPhase >= 2.0 * .pi { self.headVoiceVibPhase -= 2.0 * .pi }
+                    let f0 = baseFreq * (1.0 + 0.02 * sin(self.headVoiceVibPhase))
+                    // Sägezahn als oberwellenreiche Stimmband-Quelle.
+                    let frac = self.headVoicePhase / (2.0 * .pi)
+                    let saw = 2.0 * (frac - floor(frac + 0.5))
+                    // Vokal-Öffnung: Tiefpass-Cutoff steigt mit `headOpen` (zu = dumpfes „m", offen = „oo").
+                    let cutoff = 320.0 + 1100.0 * headOpen
+                    let alpha = min(1.0, max(0.02, 2.0 * .pi * cutoff / localSampleRate))
+                    self.headVoiceLP += alpha * (saw - self.headVoiceLP)
+                    let openGain = 0.55 + 0.45 * headOpen
+                    sampleValue += self.headVoiceLP * self.headVoiceVolume * openGain
+                    self.headVoicePhase += 2.0 * .pi * f0 / localSampleRate
+                    if self.headVoicePhase >= 2.0 * .pi { self.headVoicePhase -= 2.0 * .pi }
+                }
+
                 let finalSample = Float(max(-1.0, min(1.0, sampleValue)))
                 for buffer in abl {
                     if let ptr = buffer.mData?.assumingMemoryBound(to: Float.self) {

@@ -2065,6 +2065,7 @@ public final class GameScene: SKScene {
         // Stop sound engine hum
         SoundManager.shared.setThrustActive(false)
         SoundManager.shared.setChargingActive(false)
+        SoundManager.shared.setHeadVoice(active: false, openness: 0)
         
         switch newState {
         case .startScreen:
@@ -2430,6 +2431,7 @@ public final class GameScene: SKScene {
 
         activeHead?.removeFromParent()
         activeHead = nil
+        SoundManager.shared.setHeadVoice(active: false, openness: 0)
     }
 
     private func triggerImplosionCollapse(asteroid: Asteroid) {
@@ -2515,7 +2517,10 @@ public final class GameScene: SKScene {
         }
 
         // Voranschreiten + UFO-Armada ausspeien.
-        guard let head = activeHead else { return }
+        guard let head = activeHead else {
+            SoundManager.shared.setHeadVoice(active: false, openness: 0)
+            return
+        }
         let emit = head.update(deltaTime: deltaTime, shipPosition: ship.position)
         if emit > 0 {
             let mouth = head.mouthWorldPosition
@@ -2530,6 +2535,13 @@ public final class GameScene: SKScene {
         if head.isFinished {
             head.removeFromParent()
             activeHead = nil
+        }
+
+        // Boss-Stimme: tiefes, aufsteigendes „Moooo", solange der Kopf den Mund öffnet/UFOs ausspeit.
+        if let head = activeHead, head.phase == .spawning {
+            SoundManager.shared.setHeadVoice(active: true, openness: Double(head.mouthOpenness))
+        } else {
+            SoundManager.shared.setHeadVoice(active: false, openness: 0)
         }
     }
 
@@ -2576,6 +2588,7 @@ public final class GameScene: SKScene {
 
         activeHead?.removeFromParent()
         activeHead = nil
+        SoundManager.shared.setHeadVoice(active: false, openness: 0)
     }
     
     // MARK: - UI Configuration
