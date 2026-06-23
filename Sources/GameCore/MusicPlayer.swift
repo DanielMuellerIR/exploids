@@ -6,12 +6,18 @@ import Foundation
 ///
 /// Die Musik lässt sich global mit „M" ein-/ausschalten. Einmal ausgeschaltet, bleibt sie bis zum
 /// Programmende aus (reiner Laufzeit-Schalter, kein Persistieren) – außer man schaltet sie wieder ein.
+///
+/// Plattform-Unterschied bei der Wiedergabe:
+/// - **macOS**: eigenständiger `AVAudioPlayer` (funktioniert dort einwandfrei).
+/// - **iOS**: die Musik läuft als `AVAudioPlayerNode` an derselben `AVAudioEngine` wie die SFX
+///   (siehe `SoundManager.makeMusicNode`). Grund: Ein separater `AVAudioPlayer` neben der laufenden
+///   SFX-Engine erzeugt auf iOS Verzerrungen (zwei Render-Pfade auf dieselbe Audio-Hardware). Über
+///   einen gemeinsamen Knoten gibt es nur einen Render-Pfad und damit saubere Musik.
 public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Sendable {
 
     /// Gemeinsame Singleton-Instanz.
     public static let shared = MusicPlayer()
 
-    private var player: AVAudioPlayer?
     private var tracks: [URL] = []
     private var index = 0
 
@@ -25,6 +31,17 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
         let noSound = CommandLine.arguments.contains("--no-sound")
         return testing || noSound
     }()
+
+    #if os(iOS)
+    // iOS: Musik als Knoten in der gemeinsamen SFX-Engine. `lock` schützt Knoten + Index gegen
+    // den Completion-Handler des Schedulers (läuft auf einem internen Audio-Thread).
+    private let lock = NSLock()
+    private var musicNode: AVAudioPlayerNode?
+    private var started = false
+    #else
+    // macOS: eigenständiger AVAudioPlayer.
+    private var player: AVAudioPlayer?
+    #endif
 
     private override init() {
         super.init()
@@ -46,16 +63,91 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
     public func start() {
         guard isEnabled, !isSuppressed, !tracks.isEmpty else { return }
         #if os(iOS)
-        // Ohne aktive AVAudioSession bleibt der AVAudioPlayer auf iOS stumm.
-        AudioSessionConfig.activate()
-        #endif
+        startEngineMusic()
+        #else
         if player?.isPlaying == true { return }
         if let existing = player {
             existing.play() // aus Pause fortsetzen
         } else {
             playCurrent()
         }
+        #endif
     }
+
+    /// Schaltet die Musik ein bzw. aus.
+    public func setEnabled(_ enabled: Bool) {
+        isEnabled = enabled
+        if enabled {
+            start()
+        } else {
+            #if os(iOS)
+            lock.lock()
+            musicNode?.pause()
+            lock.unlock()
+            #else
+            player?.pause()
+            #endif
+        }
+    }
+
+    /// Umschalten (für die „M"-Taste).
+    public func toggle() {
+        setEnabled(!isEnabled)
+    }
+
+    #if os(iOS)
+
+    // MARK: - iOS: Musik über die gemeinsame Engine
+
+    /// Startet (oder setzt fort) die Musik als Knoten an der SFX-Engine.
+    private func startEngineMusic() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        // Schon eingerichtet → nur aus der Pause fortsetzen.
+        if started {
+            musicNode?.play()
+            return
+        }
+
+        // Knoten anhand des Formats des ersten Tracks erzeugen. Alle Tracks liegen im selben
+        // Format vor (48 kHz Stereo), daher genügt das Format des ersten zum Verbinden.
+        guard let firstURL = tracks.first,
+              let firstFile = try? AVAudioFile(forReading: firstURL),
+              let node = SoundManager.shared.makeMusicNode(format: firstFile.processingFormat) else {
+            return
+        }
+        musicNode = node
+        node.volume = 0.8
+        started = true
+
+        scheduleCurrentLocked()
+        node.play()
+    }
+
+    /// Plant den aktuellen Track ein; im Completion-Handler wird auf den nächsten Track gewechselt
+    /// und dieser angehängt – so läuft die Playlist in Endlosschleife. „Locked" = der Aufrufer hält
+    /// bereits `lock`.
+    private func scheduleCurrentLocked() {
+        guard let node = musicNode, index >= 0, index < tracks.count else { return }
+        guard let file = try? AVAudioFile(forReading: tracks[index]) else { return }
+        node.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            guard let self = self else { return }
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            // Zum nächsten Track wechseln (abwechselnd, dann von vorn).
+            if !self.tracks.isEmpty {
+                self.index = (self.index + 1) % self.tracks.count
+            }
+            if self.isEnabled && !self.isSuppressed {
+                self.scheduleCurrentLocked()
+            }
+        }
+    }
+
+    #else
+
+    // MARK: - macOS: eigenständiger AVAudioPlayer
 
     private func playCurrent() {
         guard index >= 0 && index < tracks.count else { index = 0; return }
@@ -71,22 +163,7 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
         }
     }
 
-    /// Schaltet die Musik ein bzw. aus.
-    public func setEnabled(_ enabled: Bool) {
-        isEnabled = enabled
-        if enabled {
-            start()
-        } else {
-            player?.pause()
-        }
-    }
-
-    /// Umschalten (für die „M"-Taste).
-    public func toggle() {
-        setEnabled(!isEnabled)
-    }
-
-    // MARK: - AVAudioPlayerDelegate
+    // MARK: - AVAudioPlayerDelegate (nur macOS)
 
     public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         // Zum nächsten Track wechseln (abwechselnd, dann von vorn).
@@ -97,4 +174,6 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
             playCurrent()
         }
     }
+
+    #endif
 }

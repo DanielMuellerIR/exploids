@@ -454,6 +454,29 @@ public final class SoundManager: @unchecked Sendable {
             return nil
         }
     }
+
+    #if os(iOS)
+    // MARK: - Musik über die gemeinsame Engine (nur iOS)
+    //
+    // Auf iOS darf die Musik NICHT über einen separaten AVAudioPlayer laufen, während diese
+    // AVAudioEngine (SFX) aktiv ist: zwei unabhängige Audio-Render-Pfade auf dieselbe Hardware
+    // erzeugen hörbare Verzerrungen (Musik wird unkenntlich). Deshalb hängt die Musik als
+    // zusätzlicher Player-Knoten an genau dieser Engine – ein einziger Render-Pfad. Auf macOS
+    // gibt es dieses Problem nicht; dort bleibt der MusicPlayer beim AVAudioPlayer.
+
+    /// Erzeugt einen an den Mixer angeschlossenen Player-Knoten für die Musik und gibt ihn zurück.
+    /// Stellt sicher, dass Engine + AudioSession laufen. Liefert nil, wenn stummgeschaltet oder die
+    /// Engine nicht startet. Der Aufrufer (MusicPlayer) plant die Tracks selbst ein und ruft play().
+    public func makeMusicNode(format: AVAudioFormat) -> AVAudioPlayerNode? {
+        guard !isMuted else { return nil }
+        start()  // Engine + AVAudioSession sicherstellen
+        guard audioEngine.isRunning else { return nil }
+        let node = AVAudioPlayerNode()
+        audioEngine.attach(node)
+        audioEngine.connect(node, to: audioEngine.mainMixerNode, format: format)
+        return node
+    }
+    #endif
 }
 
 // MARK: - ActiveSound Helper Class
