@@ -25,8 +25,11 @@ public final class FloatingHead: SKNode {
     // MARK: - Zustand
 
     public private(set) var phase: Phase = .entering
-    /// Verbleibende Treffer bis zur Zerstörung (Start: 3).
-    public private(set) var hitsRemaining: Int = 3
+    /// Treffer bis zur Zerstörung – zentral justierbar (Boss). Daniel testet 10, evtl. später 20.
+    public static var hitsToDestroy: Int = 10
+    /// Verbleibende Treffer bis zur Zerstörung.
+    public private(set) var hitsRemaining: Int = FloatingHead.hitsToDestroy
+    private let maxHits: Int = FloatingHead.hitsToDestroy
     /// True, sobald der Kopf sich nach dem Rückzug komplett aus dem Bild entfernt hat.
     public private(set) var isFinished: Bool = false
 
@@ -59,16 +62,17 @@ public final class FloatingHead: SKNode {
     private var spawnsDone: Int = 0
     private var spawnAccumulator: TimeInterval = 0.0
 
-    // Wander: der Kopf bleibt nicht stehen (schwerer zu treffen). Als Delta auf die Position
-    // angewandt, damit er sich mit einer eventuellen Mad-Feld-Rotation überlagert statt sie zu
-    // überschreiben.
-    private var wanderTime: TimeInterval = 0.0
-    private var prevWanderX: CGFloat = 0.0
-    private var prevWanderY: CGFloat = 0.0
-    private let wanderAmpX: CGFloat = 260.0
-    private let wanderFreqX: CGFloat = 0.75
-    private let wanderAmpY: CGFloat = 42.0
-    private let wanderFreqY: CGFloat = 1.15
+    // Aktive Ausweich-Bewegung (Steering): der Kopf flieht vor dem Schiff und weicht den Schüssen
+    // des Spielers aus – zügig, aber gedeckelt. Gleicht aus, dass er groß und 10 Treffer braucht.
+    private var moveVelocity: CGPoint = .zero
+    private let maxMoveSpeed: CGFloat = 300.0     // „zügig", nicht Wahnsinn
+    private let fleeStrength: CGFloat = 360.0     // Beschleunigung weg vom Schiff
+    private let fleeRange: CGFloat = 380.0        // ab hier wird das Fliehen spürbar stärker
+    private let dodgeStrength: CGFloat = 1000.0   // Ausweichen vor Schüssen
+    private let dodgeRadius: CGFloat = 95.0       // seitlicher Gefahren-Korridor um einen Schuss
+    private let dodgeLookahead: CGFloat = 280.0   // wie weit voraus Schüsse beachtet werden
+    private let boundsStrength: CGFloat = 26.0    // hält ihn im sichtbaren Bereich
+    private let moveFriction: CGFloat = 0.86      // Dämpfung (pro 1/60 s), frameraten-normiert
     /// 0 = Mund zu, 1 = Mund ganz offen.
     private var mouthProgress: CGFloat = 0.0
 
@@ -133,7 +137,8 @@ public final class FloatingHead: SKNode {
     /// Rückgabewert: Anzahl der **in diesem Frame** auszuspeienden UFOs (0, außer in der Spawn-Phase).
     /// Die GameScene erzeugt diese UFOs dann an `mouthWorldPosition`.
     @discardableResult
-    public func update(deltaTime: TimeInterval, shipPosition: CGPoint) -> Int {
+    public func update(deltaTime: TimeInterval, shipPosition: CGPoint,
+                       laserThreats: [(position: CGPoint, velocity: CGPoint)] = []) -> Int {
         trackEyes(towards: shipPosition)
         var emit = 0
 
@@ -147,7 +152,7 @@ public final class FloatingHead: SKNode {
             }
 
         case .lurking:
-            applyWander(dt: deltaTime)
+            updateMovement(dt: deltaTime, shipPos: shipPosition, threats: laserThreats)
             stateTime += deltaTime
             if stateTime >= lurkDuration {
                 phase = .spawning
@@ -157,7 +162,7 @@ public final class FloatingHead: SKNode {
             }
 
         case .spawning:
-            applyWander(dt: deltaTime)
+            updateMovement(dt: deltaTime, shipPos: shipPosition, threats: laserThreats)
             // Mund öffnen.
             advanceMouth(toward: 1.0, dt: deltaTime)
             // Erst speien, wenn der Mund weit genug offen ist.
@@ -238,16 +243,59 @@ public final class FloatingHead: SKNode {
         return hypot(a.x - b.x, a.y - b.y)
     }
 
-    /// Lässt den Kopf gemächlich hin- und herschweben (kein stehendes Ziel). Wird als Delta
-    /// angewandt, damit eine eventuelle Mad-Feld-Rotation der GameScene erhalten bleibt.
-    private func applyWander(dt: TimeInterval) {
-        wanderTime += dt
-        let nx = sin(CGFloat(wanderTime) * wanderFreqX) * wanderAmpX
-        let ny = sin(CGFloat(wanderTime) * wanderFreqY) * wanderAmpY
-        position.x += nx - prevWanderX
-        position.y += ny - prevWanderY
-        prevWanderX = nx
-        prevWanderY = ny
+    /// Aktive Ausweich-Bewegung: flieht vor dem Schiff, weicht Spieler-Schüssen aus und bleibt im
+    /// sichtbaren Bereich. Bewusst gedeckelt („zügig, nicht Wahnsinn"). Funktioniert in beiden Modi
+    /// gleich (kein zusätzliches Mad-Mitrotieren → kein Schwindel).
+    private func updateMovement(dt: TimeInterval, shipPos: CGPoint,
+                                threats: [(position: CGPoint, velocity: CGPoint)]) {
+        var fx: CGFloat = 0, fy: CGFloat = 0
+
+        // 1. Vor dem Schiff fliehen (stärker, je näher).
+        let ax = position.x - shipPos.x, ay = position.y - shipPos.y
+        let d = max(1.0, hypot(ax, ay))
+        let fleeMag = fleeStrength * min(1.6, fleeRange / d)
+        fx += ax / d * fleeMag
+        fy += ay / d * fleeMag
+
+        // 2. Spieler-Schüssen ausweichen (seitlich aus der Schussbahn gleiten).
+        for t in threats {
+            let dirLen = hypot(t.velocity.x, t.velocity.y)
+            guard dirLen > 0.001 else { continue }
+            let dx = t.velocity.x / dirLen, dy = t.velocity.y / dirLen
+            let tx = position.x - t.position.x, ty = position.y - t.position.y
+            let along = tx * dx + ty * dy
+            guard along >= 0 && along <= dodgeLookahead else { continue }   // nur Schüsse, die heranfliegen
+            var perpx = tx - dx * along, perpy = ty - dy * along
+            let pd = hypot(perpx, perpy)
+            guard pd < dodgeRadius else { continue }
+            if pd < 1.0 { perpx = -dy; perpy = dx }   // genau auf der Linie: eine Seite wählen
+            let n = max(1.0, hypot(perpx, perpy))
+            let w = 1.0 - pd / dodgeRadius
+            fx += perpx / n * dodgeStrength * w
+            fy += perpy / n * dodgeStrength * w
+        }
+
+        // 3. Im Bild halten (weiche Grenzen).
+        let halfW = screenSize.width * 0.5, halfH = screenSize.height * 0.5
+        let limX = halfW * 0.80, limTop = halfH * 0.86, limBot = -halfH * 0.34
+        if position.x >  limX  { fx -= boundsStrength * (position.x - limX) }
+        if position.x < -limX  { fx += boundsStrength * (-limX - position.x) }
+        if position.y >  limTop { fy -= boundsStrength * (position.y - limTop) }
+        if position.y <  limBot { fy += boundsStrength * (limBot - position.y) }
+
+        // Integrieren, dämpfen (frameraten-normiert), Geschwindigkeit deckeln.
+        moveVelocity.x += fx * CGFloat(dt)
+        moveVelocity.y += fy * CGFloat(dt)
+        let fr = pow(moveFriction, CGFloat(dt) * 60.0)
+        moveVelocity.x *= fr
+        moveVelocity.y *= fr
+        let sp = hypot(moveVelocity.x, moveVelocity.y)
+        if sp > maxMoveSpeed {
+            moveVelocity.x *= maxMoveSpeed / sp
+            moveVelocity.y *= maxMoveSpeed / sp
+        }
+        position.x += moveVelocity.x * CGFloat(dt)
+        position.y += moveVelocity.y * CGFloat(dt)
     }
 
     private func advanceMouth(toward target: CGFloat, dt: TimeInterval) {
@@ -317,14 +365,13 @@ public final class FloatingHead: SKNode {
         }
     }
 
-    /// Zeigt die Schadens-Risse passend zur Trefferzahl (Stufe 1: ein Auge, Stufe 2: zweites Auge + Kiefer).
+    /// Zeigt die Schadens-Risse abhängig vom verbleibenden Lebensanteil (skaliert mit `maxHits`):
+    /// ab ≤66 % ein Auge, ab ≤33 % zweites Auge + Kiefer.
     private func updateDamageVisual() {
-        let stage = 3 - hitsRemaining   // 1, 2 oder 3
-        if stage >= 1 { leftEyeCrack.isHidden = false }
-        if stage >= 2 {
-            rightEyeCrack.isHidden = false
-            jawCrack.isHidden = false
-        }
+        let frac = Double(hitsRemaining) / Double(max(1, maxHits))
+        leftEyeCrack.isHidden = frac > 0.66
+        rightEyeCrack.isHidden = frac > 0.33
+        jawCrack.isHidden = frac > 0.33
     }
 
     /// Kurzer Materialisier-Blitz (Ring) im Mund-Mittelpunkt, wenn ein UFO ausgespien wird.

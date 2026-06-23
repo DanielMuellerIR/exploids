@@ -2521,16 +2521,16 @@ public final class GameScene: SKScene {
             SoundManager.shared.setHeadVoice(active: false, openness: 0)
             return
         }
-        let emit = head.update(deltaTime: deltaTime, shipPosition: ship.position)
+        // Spieler-Schüsse als Ausweich-Bedrohungen übergeben (nur eigene, nicht die der Gegner).
+        let threats: [(position: CGPoint, velocity: CGPoint)] = activeLasers
+            .filter { $0.type != .enemy }
+            .map { ($0.position, $0.velocity) }
+        let emit = head.update(deltaTime: deltaTime, shipPosition: ship.position, laserThreats: threats)
         if emit > 0 {
             let mouth = head.mouthWorldPosition
             for _ in 0..<emit {
                 spawnArmadaUFO(at: mouth)
             }
-        }
-        // Im Mad-Meteoroids-Modus kreist der Kopf mit dem Feld mit.
-        if gameMode == .madMeteoroids {
-            head.position = rotatedAroundOrigin(head.position, by: fieldDeltaThisFrame)
         }
         if head.isFinished {
             head.removeFromParent()

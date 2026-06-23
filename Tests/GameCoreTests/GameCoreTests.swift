@@ -1458,21 +1458,23 @@ final class GameCoreTests: XCTestCase {
 
     // MARK: - Kopf-Boss (FloatingHead)
 
-    func testFloatingHeadStartsEnteringWithThreeHits() {
+    func testFloatingHeadStartsEntering() {
         let head = FloatingHead(screenSize: CGSize(width: 1024, height: 768))
         XCTAssertEqual(head.phase, .entering)
-        XCTAssertEqual(head.hitsRemaining, 3)
+        XCTAssertEqual(head.hitsRemaining, FloatingHead.hitsToDestroy)
         XCTAssertFalse(head.isFinished)
     }
 
-    func testFloatingHeadThreeHitsToDestroy() {
+    func testFloatingHeadHitsToDestroy() {
         let head = FloatingHead(screenSize: CGSize(width: 1024, height: 768))
-        XCTAssertFalse(head.registerHit())   // 3 -> 2
-        XCTAssertFalse(head.registerHit())   // 2 -> 1
-        XCTAssertTrue(head.registerHit())    // 1 -> 0 (zerstört)
+        let n = head.hitsRemaining
+        XCTAssertGreaterThanOrEqual(n, 2)
+        for _ in 0..<(n - 1) {
+            XCTAssertFalse(head.registerHit())   // noch nicht zerstört
+        }
+        XCTAssertTrue(head.registerHit())        // letzter Treffer zerstört
         XCTAssertEqual(head.hitsRemaining, 0)
-        // Weitere Treffer bleiben "zerstört".
-        XCTAssertTrue(head.registerHit())
+        XCTAssertTrue(head.registerHit())        // bleibt zerstört
     }
 
     func testFloatingHeadEmitsExactlyTenUFOsThenRetreats() {

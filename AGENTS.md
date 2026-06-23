@@ -144,22 +144,29 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
 - **Reiner Spawner** — schießt nie selbst. Größe ~Radius 80 (größter Asteroid = 40).
 - **Auftreten:** zufällig einmal in **Level 5–7**, erneut in **Level 10**; in L10 (letztes Level)
   danach **alle 4–7 Min** per Timer. Bewusst selten (nutzt sich sonst ab).
-- **3 Treffer**, jeder mit sichtbarem Feedback: kurzer Weiß-Flash + bleibender Vektor-Schaden
-  (1: ein Auge zerspringt, 2: Kiefer/Outline reißt, 3: Explosion).
+- **10 Treffer** bis zerstört (`FloatingHead.hitsToDestroy`, zentral justierbar — Daniel testet 10,
+  evtl. 20). Gleicht aus, dass der Kopf groß ist und Dauerfeuer aktiv ist. Feedback: Weiß-Flash pro
+  Treffer + bleibender Vektor-Schaden, der mit sinkendem Leben einsetzt (≤66 % ein Auge, ≤33 %
+  zweites Auge + Kiefer), Explosion beim Tod.
 - **Zustandsautomat:** Einschweben (Augen tracken sofort) → **Lauern ~3–5 s (zufällig, ø 4)** =
   Tötungsfenster → **Mund auf (animiert)** → **10 UFOs** (Mix aus großen + kleinen,
   zufällig) **gestaffelt über ~2,5 s** ausgespien, dabei **das `activeUFOs`-Limit von 2 umgangen**
   → Rückzug (Einmal-Bedrohung, kein Zyklus).
-- **Der Kopf bleibt nicht stehen:** er schwebt während Lauern/Spawnen langsam hin und her (Wander),
-  damit er nicht trivial zu treffen ist. Hitbox-Radius bewusst eng (~68, etwa Sichtgröße).
+- **Aktive Ausweich-KI** (während Lauern + Spawnen): Der Kopf **flieht vor dem Schiff** und **weicht
+  den Spieler-Schüssen intelligent aus** (gleitet seitlich aus der Schussbahn), bleibt dabei im Bild.
+  Bewusst **zügig, aber gedeckelt** (`maxMoveSpeed`), keine Wahnsinns-Geschwindigkeit. So wird er –
+  auch über den Umweg „Deckung durch andere Objekte" – manchmal schwer zu treffen. Tunables in
+  `FloatingHead` (`fleeStrength`, `dodgeStrength`/`dodgeRadius`, `maxMoveSpeed`, …). Hitbox ~68.
+  Er weicht anderen Objekten NICHT aus (darf über ihnen liegen). *Idee „Objekte zerschellen am Kopf"
+  bewusst zurückgestellt (würde dem Spieler die Zerstör-Arbeit abnehmen).*
 - **UFO-Spawn-Ursprung = Mund-Mittelpunkt**, mit kurzem Materialisier-Blitz; dann ziehen sie heraus.
 - **Sanfte UFO-Verfolgung (gilt für ALLE UFOs, regulär + Armada):** UFOs beschleunigen leicht und
   gedeckelt Richtung Spieler (`UFO.homingAccel`/`maxSpeed`), statt nur seitlich wegzufliegen — sie
   kommen „ein bisschen auf uns zu", bleiben aber durch die horizontale Grund-Bewegung killbar und
   verlassen den Schirm. Bewusst moderat, damit es mit vielen Objekten nicht zu schwer wird.
 - **Kill während des Ausstoßes stoppt die restlichen UFOs sofort.**
-- Schiff-Kontakt = Tod. Kopf **wrappt nicht**. In **Mad-Meteoroids** überlagert sich die Mad-Feld-
-  Rotation mit der Wander-Bewegung.
+- Schiff-Kontakt = Tod. Kopf **wrappt nicht**. In **Mad-Meteoroids** bewegt er sich mit derselben
+  Ausweich-KI (kein zusätzliches Mitrotieren mit dem Feld – das machte schwindelig).
 - **2000 Punkte** fürs Zerstören. Strategie: schnell vor dem Mund-Öffnen töten, sonst wenigstens
   die Armada beim Rauskommen abfangen; Ignorieren kann übel ausgehen.
 - **Sound:** Beim Mund-Öffnen ein gruseliges, tiefes, sonores menschliches **„Moooooo"** —
