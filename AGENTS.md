@@ -144,6 +144,12 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
 - Schiff-Kontakt = Tod. Kopf **wrappt nicht**. In **Mad-Meteoroids rotiert er mit dem Feld** mit.
 - **2000 Punkte** fürs Zerstören. Strategie: schnell vor dem Mund-Öffnen töten, sonst wenigstens
   die Armada beim Rauskommen abfangen; Ignorieren kann übel ausgehen.
+- **Sound (TODO, noch NICHT umgesetzt):** Beim Mund-Öffnen ein gruseliges, tiefes, sonores
+  menschliches **„Moooooo"**. Der Ton beginnt bereits mit **geschlossenen Lippen** (gedämpftes
+  Ansetzen wie beim Sprechbeginn) und **ändert sich hörbar im Moment des Öffnens** (Klang wird
+  offen/voller) — dieser Übergang soll nachgeahmt werden. Läuft in **Schleife, solange der Kopf
+  UFOs ausspuckt**, danach Stop → Mund zu → Rückzug. Erzeugung über den **`sfxgen`-Skill** als
+  Sample(s), passend zum vorhandenen Sample-SFX-Set (`Sources/GameCore/SFX/*.m4a`, `useSampledSFX`).
 
 **Weltraumkatzen (Minibosse).** Kleiner als der Kopf-Boss; agieren völlig gezielt, kein sinnloses
 Herumtreiben.

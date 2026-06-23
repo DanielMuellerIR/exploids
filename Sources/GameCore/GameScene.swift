@@ -89,6 +89,7 @@ public final class GameScene: SKScene {
         case ufo
         case ufoLaser
         case gravityWell
+        case bossHead
     }
     
     public var lastDeathCause: DeathCause = .largeAsteroid
@@ -259,6 +260,17 @@ public final class GameScene: SKScene {
     public private(set) var activeGravityWells: [GravityWell] = []
     public private(set) var activePowerUps: [PowerUp] = []
     private var options: [OptionDrone] = []
+
+    /// Aktiver Kopf-Boss („Der Götze"), falls gerade einer im Bild ist (max. einer gleichzeitig).
+    public private(set) var activeHead: FloatingHead?
+    /// In welchem Level der Kopf-Boss zum ersten Mal auftaucht – pro Spiel zufällig 5–7.
+    private var bossFirstTargetLevel: Int = Int.random(in: 5...7)
+    /// Ob der erste Auftritt (Level 5–7) bereits erfolgt ist.
+    private var bossFirstDone: Bool = false
+    /// Ob der Auftritt in Level 10 bereits erfolgt ist.
+    private var bossLevel10Done: Bool = false
+    /// Nächster zeitgesteuerter Auftritt in Level 10 (alle 4–7 Min, da es kein weiteres Level gibt).
+    private var nextBossTimeLevel10: TimeInterval = 0.0
     
     // Power-up durations
     private var tripleShotEndTime: TimeInterval = 0.0
@@ -865,6 +877,11 @@ public final class GameScene: SKScene {
                 }
             }
             
+            // Kopf-Boss (Boss-Welle) auslösen und aktualisieren – nur im laufenden Spiel.
+            if !isLevelClearing {
+                updateFloatingHead(currentTime: currentTime, deltaTime: deltaTime)
+            }
+
             // Determine input states
             let isThrusting = activeKeys.contains(13) || activeKeys.contains(126)
             
@@ -1004,7 +1021,15 @@ public final class GameScene: SKScene {
                     }
                 }
             }
-            
+
+            // Collision detection: Ship vs. Kopf-Boss (Kontakt = Tod)
+            if let head = activeHead, !ship.isHidden && !isInvincible {
+                if distanceBetween(ship.position, head.position) <= head.collisionRadius {
+                    lastDeathCause = .bossHead
+                    damageShip()
+                }
+            }
+
             // Collision detection: Ship vs. Power-ups – distanzbasiert (Abstand der Mittelpunkte),
             // NICHT über das Schiff-Polygon. Sonst sind Power-ups bei aktivem Compress (winziges
             // Schiff) praktisch nicht mehr einsammelbar und bleiben „hängen".
@@ -1197,7 +1222,44 @@ public final class GameScene: SKScene {
                     return true
                 }
             }
-            
+
+            // Collision detection: Player Lasers vs. Kopf-Boss (3 Treffer bis zerstört)
+            if let head = activeHead {
+                var lasersAfterHead: [Laser] = []
+                var headAlive = true
+                for laser in remainingLasers {
+                    // Gegner-Schüsse ignorieren; nach dem Tod des Bosses Rest unverändert behalten.
+                    if !headAlive || laser.type == .enemy {
+                        lasersAfterHead.append(laser)
+                        continue
+                    }
+                    let (start, end) = laser.getWorldSegment()
+                    let hit = distanceBetween(start, head.position) <= head.collisionRadius
+                           || distanceBetween(end, head.position) <= head.collisionRadius
+                    if hit {
+                        let destroyed = head.registerHit()
+                        SoundManager.shared.playExplosion()
+                        createShipExplosion(at: laser.position)
+                        shakeCamera(amplitude: 5.0, numberOfShakes: 6, durationPerShake: 0.025)
+                        // Schuss verbraucht (kein Durchschlag durch den Boss)
+                        laser.removeFromParent()
+
+                        if destroyed {
+                            self.score += 2000
+                            scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
+                            createShipExplosion(at: head.position)
+                            shakeCamera(amplitude: 9.0, numberOfShakes: 10, durationPerShake: 0.03)
+                            head.removeFromParent()
+                            activeHead = nil
+                            headAlive = false
+                        }
+                    } else {
+                        lasersAfterHead.append(laser)
+                    }
+                }
+                remainingLasers = lasersAfterHead
+            }
+
             // Collision detection: Enemy Lasers vs. Ship
             if !ship.isHidden && !isInvincible {
                 let shipPoly = ship.getWorldVertices()
@@ -2091,6 +2153,12 @@ public final class GameScene: SKScene {
                 beamNode.isHidden = true
                 updateLivesLabel()
 
+                // Kopf-Boss pro Spiel neu auswürfeln/zurücksetzen.
+                bossFirstTargetLevel = Int.random(in: 5...7)
+                bossFirstDone = false
+                bossLevel10Done = false
+                nextBossTimeLevel10 = 0.0
+
                 // Remove previous session objects
                 clearGameEntities()
 
@@ -2358,8 +2426,11 @@ public final class GameScene: SKScene {
             well.removeFromParent()
         }
         activeGravityWells.removeAll()
+
+        activeHead?.removeFromParent()
+        activeHead = nil
     }
-    
+
     private func triggerImplosionCollapse(asteroid: Asteroid) {
         SoundManager.shared.playImplosion()
         
@@ -2414,6 +2485,63 @@ public final class GameScene: SKScene {
         emitter.run(SKAction.sequence([wait, remove]))
     }
     
+    // MARK: - Kopf-Boss
+
+    /// Löst den Kopf-Boss bei Bedarf aus und schreitet ihn voran. Auftreten: zufällig einmal in
+    /// Level 5–7, erneut in Level 10, danach in Level 10 alle 4–7 Minuten (es gibt kein weiteres Level).
+    private func updateFloatingHead(currentTime: TimeInterval, deltaTime: TimeInterval) {
+        // Auslösen (immer nur ein Kopf gleichzeitig).
+        if activeHead == nil && isSpawningEnabled {
+            var spawn = false
+            if !bossFirstDone && currentLevel >= bossFirstTargetLevel && currentLevel <= 7 {
+                spawn = true
+                bossFirstDone = true
+            } else if currentLevel >= 10 {
+                if !bossLevel10Done {
+                    spawn = true
+                    bossLevel10Done = true
+                    nextBossTimeLevel10 = currentTime + Double.random(in: 240.0...420.0)
+                } else if currentTime >= nextBossTimeLevel10 {
+                    spawn = true
+                    nextBossTimeLevel10 = currentTime + Double.random(in: 240.0...420.0)
+                }
+            }
+            if spawn {
+                let head = FloatingHead(screenSize: size)
+                self.addChild(head)
+                self.activeHead = head
+            }
+        }
+
+        // Voranschreiten + UFO-Armada ausspeien.
+        guard let head = activeHead else { return }
+        let emit = head.update(deltaTime: deltaTime, shipPosition: ship.position)
+        if emit > 0 {
+            let mouth = head.mouthWorldPosition
+            for _ in 0..<emit {
+                spawnArmadaUFO(at: mouth)
+            }
+        }
+        // Im Mad-Meteoroids-Modus kreist der Kopf mit dem Feld mit.
+        if gameMode == .madMeteoroids {
+            head.position = rotatedAroundOrigin(head.position, by: fieldDeltaThisFrame)
+        }
+        if head.isFinished {
+            head.removeFromParent()
+            activeHead = nil
+        }
+    }
+
+    /// Erzeugt ein einzelnes Armada-UFO am Mund-Mittelpunkt (Mix groß/klein) – umgeht bewusst das
+    /// normale 2er-Limit für reguläre UFO-Spawns.
+    private func spawnArmadaUFO(at position: CGPoint) {
+        let isSmall = Double.random(in: 0...1) < 0.4
+        let ufo = UFO(isSmall: isSmall, startOnLeft: Bool.random(), screenSize: size)
+        ufo.position = position
+        self.addChild(ufo)
+        self.activeUFOs.append(ufo)
+    }
+
     private func clearGameEntities() {
         for ast in activeAsteroids {
             ast.removeFromParent()
@@ -2444,6 +2572,9 @@ public final class GameScene: SKScene {
             drone.removeFromParent()
         }
         options.removeAll()
+
+        activeHead?.removeFromParent()
+        activeHead = nil
     }
     
     // MARK: - UI Configuration
@@ -2824,6 +2955,8 @@ public final class GameScene: SKScene {
             message = "Vaporized by UFO laser on Level \(currentLevel)"
         case .gravityWell:
             message = "Crushed in a black hole on Level \(currentLevel)"
+        case .bossHead:
+            message = "Devoured by the floating idol on Level \(currentLevel)"
         }
         
         let newEntry = HighScore(initials: initials, score: score, date: Date(), deathMessage: message)
@@ -3164,6 +3297,15 @@ public final class GameScene: SKScene {
     /// Simulates typing a letter (useful for initials entry testing).
     public func simulateTypeCharacter(_ char: String) {
         handleKeyDown(keyCode: 0, characters: char, charactersIgnoringModifiers: char, isCommandDown: false)
+    }
+
+    /// For testing: erzeugt sofort einen Kopf-Boss, hängt ihn ein und gibt ihn zurück.
+    @discardableResult
+    public func spawnFloatingHeadForTesting() -> FloatingHead {
+        let head = FloatingHead(screenSize: size)
+        self.addChild(head)
+        self.activeHead = head
+        return head
     }
     
     /// For testing: directly adds an asteroid.

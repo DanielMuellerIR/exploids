@@ -1455,5 +1455,64 @@ final class GameCoreTests: XCTestCase {
         scene.simulateKeyDown(keyCode: 53)
         XCTAssertEqual(scene.gameState, .startScreen)
     }
+
+    // MARK: - Kopf-Boss (FloatingHead)
+
+    func testFloatingHeadStartsEnteringWithThreeHits() {
+        let head = FloatingHead(screenSize: CGSize(width: 1024, height: 768))
+        XCTAssertEqual(head.phase, .entering)
+        XCTAssertEqual(head.hitsRemaining, 3)
+        XCTAssertFalse(head.isFinished)
+    }
+
+    func testFloatingHeadThreeHitsToDestroy() {
+        let head = FloatingHead(screenSize: CGSize(width: 1024, height: 768))
+        XCTAssertFalse(head.registerHit())   // 3 -> 2
+        XCTAssertFalse(head.registerHit())   // 2 -> 1
+        XCTAssertTrue(head.registerHit())    // 1 -> 0 (zerstört)
+        XCTAssertEqual(head.hitsRemaining, 0)
+        // Weitere Treffer bleiben "zerstört".
+        XCTAssertTrue(head.registerHit())
+    }
+
+    func testFloatingHeadEmitsExactlyTenUFOsThenRetreats() {
+        let head = FloatingHead(screenSize: CGSize(width: 1024, height: 768))
+        head.lurkDuration = 0.1
+        head.mouthMoveDuration = 0.05
+        head.spawnInterval = 0.05
+
+        var totalEmitted = 0
+        var finished = false
+        for _ in 0..<2000 {
+            totalEmitted += head.update(deltaTime: 0.05, shipPosition: .zero)
+            if head.isFinished { finished = true; break }
+        }
+        XCTAssertEqual(totalEmitted, 10, "Der Kopf soll exakt 10 UFOs ausspeien")
+        XCTAssertTrue(finished, "Der Kopf soll sich nach dem Ausstoß zurückziehen und verschwinden")
+    }
+
+    func testFloatingHeadArmadaBypassesUFOLimit() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+
+        // Spiel starten (Space).
+        scene.simulateKeyDown(keyCode: 49)
+        XCTAssertEqual(scene.gameState, .playing)
+
+        let head = scene.spawnFloatingHeadForTesting()
+        head.spawnInterval = 0.01
+        head.beginSpawningForTesting()   // sofort in die Spawn-Phase, Mund offen
+
+        var maxUFOs = 0
+        var t = 5.0
+        for _ in 0..<12 {
+            t += 0.05
+            scene.update(t)
+            maxUFOs = max(maxUFOs, scene.activeUFOs.count)
+        }
+        // Reguläre Spawns sind auf 2 gedeckelt; die Armada muss das überschreiten.
+        XCTAssertGreaterThan(maxUFOs, 2, "Die Armada soll das reguläre 2er-UFO-Limit überschreiten")
+    }
 }
 
