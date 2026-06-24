@@ -1901,6 +1901,42 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(ra.next(), rb.next(), "RNG-Zustand beider Läufe muss identisch sein")
     }
 
+    /// Langzeit-Determinismus über Level-Übergänge UND Bosse: Ein langer Lauf (Level 5 aufwärts,
+    /// Auto-Feuer, viele Extra-Leben, damit er nicht endet) muss bei gleichem Seed bit-identisch
+    /// bleiben. Deckt ab, was die kurzen Proben nicht erreichten: UFO-/Boss-/Katzen-Spawns,
+    /// Gravity-Wells, Power-up-Drops, mehrere Level-Aufstiege.
+    func testSimulationDeterministicLongRunWithBossesAndLevels() {
+        @MainActor func longRun(seed: UInt64) -> GameScene {
+            let scene = GameScene(size: CGSize(width: 1000, height: 800))
+            let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+            view.presentScene(scene)
+            scene.autoFire = true
+            scene.startNewGameForTesting(seed: seed, startLevel: 5)
+            scene.setExtraLivesForTesting(99)
+            let dt: TimeInterval = 1.0 / 60.0
+            var rotLeft = false, rotRight = false, thrust = false
+            for f in 0..<6000 {
+                let wantLeft = (f % 140) < 60
+                if wantLeft != rotLeft { wantLeft ? scene.simulateKeyDown(keyCode: 0) : scene.simulateKeyUp(keyCode: 0); rotLeft = wantLeft }
+                let wantRight = (f % 140) >= 70 && (f % 140) < 120
+                if wantRight != rotRight { wantRight ? scene.simulateKeyDown(keyCode: 2) : scene.simulateKeyUp(keyCode: 2); rotRight = wantRight }
+                let wantThrust = (f % 50) < 18
+                if wantThrust != thrust { wantThrust ? scene.simulateKeyDown(keyCode: 13) : scene.simulateKeyUp(keyCode: 13); thrust = wantThrust }
+                scene.update(1000.0 + Double(f) * dt)
+                // Extra-Leben nachfüllen, damit der Lauf garantiert nicht in Game Over endet
+                // (in BEIDEN Läufen identisch -> symmetrisch -> valider Determinismus-Test).
+                if scene.extraLivesForTesting < 10 { scene.setExtraLivesForTesting(99) }
+            }
+            return scene
+        }
+        let a = longRun(seed: 0xB0551)
+        let b = longRun(seed: 0xB0551)
+        XCTAssertEqual(stateSnapshot(a), stateSnapshot(b),
+                       "Langer boss-/levelübergreifender Lauf muss bei gleichem Seed bit-identisch sein")
+        XCTAssertGreaterThan(a.currentLevel, 5, "Der Lauf muss mehrere Level-Übergänge durchlaufen haben")
+        XCTAssertEqual(a.gameState, .playing, "Mit Extra-Leben darf der Lauf nicht enden")
+    }
+
     /// Gegenprobe ("der Test hat Zähne"): ein anderer Seed muss zu einem anderen Endzustand führen.
     /// Beweist, dass der Snapshot tatsächlich die zufallsgetriebene Divergenz erfasst – ein blind
     /// immer-gleicher Snapshot würde hier fälschlich bestehen.

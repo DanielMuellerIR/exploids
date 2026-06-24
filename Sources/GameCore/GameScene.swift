@@ -3982,7 +3982,11 @@ public final class GameScene: SKScene {
 
     /// For testing: number of stored extra lives.
     public var extraLivesForTesting: Int { extraLives }
-    
+
+    /// For testing: gibt dem Schiff viele Extra-Leben, damit ein langer Lauf (Bosse, Level-Übergänge)
+    /// nicht vorzeitig endet. Rein für Determinismus-Tests; das Wiederbeleben ist deterministisch.
+    public func setExtraLivesForTesting(_ n: Int) { extraLives = n }
+
     /// For testing: directly spawns a UFO.
     public func spawnUFOForTesting(isSmall: Bool, startOnLeft: Bool) {
         let u = UFO(isSmall: isSmall, startOnLeft: startOnLeft, screenSize: size)
