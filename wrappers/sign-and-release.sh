@@ -8,14 +8,12 @@
 # Voraussetzungen (einmalig je Mac):
 #   1. Developer-ID-Application-Zertifikat in der Login-Keychain.
 #      Prüfen: security find-identity -v -p codesigning
-#   2. notarytool-Keychain-Profil (Name via NOTARY_PROFILE). Falls fehlend,
-#      einmalig anlegen:
-#        xcrun notarytool store-credentials "$NOTARY_PROFILE" \
-#          --apple-id <deine-apple-id> --team-id "$APPLE_TEAM_ID"
+#   2. notarytool-Keychain-Profil. Default-Name via NOTARY_PROFILE (hier
+#      'fftabsNotary', wird projektübergreifend wiederverwendet — speichert nur
+#      Apple-ID + Team-ID). Falls fehlend, einmalig anlegen:
+#        xcrun notarytool store-credentials fftabsNotary \
+#          --apple-id <deine-apple-id> --team-id <team-id>
 #      (App-spezifisches Passwort INTERAKTIV eingeben, NIE als CLI-Argument.)
-#   3. Signing-Konfiguration bereitstellen (maschinen-/account-spezifisch, NICHT
-#      im öffentlichen Repo): Environment-Variablen oder die gitignorete lokale
-#      Datei wrappers/release.local.sh (Vorlage: wrappers/release.local.sh.example).
 #
 # Aufruf:  bash wrappers/sign-and-release.sh
 #          bash wrappers/sign-and-release.sh --publish   # setzt git-Tag + lädt DMG zu GitHub hoch
@@ -26,30 +24,17 @@
 
 set -euo pipefail
 
-# ---------- Signing-/Notary-Konfiguration ----------
-# Maschinen-/account-spezifisch und damit NICHT im öffentlichen Repo hinterlegt.
-# Quelle (Priorität): Environment-Variablen, sonst die gitignorete lokale Datei
-# wrappers/release.local.sh (Vorlage: release.local.sh.example). Werte sind zentral
-# in der projektprivaten theplan-Wissensbasis dokumentiert.
-__CONF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release.local.sh"
-# shellcheck source=/dev/null
-[ -f "$__CONF" ] && source "$__CONF"
-
-TEAM_ID="${APPLE_TEAM_ID:-}"
-IDENTITY="${CODESIGN_IDENTITY:-}"
-NOTARY_PROFILE="${NOTARY_PROFILE:-}"
-
-if [ -z "$TEAM_ID" ] || [ -z "$IDENTITY" ] || [ -z "$NOTARY_PROFILE" ]; then
-  echo "FEHLER: Signing-Konfiguration fehlt." >&2
-  echo "  Benötigt: APPLE_TEAM_ID, CODESIGN_IDENTITY, NOTARY_PROFILE." >&2
-  echo "  Setze sie als Environment-Variablen ODER lege wrappers/release.local.sh an" >&2
-  echo "  (kopiere wrappers/release.local.sh.example und trage deine Werte ein)." >&2
-  exit 1
-fi
+# ---------- Konstanten (überschreibbar für CI/anderen Account) ----------
+# Team-ID und Developer-ID-Identity sind public-safe (stehen ohnehin in LICENSE,
+# Info.plist und jeder signierten Binary). Das eigentliche Notar-Geheimnis liegt
+# pro-Mac im Schlüsselbund-Profil (NOTARY_PROFILE), nie hier.
+TEAM_ID="${APPLE_TEAM_ID:-9QSWKSR4NQ}"
+IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Daniel Mueller ($TEAM_ID)}"
+NOTARY_PROFILE="${NOTARY_PROFILE:-fftabsNotary}"
 
 APP_NAME="Exploids"               # Bundle-/Anzeigename
 VOLNAME="Exploids"                # DMG-Volume-Name (= /Volumes/<name>)
-REPO="${RELEASE_REPO:-DanielMuellerIR/exploids}"   # öffentliches GitHub-Repo für --publish
+REPO="DanielMuellerIR/exploids"   # GitHub-Repo für --publish
 
 # ---------- Pfade ----------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
