@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids app icon"></p>
 
-A native macOS Asteroids-style arcade shooter (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Every graphic is procedural vector geometry and every sound effect is synthesized in real time — the only bundled media are two chiptune music tracks. Two game modes, nine power‑ups, gravity wells, enemy saucers and a pixel‑font HUD.
+A native macOS Asteroids-style arcade shooter (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and every sound effect is synthesized in real time; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Two game modes, nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
 
 ## Download
 
@@ -30,7 +30,7 @@ No Xcode project — a Swift Package Manager executable compiled into a `.app` b
 ./build-app.sh                                   # build -> Exploids.app (double-clickable)
 open Exploids.app                                # launch
 .build/release/exploids                          # launch the bare binary (logs in the terminal)
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run the 54 unit tests
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run the 90 unit tests
 ```
 
 ### Signed + notarized DMG
@@ -63,18 +63,43 @@ Nine pickups, each with its own vector glyph:
 | `C` | Compress | Shrinks the ship to ~30 % (smaller target) |
 | `+` | Extra life | Revive centered with brief invincibility |
 
+## Enemies & bosses
+
+Beyond the splitting rocks, the field fills up as you climb the levels:
+
+- **Enemy saucers** — a large green UFO that fires in random directions, and a small pink one that snipes at your ship. Both drift in with a slight homing pull.
+- **Gravity wells** — black holes that warp space, drag everything inward and crush the ship on contact.
+- **Imploding asteroids** — magenta‑outlined rocks that collapse into a fresh gravity well when you shoot them.
+- **Wobbling bombs** — red rocks that pulse and grow through stages, then detonate into a spread of fast fragments.
+- **Space Cat** — a stalking boss that takes cover behind asteroids, leads your movement and fires twin eye‑beams; takes three hits to drive off.
+- **The Idol** — a large floating stone head that drifts in, dodges your fire and spews an armada of saucers from its mouth; takes ten hits to destroy.
+
 ## Controls
 
-- **Start screen:** ▲/▼ switch game mode · ◀/▶ (or A/D) choose starting level · Space/Enter start · I glossary
+- **Start screen:** ▲/▼ switch game mode · ◀/▶ (or A/D) choose starting level · Space/Enter start · I glossary · 1–5 watch a high‑score replay
 - **In game:** Arrow keys / WASD to fly · Space to fire (hold to charge / sweep the beam) · M toggle music · Esc pause / quit
+- **Replay view:** Esc exits the replay back to the title screen.
 - High scores are saved locally; enter your name on the board when you make the cut.
 - **Cheat:** press `#` for a free extra life — handy for testing, or for a relaxed, no‑pressure run.
+
+## Replay & GIF export
+
+The simulation is **deterministic**: every run is recorded as just its seed plus your key presses, so it can be reproduced bit‑for‑bit. Two things fall out of that:
+
+- **Watch high‑score runs again** — on the title screen press `1`–`5` to replay that entry exactly as it was played; `Esc` exits.
+- **Render promo GIFs headlessly** — turn a replay into a clean, cursor‑free animated GIF straight from the command line, no window needed:
+
+```bash
+exploids --render-demo --out demo.gif            # scripted sample run -> GIF (pipeline self-test)
+exploids --export-replay 0 --out run.replay      # export high-score entry #0's replay to a file
+exploids --render-replay run.replay --out run.gif --scale 480 --fps 30
+```
 
 ## How it compares
 
 Exploids is a hobby clone, not a product. For honest context, with the weak spots named too:
 
-**Versus the original Asteroids (1979)** — the original is monochrome vector graphics with splitting rocks, two saucers, hyperspace and an extra life at 10,000 points. Exploids keeps that core and adds a second, rotating-field mode (Mad Meteoroids), nine power-ups, gravity wells, imploding and wobbling special asteroids, a charge shot and a sweeping laser beam, color, chiptune music, an in-game glossary and local high-score entry.
+**Versus the original Asteroids (1979)** — the original is monochrome vector graphics with splitting rocks, two saucers, hyperspace and an extra life at 10,000 points. Exploids keeps that core and adds a second, rotating-field mode (Mad Meteoroids), nine power-ups, gravity wells, imploding and wobbling special asteroids, two bosses, a charge shot and a sweeping laser beam, color, chiptune music, an in-game glossary, local high-score entry and deterministic replays you can re-watch or export as GIFs.
 
 **Versus Maelstrom** — [Maelstrom](https://github.com/libsdl-org/Maelstrom) (Ambrosia, 1992; a GPL SDL port since 1995, today an SDL2/SDL3 build that runs on Apple Silicon) is the best-known still-maintained open-source Asteroids clone for the Mac, and the fairer yardstick: it already has power-ups, bonus objects and rich sound. Where Exploids actually differs:
 
@@ -83,13 +108,17 @@ Exploids is a hobby clone, not a product. For honest context, with the weak spot
 - **Mechanics:** the rotating Mad Meteoroids mode, gravity wells and imploding asteroids are specific to Exploids.
 - **Stack:** native Swift 6 / SpriteKit / AppKit on Apple Silicon, versus a C/SDL port.
 
-**Where Maelstrom is plainly ahead:** it has single- *and* multiplayer (cooperative and competitive), game-controller and touch support, runs on more platforms, and carries 30 years of refinement and community. Exploids is single-player, keyboard-only, macOS-desktop-only, and young. It also ships non-commercial music (see below), a restriction Maelstrom's CC-licensed assets don't impose.
+**Where Maelstrom is plainly ahead:** it has single- *and* multiplayer (cooperative and competitive), game-controller and touch support, runs on more platforms, and carries 30 years of refinement and community. Exploids is single-player, primarily keyboard and macOS-desktop (an iOS touch target is an early work in progress), and young. It also ships non-commercial music (see below), a restriction Maelstrom's CC-licensed assets don't impose.
 
 ## Licensing
 
 - **Code:** [MIT](LICENSE) — © 2026 Daniel Müller.
 - **Heading font** `Sources/GameCore/Fonts/PressStart2P-Regular.ttf` (Press Start 2P): **SIL Open Font License 1.1** (`Sources/GameCore/Fonts/OFL.txt`) — free for any use, including commercial.
 - **⚠️ Music** `Sources/GameCore/Music/*.mp3` (two chiptune tracks): generated with **[musely.ai](https://musely.ai)** on its Free Plan — **personal, non‑commercial use only**. These tracks are **not** covered by the MIT code license and keep musely.ai's separate terms. Before any commercial use, replace them with your own / CC0 / commercially‑licensed music. All other audio is synthesized at runtime (no third‑party rights).
+
+## iOS target (work in progress)
+
+The repo also contains an iOS app target under `ios/` (SpriteKit + on‑screen touch controls) that links the same `GameCore` engine as the macOS build. It is a young work in progress and not yet released.
 
 ## Requirements
 
