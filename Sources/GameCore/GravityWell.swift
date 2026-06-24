@@ -9,10 +9,12 @@ public final class GravityWell: SKShapeNode {
     public let gravityStrength: CGFloat
     
     /// Radius of the core singularity. Touching this triggers instant destruction.
-    public let eventHorizonRadius: CGFloat = 22.0
-    
+    /// 20 % kleiner als zuvor (22.0) – schwarze Löcher waren zu schwer.
+    public let eventHorizonRadius: CGFloat = 17.6
+
     /// Maximum range of gravitational influence.
-    public let influenceRadius: CGFloat = 360.0
+    /// Reichweite um 20 % reduziert (war 360.0), passend zum 20 % kleineren Loch.
+    public let influenceRadius: CGFloat = 288.0
     
     /// The total duration this black hole exists.
     public let lifetime: TimeInterval
@@ -25,7 +27,7 @@ public final class GravityWell: SKShapeNode {
     
     // MARK: - Initializer
     
-    public init(strength: CGFloat = 500000.0, lifetime: TimeInterval = 18.0) {
+    public init(strength: CGFloat = 320000.0, lifetime: TimeInterval = 18.0) {
         self.gravityStrength = strength
         self.lifetime = lifetime
         super.init()
@@ -33,7 +35,7 @@ public final class GravityWell: SKShapeNode {
     }
     
     public required init?(coder aDecoder: NSCoder) {
-        self.gravityStrength = 500000.0
+        self.gravityStrength = 320000.0
         self.lifetime = 18.0
         super.init(coder: aDecoder)
         setupGravityWell()
@@ -53,7 +55,7 @@ public final class GravityWell: SKShapeNode {
         let spiralPath = CGMutablePath()
         let numArms = 5
         let steps = 40
-        let maxVisualRadius: CGFloat = 110.0
+        let maxVisualRadius: CGFloat = 88.0   // 20 % kleiner (war 110.0)
         
         for arm in 0..<numArms {
             let baseAngle = (CGFloat(arm) / CGFloat(numArms)) * 2.0 * .pi

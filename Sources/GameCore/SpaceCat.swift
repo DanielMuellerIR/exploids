@@ -40,8 +40,10 @@ public final class SpaceCat: SKNode {
     /// Punkte fürs Zerstören – zwischen kleinem UFO (500) und Kopf-Boss (2000).
     public let pointValue: Int = 750
 
-    /// Ungefährer Kollisionsradius (Kreis) in Szenen-Einheiten. Deckt jetzt Körper + Kopf ab.
-    public let collisionRadius: CGFloat = 26.0
+    /// Ungefährer Kollisionsradius (Kreis) in Szenen-Einheiten. Deckt die ganze sichtbare Katze
+    /// (Kopf + Körper bis zur Basis) ab – auf die getracte Kontur-Größe (artHeight 96) abgestimmt,
+    /// damit sie „überall treffbar" ist (vorher 26 = nur der mittlere Rumpf -> kaum zu treffen).
+    public let collisionRadius: CGFloat = 42.0
 
     /// Zeitpunkt des letzten Laserbeam-Treffers (für die Treffer-Drosselung des Dauer-Strahls,
     /// damit die Katze nicht in Sekundenbruchteilen zerschmilzt). Wird von der GameScene gesetzt.
@@ -91,20 +93,26 @@ public final class SpaceCat: SKNode {
     private let boundsStrength: CGFloat = 26.0    // hält sie im sichtbaren Bereich (außer bei Flucht)
     private let moveFriction: CGFloat = 0.86      // Dämpfung pro 1/60 s, frameraten-normiert
 
-    // Augen-Geometrie (lokale Koordinaten) – Ursprung der Laser liegt vor den Augen.
-    private let eyeSpacing: CGFloat = 7.0         // halber Augenabstand (parallele Laser)
-    private let muzzleAhead: CGFloat = 18.0       // Laser-Ursprung etwas vor den Körper legen
+    // Schuss-Geometrie. Der Laser-Ursprung ist jetzt das echte (getracte) Auge der Katzen-Kontur.
+    private let eyeSpacing: CGFloat = 7.0         // halber Versatz der zwei parallelen Laser ums Auge
     private let maxLeadTime: CGFloat = 2.0        // Deckel für die Predictive-Aim-Vorhaltezeit (s)
 
-    // Farben (Retro-Vektor, Violett-Körper mit glühenden Orange-Augen – klar verschieden von
-    // den grün/pinken UFOs und dem Stein-Boss).
-    private let body  = SKColor(red: 0.72, green: 0.42, blue: 1.0, alpha: 1.0)
-    private let glow  = SKColor(red: 1.0,  green: 0.55, blue: 0.1, alpha: 1.0)
-    private let whisk = SKColor(red: 0.85, green: 0.8,  blue: 1.0, alpha: 0.9)
+    // Darstellung: vektorisierte Kontur als Textur (Art/space_cat.png). Diese Konstanten verankern
+    // Kollisionskreis (Körper+Kopf) und Augen-Laser-Ursprung relativ zur getracten Grafik – bewusst
+    // zentral und im Playtest justierbar. `*Norm` sind normierte Texturkoordinaten (0..1, y nach unten).
+    private let artHeight: CGFloat = 96.0                    // Bildhöhe der Katze in Szenen-Einheiten
+    private let bodyCenterNorm = CGPoint(x: 0.72, y: 0.52)   // Körper/Kopf-Schwerpunkt -> auf den Ursprung (= Kollisionsmitte)
+    private let eyeNorm = CGPoint(x: 0.885, y: 0.175)        // Auge (Laser-Ursprung), Blick nach rechts
 
-    // Grafik-Referenzen (Augen werden beim Schuss kurz hell aufgepulst).
-    private var leftEye: SKShapeNode!
-    private var rightEye: SKShapeNode!
+    // Fallback-Farbe, falls die Textur fehlt (dann simple Vektor-Silhouette).
+    private let body = SKColor(red: 0.72, green: 0.42, blue: 1.0, alpha: 1.0)
+
+    // Grafik-Referenzen: zwei gespiegelte Kontur-Sprites für den Richtungswechsel (Crossfade).
+    private var catRight: SKSpriteNode!
+    private var catLeft: SKSpriteNode!
+    private var facingRight = true
+    /// Lokaler Augen-Ursprung bei Blick nach rechts (in `buildArt` aus den Norm-Koords berechnet).
+    private var eyeOffsetRight: CGPoint = .zero
 
     // MARK: - Rückgabe beim Schuss
 
@@ -155,6 +163,9 @@ public final class SpaceCat: SKNode {
                        laserThreats: [(position: CGPoint, velocity: CGPoint)] = [],
                        canFire: Bool = true) -> TwinLaserShot? {
         var shot: TwinLaserShot? = nil
+
+        // Blickrichtung an das Schiff koppeln (außer auf der Flucht, wo sie geradlinig rausgleitet).
+        if phase != .fleeing { updateFacing(towards: shipPosition.x) }
 
         switch phase {
         case .entering:
@@ -255,15 +266,23 @@ public final class SpaceCat: SKNode {
             t = min(maxLeadTime, distance(position, pred) / SpaceCat.laserSpeed)
         }
         let predicted = CGPoint(x: shipPos.x + shipVel.x * t, y: shipPos.y + shipVel.y * t)
-        let angle = atan2(predicted.y - position.y, predicted.x - position.x)
+        // Aus dem Auge zielen (nicht aus der Körpermitte) – die Laser kommen sichtbar aus dem Auge.
+        let eye = eyeWorldPosition()
+        let angle = atan2(predicted.y - eye.y, predicted.x - eye.x)
 
-        // Zwei parallele Ursprünge: vor den Körper gelegt und senkrecht zum Schuss versetzt.
+        // Zwei parallele Ursprünge: ums Auge herum, senkrecht zum Schuss leicht versetzt.
         let dirX = cos(angle), dirY = sin(angle)
         let perpX = -dirY, perpY = dirX
-        let base = CGPoint(x: position.x + dirX * muzzleAhead, y: position.y + dirY * muzzleAhead)
-        let a = CGPoint(x: base.x + perpX * eyeSpacing, y: base.y + perpY * eyeSpacing)
-        let b = CGPoint(x: base.x - perpX * eyeSpacing, y: base.y - perpY * eyeSpacing)
+        let a = CGPoint(x: eye.x + perpX * eyeSpacing, y: eye.y + perpY * eyeSpacing)
+        let b = CGPoint(x: eye.x - perpX * eyeSpacing, y: eye.y - perpY * eyeSpacing)
         return TwinLaserShot(origins: [a, b], angle: angle)
+    }
+
+    /// Weltposition des Augen-Ursprungs. Die Seite (links/rechts) folgt der aktuellen Blickrichtung;
+    /// bei Blick nach links wird der lokale x-Versatz gespiegelt (wie die gespiegelte Kontur).
+    private func eyeWorldPosition() -> CGPoint {
+        let ex = facingRight ? eyeOffsetRight.x : -eyeOffsetRight.x
+        return CGPoint(x: position.x + ex, y: position.y + eyeOffsetRight.y)
     }
 
     // MARK: - Bewegung / Steering
@@ -386,142 +405,79 @@ public final class SpaceCat: SKNode {
         return best
     }
 
-    // MARK: - Grafik
+    // MARK: - Grafik (vektorisierte Kontur-Textur)
 
-    /// Kurzes Hell-Aufpulsen der Augen (beim Feuern und bei einem Treffer).
+    /// Kurzes Hell-Aufpulsen der Kontur (beim Feuern und bei einem Treffer): die violetten Linien
+    /// blitzen kurz weiß auf (über `colorBlendFactor` der Sprites).
     private func flashEyes() {
-        guard leftEye != nil, rightEye != nil else { return }
-        let pulse = SKAction.sequence([
-            .group([.scale(to: 1.7, duration: 0.06), .fadeAlpha(to: 1.0, duration: 0.06)]),
-            .group([.scale(to: 1.0, duration: 0.18), .fadeAlpha(to: 0.85, duration: 0.18)])
-        ])
-        leftEye.run(pulse)
-        rightEye.run(pulse)
-    }
-
-    private func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
-
-    // Aufbau einer sitzenden Vektor-Katze: ein Körper (untere Hälfte) mit aufgesetztem, bewusst
-    // kleinerem Kopf darüber. Der Ursprung (0,0) liegt ungefähr im Körper-/Kopf-Übergang ≈ Mitte der
-    // Gesamtfigur, sodass der Kollisionskreis (collisionRadius) Körper und Kopf abdeckt.
-    private func buildArt() {
-        // ---- Körper (sitzender Rumpf, unter dem Kopf) ----
-        let bodyPath = CGMutablePath()
-        bodyPath.move(to: P(0, 3))
-        bodyPath.addQuadCurve(to: P(15, -11), control: P(15, -2))
-        bodyPath.addQuadCurve(to: P(11, -25), control: P(18, -20))
-        bodyPath.addLine(to: P(-11, -25))
-        bodyPath.addQuadCurve(to: P(-15, -11), control: P(-18, -20))
-        bodyPath.addQuadCurve(to: P(0, 3), control: P(-15, -2))
-        bodyPath.closeSubpath()
-        let bodyNode = SKShapeNode(path: bodyPath)
-        bodyNode.strokeColor = body
-        bodyNode.fillColor = body.withAlphaComponent(0.12)
-        bodyNode.lineWidth = 1.8
-        bodyNode.lineJoin = .round
-        addChild(bodyNode)
-
-        // Vorderpfötchen (zwei kurze Beinchen am Körperboden).
-        addChild(whiskers([[P(-6, -25), P(-6, -29)], [P(6, -25), P(6, -29)]], width: 2.2, color: body))
-
-        // Schweif (geschwungene Linie, die seitlich nach oben kringelt – signalisiert „Katze").
-        let tail = CGMutablePath()
-        tail.move(to: P(13, -17))
-        tail.addQuadCurve(to: P(27, -3), control: P(31, -19))
-        let tailNode = SKShapeNode(path: tail)
-        tailNode.strokeColor = body
-        tailNode.fillColor = .clear
-        tailNode.lineWidth = 2.2
-        tailNode.lineCap = .round
-        addChild(tailNode)
-
-        // ---- Kopf (bewusst kleiner, oben aufgesetzt) ----
-        let face = CGMutablePath()
-        face.move(to: P(-9, 21))
-        face.addLine(to: P(-11, 13))
-        face.addLine(to: P(-7, 7))
-        face.addLine(to: P(0, 5))
-        face.addLine(to: P(7, 7))
-        face.addLine(to: P(11, 13))
-        face.addLine(to: P(9, 21))
-        face.closeSubpath()
-        let faceNode = SKShapeNode(path: face)
-        faceNode.strokeColor = body
-        faceNode.fillColor = body.withAlphaComponent(0.12)
-        faceNode.lineWidth = 1.8
-        faceNode.lineJoin = .round
-        addChild(faceNode)
-
-        // Ohren (gefüllte Dreiecke).
-        addChild(triangle(P(-9, 20), P(-12, 30), P(-2, 22)))
-        addChild(triangle(P(9, 20), P(12, 30), P(2, 22)))
-
-        // Schnurrhaare (dünne Linien beidseits).
-        addChild(whiskers([
-            [P(-3, 10), P(-13, 11)], [P(-3, 8), P(-13, 5)],
-            [P(3, 10), P(13, 11)],  [P(3, 8), P(13, 5)]
-        ]))
-
-        // Nase (kleines Dreieck nach unten).
-        let nose = triangle(P(-1.8, 11), P(1.8, 11), P(0, 8))
-        nose.fillColor = glow
-        addChild(nose)
-
-        // Glühende Schlitz-Augen (die „Laseraugen") – kleiner, passend zum kleineren Kopf.
-        leftEye = eyeNode(at: P(-4.5, 15), scale: 0.78)
-        rightEye = eyeNode(at: P(4.5, 15), scale: 0.78)
-        addChild(leftEye)
-        addChild(rightEye)
-    }
-
-    /// Ein glühendes Katzenauge: helle Mandel mit dunklem senkrechten Schlitz (Pupille).
-    private func eyeNode(at center: CGPoint, scale: CGFloat = 1.0) -> SKShapeNode {
-        let node = SKShapeNode()
-        let p = CGMutablePath()
-        // Mandelform (breiter als hoch).
-        p.addEllipse(in: CGRect(x: -4.0 * scale, y: -2.6 * scale, width: 8.0 * scale, height: 5.2 * scale))
-        node.path = p
-        node.fillColor = glow
-        node.strokeColor = glow
-        node.lineWidth = 0.8
-        node.alpha = 0.85
-        node.position = center
-
-        // Senkrechte Schlitz-Pupille.
-        let slit = SKShapeNode(rect: CGRect(x: -0.7 * scale, y: -2.0 * scale, width: 1.4 * scale, height: 4.0 * scale))
-        slit.fillColor = SKColor(red: 0.1, green: 0.02, blue: 0.0, alpha: 1.0)
-        slit.strokeColor = .clear
-        node.addChild(slit)
-        return node
-    }
-
-    private func triangle(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint) -> SKShapeNode {
-        let p = CGMutablePath()
-        p.move(to: a)
-        p.addLine(to: b)
-        p.addLine(to: c)
-        p.closeSubpath()
-        let node = SKShapeNode(path: p)
-        node.strokeColor = body
-        node.fillColor = body.withAlphaComponent(0.18)
-        node.lineWidth = 1.6
-        node.lineJoin = .round
-        return node
-    }
-
-    /// Baut einen dünnen Linienzug (Schnurrhaare, Pfötchen). `color == nil` nutzt die Schnurrhaar-Farbe.
-    private func whiskers(_ segments: [[CGPoint]], width: CGFloat = 1.0, color: SKColor? = nil) -> SKShapeNode {
-        let p = CGMutablePath()
-        for seg in segments {
-            guard let first = seg.first else { continue }
-            p.move(to: first)
-            for pt in seg.dropFirst() { p.addLine(to: pt) }
+        for sprite in [catRight, catLeft] {
+            guard let sprite else { continue }
+            sprite.run(.sequence([
+                .colorize(with: .white, colorBlendFactor: 0.9, duration: 0.05),
+                .colorize(withColorBlendFactor: 0.0, duration: 0.18)
+            ]))
         }
-        let node = SKShapeNode(path: p)
-        node.strokeColor = color ?? whisk
-        node.fillColor = .clear
-        node.lineWidth = width
-        node.lineCap = .round
-        return node
+    }
+
+    /// Aktualisiert die Blickrichtung anhand der Schiffsposition und blendet bei einem Wechsel weich
+    /// in die gespiegelte Kontur über (der gewünschte „Richtungswechsel ohne 3D"). Eine Hysterese
+    /// (30 pt) verhindert Zittern, wenn das Schiff fast senkrecht über/unter der Katze steht.
+    private func updateFacing(towards shipX: CGFloat) {
+        guard catRight != nil, catLeft != nil else { return }
+        let want = shipX >= position.x
+        guard want != facingRight, abs(shipX - position.x) > 30.0 else { return }
+        facingRight = want
+        catRight.removeAllActions()
+        catLeft.removeAllActions()
+        catRight.run(.fadeAlpha(to: facingRight ? 1.0 : 0.0, duration: 0.22))
+        catLeft.run(.fadeAlpha(to: facingRight ? 0.0 : 1.0, duration: 0.22))
+    }
+
+    /// Baut die Katze als zwei gespiegelte Kontur-Sprites (eines blickt nach rechts, eines nach
+    /// links). Der Körper/Kopf-Schwerpunkt wird auf den Knoten-Ursprung gelegt – dort sitzt der
+    /// Kollisionskreis; der lange Schweif ragt frei darüber hinaus. Aus den Norm-Koordinaten wird
+    /// zugleich der lokale Augen-Ursprung für die Laser berechnet.
+    private func buildArt() {
+        guard let tex = ArtTexture.load("space_cat") else {
+            buildFallbackArt()
+            return
+        }
+        let texSize = tex.size()
+        let aspect = texSize.width / max(1.0, texSize.height)
+        let size = CGSize(width: artHeight * aspect, height: artHeight)
+
+        // Sprite so verschieben, dass der Körper/Kopf-Schwerpunkt im Knoten-Ursprung (0,0) liegt.
+        // Texturkoordinaten haben y nach unten, Szenen-Koordinaten y nach oben -> y-Term spiegeln.
+        let offset = CGPoint(x: (0.5 - bodyCenterNorm.x) * size.width,
+                             y: (bodyCenterNorm.y - 0.5) * size.height)
+
+        let right = SKSpriteNode(texture: tex, size: size)
+        right.position = offset
+        addChild(right)
+        catRight = right
+
+        let left = SKSpriteNode(texture: tex, size: size)
+        left.position = offset
+        left.xScale = -1.0          // gespiegelte Kontur (Blick nach links)
+        left.alpha = 0.0
+        addChild(left)
+        catLeft = left
+
+        // Lokaler Augen-Ursprung bei Blick nach rechts (Norm-Koord -> lokale Szenen-Koord, y oben).
+        eyeOffsetRight = CGPoint(x: offset.x + (eyeNorm.x - 0.5) * size.width,
+                                 y: offset.y + (0.5 - eyeNorm.y) * size.height)
+    }
+
+    /// Notnagel ohne Textur: eine einfache violette Kontur, damit Spiel/Tests nie leer laufen.
+    private func buildFallbackArt() {
+        let dot = SKShapeNode(circleOfRadius: collisionRadius)
+        dot.strokeColor = body
+        dot.fillColor = .clear
+        dot.lineWidth = 2.0
+        addChild(dot)
+        // Dummy-Sprites, damit flashEyes/updateFacing nicht crashen.
+        catRight = SKSpriteNode(color: .clear, size: .zero)
+        catLeft = SKSpriteNode(color: .clear, size: .zero)
+        eyeOffsetRight = CGPoint(x: collisionRadius * 0.6, y: collisionRadius * 0.4)
     }
 }

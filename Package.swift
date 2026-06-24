@@ -29,7 +29,10 @@ let package = Package(
                 // Generierte Retro-Soundeffekte (AAC/.m4a) – optionaler Sample-Modus im SoundManager.
                 .copy("SFX"),
                 // Retro-Pixel-Font (Press Start 2P, OFL) – beim Start registriert.
-                .copy("Fonts")
+                .copy("Fonts"),
+                // Vektorisierte Boss-Grafiken (PNG, getracte Konturen) – über Bundle.module als
+                // Textur geladen: `space_cat.png` (Weltraumkatze), `zardoz_head.png` (Kopf-Boss).
+                .copy("Art")
             ]
         ),
         // macOS-App-Shell (AppKit): Entry-Point, Fenster, Menü, Dock-Icon.

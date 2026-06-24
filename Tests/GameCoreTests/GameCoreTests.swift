@@ -1539,6 +1539,19 @@ final class GameCoreTests: XCTestCase {
         XCTAssertGreaterThan(maxUFOs, 2, "Die Armada soll das reguläre 2er-UFO-Limit überschreiten")
     }
 
+    // MARK: - Boss-Grafiken (vektorisierte Konturen aus dem Ressourcenbundle)
+
+    /// Stellt sicher, dass die getracten Boss-Texturen zur Laufzeit aus `Bundle.module/Art` ladbar
+    /// sind (sonst würden Katze/Kopf still auf den Fallback ausweichen).
+    func testBossArtTexturesLoadFromBundle() {
+        let cat = ArtTexture.load("space_cat")
+        let head = ArtTexture.load("zardoz_head")
+        XCTAssertNotNil(cat, "space_cat.png fehlt im Art-Bundle")
+        XCTAssertNotNil(head, "zardoz_head.png fehlt im Art-Bundle")
+        XCTAssertGreaterThan(cat?.size().width ?? 0, 0)
+        XCTAssertGreaterThan(head?.size().height ?? 0, 0)
+    }
+
     // MARK: - Weltraumkatzen (SpaceCat)
 
     func testSpaceCatStartsEntering() {

@@ -103,9 +103,9 @@ public final class GameScene: SKScene {
         // Tempo/Spawn-Frequenz, damit das mittlere Level (5) sich auch wie Mitte anfühlt.
         LevelSpawnConfig(level: 1, maxAsteroids: 3, spawnRate: 2.8, speedMultiplier: 1.0, powerUpChance: 0.12, normalWeight: 100, implodingWeight: 0, wobblingWeight: 0, ufoInterval: nil, blackHoleInterval: nil),
         LevelSpawnConfig(level: 2, maxAsteroids: 4, spawnRate: 2.4, speedMultiplier: 1.08, powerUpChance: 0.14, normalWeight: 90, implodingWeight: 0, wobblingWeight: 10, ufoInterval: 35.0, blackHoleInterval: nil),
-        LevelSpawnConfig(level: 3, maxAsteroids: 5, spawnRate: 2.1, speedMultiplier: 1.16, powerUpChance: 0.16, normalWeight: 80, implodingWeight: 10, wobblingWeight: 10, ufoInterval: 30.0, blackHoleInterval: nil),
-        LevelSpawnConfig(level: 4, maxAsteroids: 6, spawnRate: 1.8, speedMultiplier: 1.24, powerUpChance: 0.18, normalWeight: 65, implodingWeight: 18, wobblingWeight: 17, ufoInterval: 25.0, blackHoleInterval: 90.0),
-        LevelSpawnConfig(level: 5, maxAsteroids: 7, spawnRate: 1.5, speedMultiplier: 1.32, powerUpChance: 0.20, normalWeight: 55, implodingWeight: 23, wobblingWeight: 22, ufoInterval: 20.0, blackHoleInterval: 75.0)
+        LevelSpawnConfig(level: 3, maxAsteroids: 4, spawnRate: 2.1, speedMultiplier: 1.16, powerUpChance: 0.16, normalWeight: 85, implodingWeight: 5, wobblingWeight: 10, ufoInterval: 30.0, blackHoleInterval: nil),
+        LevelSpawnConfig(level: 4, maxAsteroids: 5, spawnRate: 1.8, speedMultiplier: 1.24, powerUpChance: 0.18, normalWeight: 74, implodingWeight: 9, wobblingWeight: 17, ufoInterval: 25.0, blackHoleInterval: nil),
+        LevelSpawnConfig(level: 5, maxAsteroids: 6, spawnRate: 1.5, speedMultiplier: 1.32, powerUpChance: 0.20, normalWeight: 66, implodingWeight: 12, wobblingWeight: 22, ufoInterval: 20.0, blackHoleInterval: 110.0)
     ]
     
     public func configForLevel(_ lvl: Int) -> LevelSpawnConfig {
@@ -114,15 +114,15 @@ public final class GameScene: SKScene {
             let extraLevels = lvl - 5
             return LevelSpawnConfig(
                 level: lvl,
-                maxAsteroids: min(16, last.maxAsteroids + extraLevels),
+                maxAsteroids: min(13, last.maxAsteroids + extraLevels),
                 spawnRate: max(0.6, last.spawnRate - Double(extraLevels) * 0.07),
                 speedMultiplier: min(2.6, last.speedMultiplier + CGFloat(extraLevels) * 0.08),
                 powerUpChance: min(0.35, last.powerUpChance + Double(extraLevels) * 0.02),
-                normalWeight: max(30, last.normalWeight - extraLevels * 5),
-                implodingWeight: min(40, last.implodingWeight + extraLevels * 2),
+                normalWeight: max(40, last.normalWeight - extraLevels * 4),
+                implodingWeight: min(20, last.implodingWeight + extraLevels),
                 wobblingWeight: min(40, last.wobblingWeight + extraLevels * 2),
                 ufoInterval: max(8.0, (last.ufoInterval ?? 15.0) - Double(extraLevels) * 0.8),
-                blackHoleInterval: max(35.0, (last.blackHoleInterval ?? 60.0) - Double(extraLevels) * 1.0)
+                blackHoleInterval: max(70.0, (last.blackHoleInterval ?? 110.0) - Double(extraLevels) * 1.5)
             )
         }
         return GameScene.levelConfigs[max(1, min(lvl, GameScene.levelConfigs.count)) - 1]
@@ -1056,7 +1056,9 @@ public final class GameScene: SKScene {
             // NICHT über das Schiff-Polygon. Sonst sind Power-ups bei aktivem Compress (winziges
             // Schiff) praktisch nicht mehr einsammelbar und bleiben „hängen".
             if !ship.isHidden {
-                let collectRadius: CGFloat = 30.0
+                // Großzügiger Sammelradius: Power-ups driften + pulsen; bei 30 ging man leicht über
+                // den Rand, ohne einzusammeln. 40 = visuelles Überfliegen sammelt zuverlässig ein.
+                let collectRadius: CGFloat = 40.0
                 // WICHTIG: erst die einzusammelnden bestimmen, DANN einsammeln und gezielt aus dem
                 // Array entfernen. Nicht „remainingPowerUps neu bauen und activePowerUps überschreiben":
                 // collectPowerUp kann (Bombe -> detonateBomb -> spawnPowerUp) WÄHRENDDESSEN neue
@@ -2585,7 +2587,7 @@ public final class GameScene: SKScene {
     private func triggerImplosionCollapse(asteroid: Asteroid) {
         SoundManager.shared.playImplosion()
         
-        let collapseWell = GravityWell(strength: 2000000.0, lifetime: 4.0)
+        let collapseWell = GravityWell(strength: 1280000.0, lifetime: 4.0)
         collapseWell.position = asteroid.position
         self.addChild(collapseWell)
         self.activeGravityWells.append(collapseWell)
@@ -2768,6 +2770,14 @@ public final class GameScene: SKScene {
     /// Baut aus einem Doppelschuss zwei parallele `.catEye`-Laser (halbe Spielerschuss-Geschwindigkeit,
     /// längere Lebensdauer, damit sie aus Schuss-Distanz auch ankommen).
     private func fireCatTwinLaser(_ shot: SpaceCat.TwinLaserShot) {
+        // Mündungsblitz am Auge (Mittelpunkt der beiden Ursprünge): verankert sichtbar, dass die
+        // Schüsse aus dem Auge kommen. Bei der kleinen, schnellen Katze ist das sonst kaum erkennbar
+        // (der Ursprung liegt korrekt am Auge, wirkt aber leicht wie „aus dem Körper").
+        if shot.origins.count == 2 {
+            let eye = CGPoint(x: (shot.origins[0].x + shot.origins[1].x) / 2.0,
+                              y: (shot.origins[0].y + shot.origins[1].y) / 2.0)
+            showCatMuzzleFlash(at: eye)
+        }
         for origin in shot.origins {
             // Lebensdauer großzügig (3.0 s ≈ 900 px Reichweite bei 300 px/s), damit die Schüsse
             // das Ziel auch aus größerer Distanz noch erreichen, bevor sie ablaufen.
@@ -2776,6 +2786,20 @@ public final class GameScene: SKScene {
             self.addChild(laser)
             self.activeLasers.append(laser)
         }
+    }
+
+    /// Kurzer oranger Mündungsblitz (glühendes Katzenauge) am Schuss-Ursprung.
+    private func showCatMuzzleFlash(at pos: CGPoint) {
+        let flash = SKShapeNode(circleOfRadius: 5.0)
+        flash.position = pos
+        flash.fillColor = SKColor(red: 1.0, green: 0.6, blue: 0.15, alpha: 0.9)
+        flash.strokeColor = .clear
+        flash.zPosition = 6
+        addChild(flash)
+        flash.run(.sequence([
+            .group([.scale(to: 2.2, duration: 0.18), .fadeOut(withDuration: 0.18)]),
+            .removeFromParent()
+        ]))
     }
 
     private func spawnSpaceCat() {
