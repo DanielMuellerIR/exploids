@@ -232,3 +232,12 @@ völlig gezielt, kein sinnloses Herumtreiben. Code: `Sources/GameCore/SpaceCat.s
   Invariante (`entityTrackingConsistentForTesting`) ab.
 - *Offen / Tuning:* Feinabstimmung von Frequenz/Schwierigkeit nach dem Playtest; ggf. Sound für
   den Augenlaser (aktuell der UFO-Sound wiederverwendet); optionaler Glossar-Eintrag.
+
+### Geplant: Deterministisches Replay-System (Plan steht, Umsetzung offen)
+
+Ziel: Spielsimulation bit-exakt reproduzierbar machen → Highscore-Läufe in der App erneut abspielen
+und daraus saubere Promo-GIFs headless rendern. Aufwand grob 4–6 Tage in drei Phasen
+(Determinismus-Fundament → Aufnahme/Wiedergabe → Fixed-Timestep + GIF). **Voller, in Unterschritte
+zerlegter Plan mit Erfolgskriterien:** [`docs/replay-system-plan.md`](docs/replay-system-plan.md).
+Status 2026-06-24: nur dokumentiert, Start in neuer Session (Einstieg: Phase 1.1 PRNG + 1.5
+Determinismus-Probe). Das Determinismus-Fundament macht nebenbei alle Tests deterministisch.
