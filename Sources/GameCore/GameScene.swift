@@ -3649,6 +3649,15 @@ public final class GameScene: SKScene {
         self.selectedMode = mode
     }
 
+    /// Für Tests/Replay: startet ein frisches Spiel mit festgelegtem Seed, Start-Level und Modus.
+    /// Setzt die Auswahl-Felder und ruft `startNewGame(seed:)` – damit ist ein deterministischer
+    /// Lauf vollständig per Code reproduzierbar (Grundlage der Determinismus-Probe).
+    public func startNewGameForTesting(seed: UInt64, startLevel: Int = 1, mode: GameMode = .ancientAsteroids) {
+        self.selectedStartLevel = startLevel
+        self.selectedMode = mode
+        startNewGame(seed: seed)
+    }
+
     /// For testing: the effective spawn config for the current mode and level.
     public func currentConfigForTesting() -> LevelSpawnConfig {
         return currentConfig()

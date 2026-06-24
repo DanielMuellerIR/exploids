@@ -1815,5 +1815,108 @@ final class GameCoreTests: XCTestCase {
         scene.startNewGame()
         XCTAssertNotEqual(scene.currentSeed, 99, "Ohne Injektion darf der alte Seed nicht kleben bleiben")
     }
+
+    // MARK: - Determinismus-Regressionsprobe (Phase 1.5, Schlussstein)
+
+    /// Treibt ein frisches Spiel mit festem Seed über `frames` Frames mit fester dt-Folge und einem
+    /// rein vom Frame-Index abhängigen (also deterministischen) Eingabe-Skript. Gibt die Szene zurück.
+    /// Beide Determinismus-Läufe nutzen exakt diesen Treiber – nur der Seed unterscheidet sich.
+    @MainActor
+    private func runScriptedGame(seed: UInt64, startLevel: Int, frames: Int,
+                                 mode: GameMode = .ancientAsteroids) -> GameScene {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.startNewGameForTesting(seed: seed, startLevel: startLevel, mode: mode)
+
+        let dt: TimeInterval = 1.0 / 60.0
+        let base: TimeInterval = 1000.0
+        // Tastenzustände, die wir je nach Frame setzen/lösen (deterministisch).
+        var thrustHeld = false
+        var rotLeftHeld = false
+        var rotRightHeld = false
+
+        for f in 0..<frames {
+            // --- Deterministisches Eingabe-Skript (nur abhängig vom Frame-Index) ---
+            // Schub für ein mittleres Fenster, danach aus.
+            let wantThrust = (f >= 10 && f < 220)
+            if wantThrust != thrustHeld {
+                if wantThrust { scene.simulateKeyDown(keyCode: 13) } else { scene.simulateKeyUp(keyCode: 13) }
+                thrustHeld = wantThrust
+            }
+            // Links-/Rechts-Drehung in zwei Phasen, damit sich Ausrichtung (und Spawn-Kegel) ändert.
+            let wantLeft = (f >= 40 && f < 110)
+            if wantLeft != rotLeftHeld {
+                if wantLeft { scene.simulateKeyDown(keyCode: 0) } else { scene.simulateKeyUp(keyCode: 0) }
+                rotLeftHeld = wantLeft
+            }
+            let wantRight = (f >= 130 && f < 190)
+            if wantRight != rotRightHeld {
+                if wantRight { scene.simulateKeyDown(keyCode: 2) } else { scene.simulateKeyUp(keyCode: 2) }
+                rotRightHeld = wantRight
+            }
+            // Feuern: alle 9 Frames ein kurzer Tastendruck (löst Schüsse → Treffer → Splits → Drops aus).
+            if f % 9 == 0 { scene.simulateKeyDown(keyCode: 49) }
+            if f % 9 == 1 { scene.simulateKeyUp(keyCode: 49) }
+
+            scene.update(base + Double(f) * dt)
+        }
+        return scene
+    }
+
+    /// Baut einen kanonischen String aus dem gesamten simulationsrelevanten Zustand der Szene.
+    /// Da beide Läufe Schritt für Schritt identisch verarbeitet werden, stimmen auch die Array-
+    /// Reihenfolgen überein – ein direkter String-Vergleich zeigt jede Divergenz (mit Diff).
+    @MainActor
+    private func stateSnapshot(_ s: GameScene) -> String {
+        func p(_ pt: CGPoint) -> String { "(\(pt.x.bitPattern),\(pt.y.bitPattern))" }
+        var out = "score=\(s.score) gt=\(s.gameTime.bitPattern) lvl=\(s.currentLevel)\n"
+        out += "ship pos=\(p(s.ship.position)) vel=\(p(s.ship.velocity)) rot=\(s.ship.zRotation.bitPattern)\n"
+        out += "ast[\(s.activeAsteroids.count)]: "
+        for a in s.activeAsteroids {
+            out += "\(p(a.position))v\(p(a.velocity))pi\(a.pitch.bitPattern)ya\(a.yaw.bitPattern)sz\(a.sizeClass.rawValue) "
+        }
+        out += "\nufo[\(s.activeUFOs.count)]: "
+        for u in s.activeUFOs { out += "\(p(u.position))v\(p(u.velocity)) " }
+        out += "\npow[\(s.activePowerUps.count)]: "
+        for pu in s.activePowerUps { out += "\(p(pu.position))t\(pu.type.rawValue) " }
+        out += "\ncat[\(s.activeCats.count)]: "
+        for c in s.activeCats { out += "\(p(c.position)) " }
+        out += "\nwell[\(s.activeGravityWells.count)]: "
+        for w in s.activeGravityWells { out += "\(p(w.position)) " }
+        out += "\nlas[\(s.activeLasers.count)]: "
+        for l in s.activeLasers { out += "\(p(l.position)) " }
+        return out
+    }
+
+    /// Kernprobe: gleicher Seed + gleiche Eingabe/dt-Folge ⇒ bit-identischer Endzustand.
+    func testSimulationIsDeterministicForSameSeedAndInput() {
+        let a = runScriptedGame(seed: 0xDEADBEEF, startLevel: 1, frames: 600)
+        let b = runScriptedGame(seed: 0xDEADBEEF, startLevel: 1, frames: 600)
+        XCTAssertEqual(stateSnapshot(a), stateSnapshot(b),
+                       "Zwei Läufe mit gleichem Seed und gleicher Eingabe müssen identisch sein")
+
+        // Zusätzlich der RNG-Zustand: aus identischen Generatoren muss der nächste Wert gleich sein.
+        var ra = a.rng, rb = b.rng
+        XCTAssertEqual(ra.next(), rb.next(), "RNG-Zustand beider Läufe muss identisch sein")
+    }
+
+    /// Gegenprobe ("der Test hat Zähne"): ein anderer Seed muss zu einem anderen Endzustand führen.
+    /// Beweist, dass der Snapshot tatsächlich die zufallsgetriebene Divergenz erfasst – ein blind
+    /// immer-gleicher Snapshot würde hier fälschlich bestehen.
+    func testSimulationDivergesForDifferentSeed() {
+        let a = runScriptedGame(seed: 1, startLevel: 1, frames: 600)
+        let b = runScriptedGame(seed: 2, startLevel: 1, frames: 600)
+        XCTAssertNotEqual(stateSnapshot(a), stateSnapshot(b),
+                          "Verschiedene Seeds müssen zu unterschiedlichen Verläufen führen")
+    }
+
+    /// Determinismus auch im Mad-Modus auf höherem Level (Feld-Rotation, UFO-/Boss-/Katzen-Pfade).
+    func testSimulationIsDeterministicMadModeHighLevel() {
+        let a = runScriptedGame(seed: 4242, startLevel: 5, frames: 800, mode: .madMeteoroids)
+        let b = runScriptedGame(seed: 4242, startLevel: 5, frames: 800, mode: .madMeteoroids)
+        XCTAssertEqual(stateSnapshot(a), stateSnapshot(b),
+                       "Auch Mad-Modus/höheres Level muss bei gleichem Seed reproduzierbar sein")
+    }
 }
 
