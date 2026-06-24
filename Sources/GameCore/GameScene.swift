@@ -207,6 +207,23 @@ public final class GameScene: SKScene {
     public private(set) var isLevelClearing: Bool = false
     private var levelClearEndTime: TimeInterval = 0.0
     
+    // MARK: - Determinismus / Replay (Phase 1.2)
+
+    /// Geseedeter Zufallsgenerator für die gesamte Spiel-Logik. Wird bei jedem frischen Spielstart
+    /// neu aus `currentSeed` aufgesetzt. Alle gameplay-relevanten `.random`-Aufrufe ziehen in
+    /// Phase 1.3 nach und nach hierüber (`Int.random(in:using:&rng)`), damit ein Lauf bei gleichem
+    /// Seed exakt reproduzierbar ist.
+    var rng: GameRandom = GameRandom(seed: 0)
+
+    /// Der Seed des aktuell laufenden Spiels. Nach `startNewGame` gesetzt und auslesbar (u. a. für
+    /// die spätere Replay-Aufnahme und für Tests).
+    public private(set) var currentSeed: UInt64 = 0
+
+    /// Optional injizierter Seed für den nächsten frischen Spielstart (Replay/Test). Ist er gesetzt,
+    /// wird er beim nächsten Fresh-Game übernommen und danach geleert; sonst würfelt das Spiel einen
+    /// neuen Seed aus dem System-RNG (einmalig, der einzige nicht-deterministische Punkt).
+    private var pendingSeed: UInt64?
+
     // Difficulty and Time state
     public private(set) var playTime: TimeInterval = 0.0
     
@@ -2177,6 +2194,16 @@ public final class GameScene: SKScene {
     public func restartGame() {
         transitionTo(.playing)
     }
+
+    /// Startet ein frisches Spiel. Ohne `seed` wird einer ausgewürfelt; mit `seed` wird er
+    /// übernommen — das ist der Einstiegspunkt für reproduzierbare Läufe (Replay/Tests).
+    public func startNewGame(seed: UInt64? = nil) {
+        pendingSeed = seed
+        // Über den State-Wechsel auf .playing läuft der Fresh-Game-Pfad (setzt currentSeed/rng).
+        // Aus dem laufenden Spiel heraus zuerst zurücksetzen, damit der else-Zweig greift.
+        gameState = .startScreen
+        transitionTo(.playing)
+    }
     
     /// Transitions between game states, configuring visible overlay nodes and sound.
     public func transitionTo(_ newState: GameState) {
@@ -2295,6 +2322,14 @@ public final class GameScene: SKScene {
                 activeKeys.removeAll()
             } else {
                 // Fresh game session
+
+                // Seed für diesen Lauf festlegen: injizierten Seed übernehmen (Replay/Test) oder
+                // einmalig einen neuen aus dem System-RNG würfeln. Danach speist sich ALLE
+                // Spiel-Logik aus `rng` (deterministisch reproduzierbar bei gleichem Seed).
+                currentSeed = pendingSeed ?? UInt64.random(in: UInt64.min...UInt64.max)
+                pendingSeed = nil
+                rng = GameRandom(seed: currentSeed)
+
                 gameMode = selectedMode
                 currentLevel = selectedStartLevel
                 levelTimeRemaining = (currentLevel >= 10) ? 999999.0 : 60.0

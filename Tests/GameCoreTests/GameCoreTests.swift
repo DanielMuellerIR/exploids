@@ -1760,5 +1760,57 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(scene.activeAsteroids.count, 1, "Katzen-Augenlaser darf keine Asteroiden zerstören")
         XCTAssertEqual(scene.activeUFOs.count, 1, "Katzen-Augenlaser darf keine UFOs zerstören")
     }
+
+    // MARK: - GameRandom (deterministischer PRNG, Phase 1.1)
+
+    /// Gleicher Seed muss IMMER dieselbe Sequenz liefern — das Fundament fürs Replay.
+    func testGameRandomSameSeedSameSequence() {
+        var a = GameRandom(seed: 12345)
+        var b = GameRandom(seed: 12345)
+        for _ in 0..<100 {
+            XCTAssertEqual(a.next(), b.next(), "Gleicher Seed muss identische Folge erzeugen")
+        }
+    }
+
+    /// Unterschiedliche Seeds müssen unterschiedliche Sequenzen liefern (sonst wäre der Seed wirkungslos).
+    func testGameRandomDifferentSeedDiffersSequence() {
+        var a = GameRandom(seed: 1)
+        var b = GameRandom(seed: 2)
+        var anyDifferent = false
+        for _ in 0..<100 where a.next() != b.next() {
+            anyDifferent = true
+        }
+        XCTAssertTrue(anyDifferent, "Verschiedene Seeds dürfen nicht dieselbe Folge erzeugen")
+    }
+
+    /// `Int.random(in:using:)` über GameRandom muss reproduzierbar sein — das ist die Schreibweise,
+    /// auf die in Phase 1.3 alle 65 Gameplay-Zufallsaufrufe umgestellt werden.
+    func testGameRandomReproducibleWithStdlibAPIs() {
+        var a = GameRandom(seed: 777)
+        var b = GameRandom(seed: 777)
+        let rollsA = (0..<50).map { _ in Int.random(in: 1...6, using: &a) }
+        let rollsB = (0..<50).map { _ in Int.random(in: 1...6, using: &b) }
+        XCTAssertEqual(rollsA, rollsB, "Int.random(in:using:) muss bei gleichem Seed reproduzierbar sein")
+    }
+
+    // MARK: - Seed-Verankerung in GameScene (Phase 1.2)
+
+    /// Ein injizierter Seed muss übernommen werden; ohne Injektion wird trotzdem einer gesetzt.
+    func testStartNewGameAppliesInjectedSeed() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+
+        scene.startNewGame(seed: 4242)
+        XCTAssertEqual(scene.currentSeed, 4242, "Injizierter Seed muss übernommen werden")
+
+        scene.startNewGame(seed: 99)
+        XCTAssertEqual(scene.currentSeed, 99, "Neuer injizierter Seed muss den alten ersetzen")
+
+        // Ohne Injektion muss dennoch ein (ausgewürfelter) Seed gesetzt sein – pendingSeed wurde
+        // beim vorigen Start geleert, also darf 99 nicht "kleben".
+        scene.startNewGame()
+        XCTAssertNotEqual(scene.currentSeed, 99, "Ohne Injektion darf der alte Seed nicht kleben bleiben")
+    }
 }
 
