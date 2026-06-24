@@ -2799,14 +2799,6 @@ public final class GameScene: SKScene {
                                                  : "M: MUSIC   N: SFX   F: AUTO-FIRE   ESC: BACK"
     }
     
-    private func shouldSpawnImploding() -> Bool {
-        let config = configForLevel(currentLevel)
-        let totalWeight = config.normalWeight + config.implodingWeight
-        guard totalWeight > 0 else { return false }
-        let rand = Int.random(in: 0..<totalWeight)
-        return rand >= config.normalWeight
-    }
-    
     private func clearGameEntitiesKeepOptions() {
         for ast in activeAsteroids {
             ast.removeFromParent()
