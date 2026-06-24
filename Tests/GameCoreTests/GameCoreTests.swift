@@ -2015,5 +2015,73 @@ final class GameCoreTests: XCTestCase {
         XCTAssertFalse(scene.startReplay(stale), "Inkompatible Aufnahme darf nicht starten")
         XCTAssertFalse(scene.isReplaying)
     }
+
+    // MARK: - Replay an Highscore persistieren (Phase 2.4)
+
+    /// End-to-End: Ein Lauf, der als Highscore endet, hängt seine Aufnahme an den Eintrag.
+    func testHighScoreEntryGetsReplayAttached() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.startNewGameForTesting(seed: 0xA11CE, startLevel: 1)
+
+        // Ein paar Frames spielen (Aufnahme läuft mit).
+        driveNoThrustScript(scene, frames: 50, base: 1000.0)
+        // Score hochsetzen, damit der Lauf garantiert ein Highscore ist (unabhängig von vorhandenen).
+        scene.addScoreForTesting(99999)
+
+        // Game Over erzwingen (Schiff hat weder Schild noch Extra-Leben → Game Over).
+        var guardCount = 0
+        while scene.gameState == .playing && guardCount < 5 {
+            scene.damageShipForTesting()
+            guardCount += 1
+        }
+        XCTAssertEqual(scene.gameState, .nameEntry, "Highscore-Lauf muss in die Initialen-Eingabe führen")
+        XCTAssertNotNil(scene.lastReplay, "Bei Game Over muss die Aufnahme finalisiert sein")
+
+        // Initialen eingeben + bestätigen → recordHighScore.
+        scene.simulateTypeCharacter("A")
+        scene.simulateTypeCharacter("C")
+        scene.simulateTypeCharacter("E")
+        scene.simulateKeyDown(keyCode: 36) // Enter
+
+        guard let top = scene.highScores.first else { return XCTFail("Kein Highscore-Eintrag") }
+        XCTAssertNotNil(top.replayData, "Der Highscore-Eintrag muss eine Aufnahme tragen")
+        let replay = scene.replay(for: top)
+        XCTAssertNotNil(replay, "Die angehängte Aufnahme muss dekodierbar sein")
+        XCTAssertEqual(replay?.seed, 0xA11CE, "Die Aufnahme muss den Seed des Laufs tragen")
+    }
+
+    /// Persistenz-Round-Trip: Eine an einen Highscore gehängte Aufnahme spielt nach Speichern/Laden
+    /// (JSON wie in UserDefaults) noch immer identisch ab.
+    func testPersistedHighScoreReplayStillReproduces() {
+        // Aufnahme + Referenz-Snapshot erzeugen.
+        let a = GameScene(size: CGSize(width: 1000, height: 800))
+        let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        viewA.presentScene(a)
+        a.startNewGameForTesting(seed: 0xBEEF_F00D, startLevel: 1)
+        driveNoThrustScript(a, frames: 200, base: 1000.0)
+        let snapA = stateSnapshot(a)
+        let replay = a.currentReplayForTesting()!
+
+        // In einen Highscore packen und wie die Persistenz JSON-codieren/decodieren.
+        let entry = HighScore(initials: "ACE", score: 12345, date: Date(),
+                              replayData: try! replay.encoded())
+        let json = try! JSONEncoder().encode([entry])
+        let reloaded = try! JSONDecoder().decode([HighScore].self, from: json)
+
+        // Aus dem neugeladenen Eintrag abspielen.
+        let b = GameScene(size: CGSize(width: 1000, height: 800))
+        let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        viewB.presentScene(b)
+        guard let restored = b.replay(for: reloaded[0]) else {
+            return XCTFail("Neugeladene Aufnahme nicht dekodierbar")
+        }
+        XCTAssertTrue(b.startReplay(restored))
+        for f in 0...(restored.frameCount + 1) {
+            b.update(2000.0 + Double(f) / 60.0)
+        }
+        XCTAssertEqual(stateSnapshot(b), snapA, "Persistierte Aufnahme muss nach Neuladen identisch abspielen")
+    }
 }
 

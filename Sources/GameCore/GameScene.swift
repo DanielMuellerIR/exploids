@@ -10,12 +10,17 @@ public struct HighScore: Codable, Sendable {
     public let score: Int
     public let date: Date
     public let deathMessage: String?
-    
-    public init(initials: String, score: Int, date: Date, deathMessage: String? = nil) {
+    /// Kompakt kodierte Aufnahme dieses Laufs (`Replay.encoded()`), falls vorhanden. Optional, damit
+    /// ältere persistierte Einträge ohne Replay weiterhin dekodieren. In JSON als Base64 gespeichert.
+    public let replayData: Data?
+
+    public init(initials: String, score: Int, date: Date, deathMessage: String? = nil,
+                replayData: Data? = nil) {
         self.initials = initials
         self.score = score
         self.date = date
         self.deathMessage = deathMessage
+        self.replayData = replayData
     }
 }
 
@@ -3396,13 +3401,26 @@ public final class GameScene: SKScene {
             message = "Zapped by space cat eye-beams on Level \(currentLevel)"
         }
         
-        let newEntry = HighScore(initials: initials, score: score, date: Date(), deathMessage: message)
+        // Aufnahme dieses Laufs an den Eintrag hängen (falls vorhanden und kodierbar), damit der
+        // Highscore-Lauf später exakt nachgespielt werden kann (Phase 2.5 / GIF in Phase 3).
+        let replayData: Data? = lastReplay.flatMap { try? $0.encoded() }
+
+        let newEntry = HighScore(initials: initials, score: score, date: Date(),
+                                 deathMessage: message, replayData: replayData)
         highScores.append(newEntry)
         highScores.sort { $0.score > $1.score }
         if highScores.count > 5 {
             highScores = Array(highScores.prefix(5))
         }
         saveHighScores()
+    }
+
+    /// Dekodiert die an einen Highscore gehängte Aufnahme (falls vorhanden und kompatibel). Liefert
+    /// `nil`, wenn kein Replay gespeichert ist oder es zu einer fremden Logik-Version gehört.
+    public func replay(for highScore: HighScore) -> Replay? {
+        guard let data = highScore.replayData, let replay = try? Replay(data: data),
+              replay.isCompatible else { return nil }
+        return replay
     }
     
     // MARK: - Mad Meteoroids Field Rotation
