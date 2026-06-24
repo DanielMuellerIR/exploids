@@ -25,7 +25,7 @@ public final class FloatingHead: SKNode {
     // MARK: - Zustand
 
     public private(set) var phase: Phase = .entering
-    /// Treffer bis zur Zerstörung – zentral justierbar (Boss). Daniel testet 10, evtl. später 20.
+    /// Treffer bis zur Zerstörung – zentral justierbar (Boss). Playtest mit 10, evtl. später 20.
     public static var hitsToDestroy: Int = 10
     /// Verbleibende Treffer bis zur Zerstörung.
     public private(set) var hitsRemaining: Int = FloatingHead.hitsToDestroy

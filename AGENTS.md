@@ -157,7 +157,7 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
 - **Reiner Spawner** — schießt nie selbst. Größe ~Radius 80 (größter Asteroid = 40).
 - **Auftreten:** zufällig einmal in **Level 5–7**, erneut in **Level 10**; in L10 (letztes Level)
   danach **alle 4–7 Min** per Timer. Bewusst selten (nutzt sich sonst ab).
-- **10 Treffer** bis zerstört (`FloatingHead.hitsToDestroy`, zentral justierbar — Daniel testet 10,
+- **10 Treffer** bis zerstört (`FloatingHead.hitsToDestroy`, zentral justierbar — Playtest mit 10,
   evtl. 20). Gleicht aus, dass der Kopf groß ist und Dauerfeuer aktiv ist. Feedback: Weiß-Flash pro
   Treffer + bleibender Vektor-Schaden, der mit sinkendem Leben einsetzt (≤66 % ein Auge, ≤33 %
   zweites Auge + Kiefer), Explosion beim Tod.
@@ -191,7 +191,7 @@ mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
   - **Timing-Anforderung:** Sample startet, sobald sich der Mund zu öffnen beginnt, und läuft
     weiter, bis ALLE 10 UFOs erschienen sind (~3 s Spawn-Phase). Deshalb **lange Samples** (großzügig)
     mit **Ausfaden am Ende** (Fade wird beim Konvertieren nach `.m4a` via `ffmpeg afade` gesetzt).
-  - **Sample-Variante: ERLEDIGT** — Daniels ⭐-Wahl (Gallery-ID `178222118321504`, 7 s) exportiert,
+  - **Sample-Variante: ERLEDIGT** — die ⭐-Favoriten-Wahl (Gallery-ID `178222118321504`, 7 s) exportiert,
     nach `Sources/GameCore/SFX/bosshead_0.m4a` (44,1 kHz Stereo, End-Fade via `ffmpeg afade`) gewandelt,
     im Manifest eingetragen. Im **Sample-Modus** (`useSampledSFX`) spielt `SoundManager.playBossHead()`
     das lange Mooo **einmal beim Mund-Öffnen** (Flanke in `GameScene.updateFloatingHead`), `stopBossHead()`
@@ -212,7 +212,7 @@ völlig gezielt, kein sinnloses Herumtreiben. Code: `Sources/GameCore/SpaceCat.s
 - **Ablauf:** **dreimal** je ein Doppelschuss-Versuch (`totalAttacks`), **dazwischen jeweils
   ausweichen** (`repositioning` mit seitlichem Impuls); danach **Flucht zum Bildschirmrand — kein
   Wrap** (verschwindet, kommt nicht zurück).
-- **Entscheidungen zu den vormals offenen Punkten (zentral justierbar, von Daniel testbar):**
+- **Entscheidungen zu den vormals offenen Punkten (zentral justierbar, im Playtest abstimmbar):**
   - **HP = 2** (`SpaceCat.hitsToDestroy`, mehr als ein UFO mit 1, weit weniger als der Boss mit 10).
   - **Punkte = 750** (`pointValue`, zwischen kleinem UFO 500 und Boss 2000).
   - **Vektor-Design:** violettes Linien-Katzengesicht mit Ohren, Schnurrhaaren, Schweif und
@@ -222,5 +222,5 @@ völlig gezielt, kein sinnloses Herumtreiben. Code: `Sources/GameCore/SpaceCat.s
 - **Kollisionen:** Schiff-Kontakt = Tod (Katze überlebt, Miniboss); Augenlaser-Treffer = Tod; ein
   Bomben-Treffer zählt wie ein direkter Schuss (1 Stufe Schaden, nicht zwingend tödlich).
   Death-Causes `.spaceCat`/`.spaceCatLaser` mit eigenen Highscore-Meldungen.
-- *Offen / Tuning:* Feinabstimmung von Frequenz/Schwierigkeit nach Daniels Playtest; ggf. Sound für
+- *Offen / Tuning:* Feinabstimmung von Frequenz/Schwierigkeit nach dem Playtest; ggf. Sound für
   den Augenlaser (aktuell der UFO-Sound wiederverwendet); optionaler Glossar-Eintrag.
