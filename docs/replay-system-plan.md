@@ -1,9 +1,26 @@
 # Plan: Deterministisches Replay-System
 
-Stand: 2026-06-24. **Status: Phase 1 abgeschlossen (Determinismus-Fundament, Tests grün).**
-Phase 2 (Aufnahme→Wiedergabe) und Phase 3 (Fixed-Timestep + headless GIF) folgen. Dieses Dokument
-ist die Arbeitsgrundlage; jeder Unterschritt ist so formuliert, dass er einzeln (auch von einem
-günstigeren Modell) umgesetzt werden kann, mit einem prüfbaren Erfolgskriterium.
+Stand: 2026-06-24. **Status: Phase 1 + 2 abgeschlossen; Phase 3 bis auf 3.1 abgeschlossen.**
+Headless-GIF-Rendering läuft (3.2–3.5). **Offen/zurückgestellt: 3.1 (Fixed-Timestep)** – siehe
+Hinweis dort. Dieses Dokument ist die Arbeitsgrundlage; jeder Unterschritt hat ein prüfbares
+Erfolgskriterium.
+
+**Umsetzungsnotiz Phase 2 (erledigt):** `Replay` (Codable, kompakte Binär-Plist) + `ReplayRecorder`
++ `ReplayPlayer`. Jeder Lauf wird aufgezeichnet (Seed + Eingaben + Float-`dt`-Folge), bei Game Over
+finalisiert und an den Highscore gehängt. Wiedergabe per `startReplay()`: `update()` verwirft den
+Echtzeit-`dt`, wendet den aufgezeichneten an und speist die Eingaben ein – **bit-exakt** (dt wird
+auf Float-Präzision quantisiert, damit die Float-Aufnahme exakt reproduziert). In-App: Highscore per
+Zifferntaste 1–5 ansehen, „▶ REPLAY"-Overlay, ESC verlässt.
+
+**Umsetzungsnotiz Phase 3 (3.2–3.5 erledigt):** Headless-GIF-Renderer (`ReplayRenderer` im
+ExploidsMac-Target): `SKRenderer` + Offscreen-Metal-Textur, `update(atTime:)` treibt Replay-Frame
++ SKActions, `render(...)` zeichnet, ImageIO kodiert ein animiertes GIF. HUD ausblendbar
+(`setHUDHiddenForRender`). CLI: `exploids --render-replay <file> --out <gif> [--scale S --fps N
+--stride N --show-hud]`, `--export-replay <i> --out <file>`, `--render-demo --out <gif>` (skriptet
+intern einen Lauf – Pipeline-Selbsttest). Verifiziert: erzeugt gültige GIFs mit echtem Spielinhalt
+(Schiff/Asteroiden/Laser/Effekte), cursorfrei. **3.1 NICHT umgesetzt** (siehe Phase-3-Block):
+höchstes Risiko (Spielgefühl), für das GIF nicht nötig, da das dt-basierte Replay bereits bit-exakt
+reproduziert – braucht Daniels Playtest.
 
 **Umsetzungsnotiz Phase 1 (erledigt):** PRNG `GameRandom` (SplitMix64) eingeführt; alle
 gameplay-relevanten `.random`-Aufrufe ziehen aus einem pro Lauf geseedeten `rng` (Entities über
@@ -168,6 +185,13 @@ Noch kein Replay.
 ---
 
 ## Phase 3 — Fixed-Timestep + headless GIF
+
+> **ZURÜCKGESTELLT (2026-06-24).** 3.1 wurde bewusst NICHT umgesetzt: Es ist das höchste Risiko im
+> Projekt (Spielgefühl muss identisch bleiben – nur per manuellem Playtest verifizierbar) und für
+> das eigentliche Ziel (Promo-GIF) nicht nötig, weil die dt-basierte Wiedergabe aus Phase 2 bereits
+> bit-exakt reproduziert. Die Aufnahmen tragen daher weiterhin die `dt`-Folge (als `Float`, kompakt).
+> Wenn gewünscht, kann 3.1 später separat angegangen und von Daniel im Spielgefühl abgenommen werden;
+> erst danach dürfte die `dt`-Folge aus dem Format entfallen.
 
 ### 3.1 — Update-Schleife auf Fixed-Timestep umstellen
 - **Datei:** `GameScene.swift`.

@@ -255,6 +255,10 @@ public final class GameScene: SKScene {
     /// an einen Highscore zu hängen (Phase 2.4).
     public private(set) var lastReplay: Replay?
 
+    /// Headless-Render-Modus: HUD/Overlay (Score, Timer, Level, Leben, „REPLAY") dauerhaft
+    /// ausgeblendet, damit ein gerendertes Promo-GIF sauber bleibt (Phase 3.5).
+    private var renderHUDHidden = false
+
     // Difficulty and Time state
     public private(set) var playTime: TimeInterval = 0.0
     
@@ -2353,6 +2357,23 @@ public final class GameScene: SKScene {
         return startReplay(replay)
     }
 
+    /// Aktiviert/deaktiviert den Headless-Render-Modus (HUD/Overlay dauerhaft aus). Für den
+    /// GIF-Renderer gedacht; im normalen Spiel nicht nutzen.
+    public func setHUDHiddenForRender(_ hidden: Bool) {
+        renderHUDHidden = hidden
+        if hidden { hideRenderHUD() }
+    }
+
+    /// Blendet alle HUD-/Overlay-Labels aus, die in einem Promo-GIF stören würden.
+    private func hideRenderHUD() {
+        scoreLabel.isHidden = true
+        hiScoreLabel.isHidden = true
+        timerLabel.isHidden = true
+        levelLabel.isHidden = true
+        livesLabel.isHidden = true
+        replayOverlayLabel.isHidden = true
+    }
+
     /// Ermittelt die Ziffer 1–9 aus einem Tastendruck – entweder aus den Zeichen (macOS-keyDown,
     /// iOS) oder aus den Zifferntasten-Keycodes der oberen Reihe (für headless/Controller). `nil`,
     /// wenn es keine Ziffer ist.
@@ -2678,6 +2699,10 @@ public final class GameScene: SKScene {
             settingsAutoFireLabel.isHidden = false
             settingsHintLabel.isHidden = false
         }
+
+        // Headless-Render: HUD/Overlay durchgängig ausgeblendet halten (für ein sauberes Promo-GIF),
+        // egal in welchen Zustand wir gerade gewechselt sind.
+        if renderHUDHidden { hideRenderHUD() }
     }
 
     /// iOS-Breitformat: positioniert die Startbildschirm-Labels passend zur aktuellen Bildhöhe

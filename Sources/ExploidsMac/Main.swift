@@ -238,15 +238,36 @@ struct Main {
             Options:
               --no-sound    Mute all game sounds and disable audio engine startup.
               --test-mode   Run a headless game simulation for 10 frames and print telemetry, then exit.
+              --export-replay <i> --out <file>
+                            Export the replay attached to high-score entry <i> (0-based) to a file.
+              --render-replay <file> --out <gif> [--scale S] [--fps N] [--stride N] [--show-hud]
+                            Headlessly render a replay file to an animated GIF (no window). Default
+                            scale 480x360, fps 30, stride 2, HUD hidden.
               --version, -v Show application version.
               --help, -h    Show this help message.
             """)
             exit(0)
         }
-        
+
         // 2. Check for --no-sound
         if arguments.contains("--no-sound") {
             SoundManager.shared.isMuted = true
+        }
+
+        // 2b. Headless: Replay eines Highscores in eine Datei exportieren.
+        if let i = arguments.firstIndex(of: "--export-replay") {
+            runExportReplay(arguments: arguments, flagIndex: i)
+        }
+
+        // 2c. Headless: Replay-Datei zu animiertem GIF rendern (cursorfrei, reproduzierbar).
+        if let i = arguments.firstIndex(of: "--render-replay") {
+            runRenderReplay(arguments: arguments, flagIndex: i)
+        }
+
+        // 2d. Headless: einen kurzen, skriptgesteuerten Demo-Lauf erzeugen und zu GIF rendern
+        // (Selbsttest der Pipeline + schnelles Demo-GIF ohne gespeicherten Highscore).
+        if arguments.contains("--render-demo") {
+            runRenderDemo(arguments: arguments)
         }
         
         // 3. Check for --test-mode
@@ -285,5 +306,119 @@ struct Main {
         
         // Start the Cocoa run loop
         app.run()
+    }
+
+    // MARK: - Headless-CLI: Replay-Export & GIF-Render
+
+    /// Liest den Wert eines `--flag value`-Arguments (oder nil).
+    private static func argValue(_ arguments: [String], _ flag: String) -> String? {
+        guard let i = arguments.firstIndex(of: flag), i + 1 < arguments.count else { return nil }
+        return arguments[i + 1]
+    }
+
+    /// `--export-replay <index> --out <file>`: schreibt die an Highscore-Eintrag <index> gehängte
+    /// Aufnahme als Datei (kompaktes Binärformat). Beendet den Prozess.
+    private static func runExportReplay(arguments: [String], flagIndex: Int) {
+        guard flagIndex + 1 < arguments.count, let index = Int(arguments[flagIndex + 1]) else {
+            FileHandle.standardError.write(Data("Fehler: --export-replay braucht einen Index.\n".utf8)); exit(2)
+        }
+        guard let outPath = argValue(arguments, "--out") else {
+            FileHandle.standardError.write(Data("Fehler: --out <file> fehlt.\n".utf8)); exit(2)
+        }
+
+        // Szene aufsetzen (lädt Highscores aus dem Store) und Replay des Eintrags holen.
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
+        let scene = GameScene(size: CGSize(width: 800, height: 600))
+        view.presentScene(scene)
+        guard index >= 0, index < scene.highScores.count else {
+            FileHandle.standardError.write(Data("Fehler: Highscore-Index \(index) existiert nicht (0..\(scene.highScores.count - 1)).\n".utf8)); exit(3)
+        }
+        guard let replay = scene.replay(for: scene.highScores[index]) else {
+            FileHandle.standardError.write(Data("Fehler: Eintrag \(index) trägt keine (kompatible) Aufnahme.\n".utf8)); exit(3)
+        }
+        do {
+            try replay.encoded().write(to: URL(fileURLWithPath: outPath))
+            print("Replay (Seed \(replay.seed), \(replay.frameCount) Frames) exportiert nach \(outPath)")
+            exit(0)
+        } catch {
+            FileHandle.standardError.write(Data("Fehler beim Schreiben: \(error)\n".utf8)); exit(4)
+        }
+    }
+
+    /// `--render-demo --out <gif>`: skriptet intern einen kurzen Lauf, nimmt ihn auf und rendert ihn
+    /// zu einem GIF. Dient dem Pipeline-Selbsttest und als schnelles Demo-GIF ohne Highscore.
+    private static func runRenderDemo(arguments: [String]) {
+        let outPath = argValue(arguments, "--out") ?? "demo-replay.gif"
+        let frames = Int(argValue(arguments, "--frames") ?? "600") ?? 600
+        let startLevel = Int(argValue(arguments, "--level") ?? "3") ?? 3
+
+        // Szene aufsetzen und einen festen, frame-indizierten Lauf aufzeichnen.
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 480, height: 360))
+        let scene = GameScene(size: CGSize(width: 480, height: 360))
+        view.presentScene(scene)
+        // Höheres Start-Level → mehr Asteroiden/Gegner im Demo-GIF.
+        scene.startNewGameForTesting(seed: 0xC0FFEE, startLevel: startLevel, mode: .ancientAsteroids)
+
+        var fireDown = false
+        for f in 0..<frames {
+            let wantThrust = (f % 120) < 70
+            if wantThrust { scene.simulateKeyDown(keyCode: 13) } else { scene.simulateKeyUp(keyCode: 13) }
+            if (f % 90) < 30 { scene.simulateKeyDown(keyCode: 0) } else { scene.simulateKeyUp(keyCode: 0) }
+            if (f % 90) >= 45 && (f % 90) < 70 { scene.simulateKeyDown(keyCode: 2) } else { scene.simulateKeyUp(keyCode: 2) }
+            if f % 6 == 0 { scene.simulateKeyDown(keyCode: 49); fireDown = true }
+            else if fireDown { scene.simulateKeyUp(keyCode: 49); fireDown = false }
+            scene.update(1000.0 + Double(f) / 60.0)
+            if scene.gameState != .playing { break } // bei Game Over: Aufnahme endet hier
+        }
+        guard let replay = scene.currentReplayForTesting() ?? scene.lastReplay else {
+            FileHandle.standardError.write(Data("Fehler: Demo-Aufnahme leer.\n".utf8)); exit(4)
+        }
+
+        do {
+            var options = ReplayRenderer.Options()
+            if let s = argValue(arguments, "--scale"), let scale = Double(s), scale > 0 {
+                options.width = Int(scale); options.height = Int(scale * 3.0 / 4.0)
+            }
+            if arguments.contains("--show-hud") { options.hideHUD = false }
+            try ReplayRenderer.renderToGIF(replay, outputURL: URL(fileURLWithPath: outPath), options: options)
+            print("Demo-GIF gerendert: \(outPath) (\(replay.frameCount) Frames Aufnahme)")
+            exit(0)
+        } catch {
+            FileHandle.standardError.write(Data("Fehler beim Rendern: \(error)\n".utf8)); exit(4)
+        }
+    }
+
+    /// `--render-replay <file> --out <gif> [...]`: rendert eine Replay-Datei headless zu einem GIF.
+    private static func runRenderReplay(arguments: [String], flagIndex: Int) {
+        guard flagIndex + 1 < arguments.count else {
+            FileHandle.standardError.write(Data("Fehler: --render-replay braucht eine Datei.\n".utf8)); exit(2)
+        }
+        let inPath = arguments[flagIndex + 1]
+        guard let outPath = argValue(arguments, "--out") else {
+            FileHandle.standardError.write(Data("Fehler: --out <gif> fehlt.\n".utf8)); exit(2)
+        }
+
+        var options = ReplayRenderer.Options()
+        if let s = argValue(arguments, "--scale"), let scale = Double(s), scale > 0 {
+            // Quadratisches Szenen-Seitenverhältnis ist 4:3; --scale setzt die Breite, Höhe folgt 3:4.
+            options.width = Int(scale)
+            options.height = Int(scale * 3.0 / 4.0)
+        }
+        if let f = argValue(arguments, "--fps"), let fps = Int(f), fps > 0 { options.fps = fps }
+        if let st = argValue(arguments, "--stride"), let stride = Int(st), stride > 0 { options.frameStride = stride }
+        if arguments.contains("--show-hud") { options.hideHUD = false }
+
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: inPath))
+            let replay = try Replay(data: data)
+            guard replay.isCompatible else {
+                FileHandle.standardError.write(Data("Fehler: Aufnahme gehört zu einer anderen Logik-Version (inkompatibel).\n".utf8)); exit(3)
+            }
+            try ReplayRenderer.renderToGIF(replay, outputURL: URL(fileURLWithPath: outPath), options: options)
+            print("GIF gerendert: \(outPath)")
+            exit(0)
+        } catch {
+            FileHandle.standardError.write(Data("Fehler beim Rendern: \(error)\n".utf8)); exit(4)
+        }
     }
 }
