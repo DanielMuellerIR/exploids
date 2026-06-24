@@ -42,6 +42,10 @@ public final class Asteroid: SKShapeNode {
     
     /// The elapsed time in the current wobbling growth phase.
     public var timeInCurrentPhase: TimeInterval = 0.0
+
+    /// Durchgehend akkumulierte Zeit (aus dt) nur für den optischen Wobble-Puls – deterministisch,
+    /// damit der Asteroid-Zustand reproduzierbar bleibt (statt rohem `systemUptime`).
+    private var wobbleTime: TimeInterval = 0.0
     
     /// The current phase index of the wobbling asteroid (0 = small, 1 = medium, 2 = large).
     public var wobblePhase: Int = 0
@@ -297,8 +301,12 @@ public final class Asteroid: SKShapeNode {
         
         if isWobblingType {
             timeInCurrentPhase += deltaTime
-            // wobble scale oscillates between 0.85 and 1.15 scale
-            let wobbleScale = 1.0 + 0.15 * sin(CGFloat(ProcessInfo.processInfo.systemUptime * 18.0))
+            // wobble scale oscillates between 0.85 and 1.15 scale.
+            // Gegen die akkumulierte `wobbleTime` (aus dt) statt gegen Echtzeit rechnen, damit der
+            // Asteroid-Zustand deterministisch bleibt (Replay) – und dennoch ein durchgehender,
+            // phasenübergreifender Puls entsteht (nicht der pro Phase zurückgesetzte timeInCurrentPhase).
+            wobbleTime += deltaTime
+            let wobbleScale = 1.0 + 0.15 * sin(CGFloat(wobbleTime * 18.0))
             self.xScale = wobbleScale
             self.yScale = wobbleScale
         }

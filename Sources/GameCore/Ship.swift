@@ -7,6 +7,10 @@ public final class Ship: SKShapeNode {
     
     /// The ship's current velocity vector in points per second.
     public var velocity: CGPoint = .zero
+
+    /// Akkumulierte Zeit (aus dt) für den rein optischen Schild-Puls. Deterministisch, damit der
+    /// Gameplay-Pfad keine rohe Echtzeit (`systemUptime`) mehr liest.
+    private var shieldPulseTime: TimeInterval = 0.0
     
     /// The maximum velocity speed clamp.
     public var maxVelocity: CGFloat = 350.0
@@ -212,7 +216,10 @@ public final class Ship: SKShapeNode {
     /// Updates the spaceship's orientation, velocity, and position.
     public func update(deltaTime: TimeInterval, isThrusting: Bool, rotationInput: CGFloat) {
         let dt = CGFloat(deltaTime)
-        
+        // Akkumulierte Zeit (aus dt) für den optischen Schild-Puls – deterministisch statt rohem
+        // systemUptime, damit im Gameplay-Pfad keine Echtzeit-Lesestelle mehr steckt.
+        shieldPulseTime += deltaTime
+
         // 1. Update zRotation based on rotationInput and rotationSpeed
         zRotation += rotationInput * rotationSpeed * dt
         
@@ -240,7 +247,7 @@ public final class Ship: SKShapeNode {
         
         // Animate Shield Pulsing (alle sichtbaren Ringe)
         if isShieldActive {
-            let pulse = 1.0 + 0.05 * sin(CGFloat(ProcessInfo.processInfo.systemUptime) * 6.0)
+            let pulse = 1.0 + 0.05 * sin(CGFloat(shieldPulseTime) * 6.0)
             for ring in shieldRings where !ring.isHidden {
                 ring.xScale = pulse
                 ring.yScale = pulse

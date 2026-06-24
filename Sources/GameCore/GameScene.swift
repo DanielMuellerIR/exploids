@@ -224,6 +224,13 @@ public final class GameScene: SKScene {
     /// neuen Seed aus dem System-RNG (einmalig, der einzige nicht-deterministische Punkt).
     private var pendingSeed: UInt64?
 
+    /// Akkumulierte Spielzeit (Summe aller angewandten `dt`). Die EINZIGE Zeitquelle für die
+    /// Spiel-Logik: Power-up-Ablauf, Spawn-/Boss-/Katzen-Timer und Laser-Cooldown rechnen alle gegen
+    /// `gameTime`, nie gegen Echtzeit (`systemUptime`) oder die rohe SpriteKit-`currentTime`. Dadurch
+    /// hängt ein Lauf nur an (Seed + dt-Folge) und ist reproduzierbar. Wird bei jedem frischen
+    /// Spielstart auf 0 zurückgesetzt.
+    private(set) var gameTime: TimeInterval = 0.0
+
     // Difficulty and Time state
     public private(set) var playTime: TimeInterval = 0.0
     
@@ -652,7 +659,7 @@ public final class GameScene: SKScene {
     
     /// Spawns a laser from the ship's tip with a cooldown limit.
     private func fireLaser() {
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = gameTime
         let isRapidActive = now < rapidFireEndTime
         let cooldown: TimeInterval = isRapidActive ? 0.06 : 0.15
         
@@ -715,17 +722,21 @@ public final class GameScene: SKScene {
     /// Spawns an R-Type Wave Cannon Charge Shot.
     // MARK: - Game Loop
     
-    public override func update(_ currentTime: TimeInterval) {
+    public override func update(_ wallTime: TimeInterval) {
         if lastUpdateTime == 0 {
-            lastUpdateTime = currentTime
-            lastSpawnTime = currentTime
-            lastUFOSpawnTime = currentTime
-            lastGravityWellSpawnTime = currentTime
+            lastUpdateTime = wallTime
             return
         }
-        let deltaTime = currentTime - lastUpdateTime
-        lastUpdateTime = currentTime
-        
+        let deltaTime = wallTime - lastUpdateTime
+        lastUpdateTime = wallTime
+
+        // Eine Quelle der Wahrheit für Zeit: akkumulierte dt. Ab hier benennt die lokale Konstante
+        // `currentTime` die SPIELZEIT (nicht die Echtzeit-`wallTime`) – so rechnet der gesamte
+        // restliche Methodenrumpf und alle aufgerufenen Helfer gegen `gameTime`. Das ist die
+        // Grundlage für deterministisches Replay (Lauf hängt nur an Seed + dt-Folge).
+        gameTime += deltaTime
+        let currentTime = gameTime
+
         if gameState == .quitConfirmation {
             return
         }
@@ -1496,7 +1507,7 @@ public final class GameScene: SKScene {
             ship.shieldLevel -= 1   // eine Schild-Stufe absorbiert den Treffer
             SoundManager.shared.playExplosion()
             createShipExplosion(at: ship.position)
-            invincibilityEndTime = ProcessInfo.processInfo.systemUptime + 1.5
+            invincibilityEndTime = gameTime + 1.5
             shakeCamera(amplitude: 4.5, numberOfShakes: 6, durationPerShake: 0.03)
         } else if extraLives > 0 {
             // Extra-Life-Power-up: kein Game Over – stattdessen in der Mitte wiederbeleben und
@@ -1508,7 +1519,7 @@ public final class GameScene: SKScene {
             createShipExplosion(at: ship.position)
             ship.position = .zero
             ship.velocity = .zero
-            invincibilityEndTime = ProcessInfo.processInfo.systemUptime + extraLifeInvincibility
+            invincibilityEndTime = gameTime + extraLifeInvincibility
             shakeCamera(amplitude: 6.0, numberOfShakes: 7, durationPerShake: 0.035)
             showPowerUpNotification(text: "REVIVED!", color: SKColor(red: 1.0, green: 0.3, blue: 0.45, alpha: 1.0))
         } else {
@@ -1771,7 +1782,7 @@ public final class GameScene: SKScene {
     
     /// Handles collection updates for powerups.
     private func collectPowerUp(_ powerUp: PowerUp) {
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = gameTime
         let text: String
         let color: SKColor
         
@@ -2007,7 +2018,7 @@ public final class GameScene: SKScene {
     /// Wickelt zeitbasierte Power-up-Effekte pro Frame ab: Compress nach Ablauf zurücksetzen und
     /// den Laserbeam betreiben, solange das Power-up läuft UND Space gehalten wird.
     private func updateTimedPowerUpEffects(currentTime: TimeInterval) {
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = gameTime
 
         // Compress: nach Ablauf Schiff (und Beiboote) wieder auf Originalgröße.
         if compressEndTime > 0 && now >= compressEndTime {
@@ -2336,6 +2347,18 @@ public final class GameScene: SKScene {
                 currentSeed = pendingSeed ?? UInt64.random(in: UInt64.min...UInt64.max)
                 pendingSeed = nil
                 rng = GameRandom(seed: currentSeed)
+
+                // Spielzeit + alle zeitbasierten Timer auf den gemeinsamen Nullpunkt setzen, damit der
+                // Lauf bei gameTime 0 beginnt (sonst würden Spawn-/Power-up-Timer aus der Menü-Phase
+                // nachwirken und der Lauf wäre nicht reproduzierbar).
+                gameTime = 0.0
+                lastSpawnTime = 0.0
+                lastUFOSpawnTime = 0.0
+                lastGravityWellSpawnTime = 0.0
+                // Negativ vorbelegen, damit der ERSTE Schuss bei gameTime 0 sofort den Cooldown
+                // passiert (gameTime - lastLaserTime = 1.0 ≥ Cooldown). Mit 0.0 wäre der erste
+                // Tastendruck fälschlich blockiert (0 - 0 < 0.15) – seit der Umstellung auf gameTime.
+                lastLaserTime = -1.0
 
                 gameMode = selectedMode
                 currentLevel = selectedStartLevel
