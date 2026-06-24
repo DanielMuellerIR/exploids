@@ -1992,7 +1992,7 @@ public final class GameScene: SKScene {
 
         // Laserbeam: während der Power-up-Dauer, solange gefeuert wird (Auto-Feuer oder Taste).
         if now < beamEndTime && (autoFire || isSpaceHeld) && !ship.isHidden {
-            fireBeam()
+            fireBeam(currentTime: currentTime)
         } else {
             beamNode.isHidden = true
         }
@@ -2001,7 +2001,7 @@ public final class GameScene: SKScene {
     /// Baut den Laserbeam dieses Frames auf: eine Polylinie ab der Schiffsnase in Blickrichtung,
     /// halbe Bildschirmbreite lang, an den Bildschirmkanten toroidal umgebrochen (ragt also auf der
     /// gegenüberliegenden Seite wieder herein). Zerstört Asteroiden entlang des Strahls.
-    private func fireBeam() {
+    private func fireBeam(currentTime: TimeInterval) {
         let halfW = (size.width > 100 ? size.width : 1024.0) / 2
         let halfH = (size.height > 100 ? size.height : 768.0) / 2
         let angle = ship.zRotation
@@ -2065,6 +2065,72 @@ public final class GameScene: SKScene {
             }
         }
         activeAsteroids.append(contentsOf: newAsteroids)
+
+        // Der Strahl trifft auch die anderen Gegner – sonst kann man UFOs, Katzen und den Boss mit
+        // dem Beam nicht erledigen (genau dieser Bug fiel beim Spielen auf). UFOs sterben sofort
+        // (1 Treffer), Mehr-HP-Gegner (Katze/Boss) werden GEDROSSELT getroffen (lastBeamHitTime),
+        // sonst würden sie beim Dauer-Strahl pro Frame Schaden nehmen und sofort zerschmelzen.
+        let beamHitInterval: TimeInterval = 0.12
+        var scoreChanged = false
+
+        // UFOs: sofort zerstören (wie ein Laser-Treffer).
+        var hitUFOs: [UFO] = []
+        for ufo in activeUFOs {
+            let poly = ufo.getWorldVertices()
+            if points.contains(where: { CollisionHelper.isPointInPolygon($0, polygon: poly) }) {
+                hitUFOs.append(ufo)
+            }
+        }
+        for ufo in hitUFOs {
+            self.score += ufo.pointValue
+            scoreChanged = true
+            if Double.random(in: 0...1) <= 0.20 { spawnPowerUp(at: ufo.position) }
+            SoundManager.shared.playExplosion()
+            createShipExplosion(at: ufo.position)
+            ufo.removeFromParent()
+        }
+        if !hitUFOs.isEmpty { activeUFOs.removeAll { hitUFOs.contains($0) } }
+
+        // Weltraumkatzen: gedrosselter Treffer pro Strahl-Kontakt.
+        var deadCats: [SpaceCat] = []
+        for cat in activeCats {
+            let near = points.contains { distanceBetween($0, cat.position) <= cat.collisionRadius }
+            guard near, currentTime - cat.lastBeamHitTime >= beamHitInterval else { continue }
+            cat.lastBeamHitTime = currentTime
+            let destroyed = cat.registerHit()
+            createShipExplosion(at: cat.position)
+            if destroyed {
+                self.score += cat.pointValue
+                scoreChanged = true
+                if Double.random(in: 0...1) <= 0.5 { spawnPowerUp(at: cat.position) }
+                deadCats.append(cat)
+            }
+        }
+        if !deadCats.isEmpty {
+            activeCats.removeAll { deadCats.contains($0) }
+            deadCats.forEach { $0.removeFromParent() }
+        }
+
+        // Kopf-Boss: ebenfalls gedrosselt.
+        if let head = activeHead {
+            let near = points.contains { distanceBetween($0, head.position) <= head.collisionRadius }
+            if near && currentTime - head.lastBeamHitTime >= beamHitInterval {
+                head.lastBeamHitTime = currentTime
+                let destroyed = head.registerHit()
+                createShipExplosion(at: head.position)
+                shakeCamera(amplitude: 5.0, numberOfShakes: 6, durationPerShake: 0.025)
+                if destroyed {
+                    self.score += 2000
+                    scoreChanged = true
+                    createShipExplosion(at: head.position)
+                    shakeCamera(amplitude: 9.0, numberOfShakes: 10, durationPerShake: 0.03)
+                    head.removeFromParent()
+                    activeHead = nil
+                }
+            }
+        }
+
+        if scoreChanged { scoreLabel.text = "SCORE: \(String(format: "%05d", score))" }
     }
 
     /// Wrappt eine Koordinate toroidal in den Bereich [-half, half].
@@ -3523,6 +3589,19 @@ public final class GameScene: SKScene {
     public var powerUpNodeCountInSceneForTesting: Int {
         return self.children.compactMap { $0 as? PowerUp }.count
     }
+
+    /// For testing: prüft, dass für JEDEN Entity-Typ die Anzahl der Knoten im Szenengraph exakt der
+    /// Länge des zugehörigen Tracking-Arrays entspricht. Schlägt fehl, sobald ein Objekt im
+    /// Szenengraph hängt, das nicht (mehr) getrackt wird (verwaister Node), oder umgekehrt. Das ist
+    /// die zentrale „nichts bleibt unzerstörbar/uneinsammelbar hängen"-Invariante.
+    public var entityTrackingConsistentForTesting: Bool {
+        func count<T>(_ type: T.Type) -> Int { children.compactMap { $0 as? T }.count }
+        return count(Asteroid.self) == activeAsteroids.count
+            && count(UFO.self)      == activeUFOs.count
+            && count(SpaceCat.self) == activeCats.count
+            && count(PowerUp.self)  == activePowerUps.count
+            && count(Laser.self)    == activeLasers.count
+    }
     
     /// For testing: returns the triple shot end time.
     public var tripleShotEndTimeForTesting: TimeInterval {
@@ -3583,8 +3662,8 @@ public final class GameScene: SKScene {
     }
 
     /// For testing: runs one frame of the laser beam (bypasses the hold-to-fire gating).
-    public func fireBeamForTesting() {
-        fireBeam()
+    public func fireBeamForTesting(currentTime: TimeInterval = 0.0) {
+        fireBeam(currentTime: currentTime)
     }
 
     /// For testing: number of stored extra lives.

@@ -28,9 +28,9 @@ public final class SpaceCat: SKNode {
 
     public private(set) var phase: Phase = .entering
 
-    /// Treffer bis zur Zerstörung – zentral justierbar (Miniboss). Default 2 (mehr als ein normales
+    /// Treffer bis zur Zerstörung – zentral justierbar (Miniboss). Default 3 (mehr als ein normales
     /// UFO mit 1 Treffer, aber deutlich weniger als der Kopf-Boss mit 10).
-    public static var hitsToDestroy: Int = 2
+    public static var hitsToDestroy: Int = 3
     /// Verbleibende Treffer bis zur Zerstörung.
     public private(set) var hitsRemaining: Int = SpaceCat.hitsToDestroy
 
@@ -40,8 +40,12 @@ public final class SpaceCat: SKNode {
     /// Punkte fürs Zerstören – zwischen kleinem UFO (500) und Kopf-Boss (2000).
     public let pointValue: Int = 750
 
-    /// Ungefährer Kollisionsradius (Kreis) in Szenen-Einheiten.
-    public let collisionRadius: CGFloat = 20.0
+    /// Ungefährer Kollisionsradius (Kreis) in Szenen-Einheiten. Deckt jetzt Körper + Kopf ab.
+    public let collisionRadius: CGFloat = 26.0
+
+    /// Zeitpunkt des letzten Laserbeam-Treffers (für die Treffer-Drosselung des Dauer-Strahls,
+    /// damit die Katze nicht in Sekundenbruchteilen zerschmilzt). Wird von der GameScene gesetzt.
+    public var lastBeamHitTime: TimeInterval = 0.0
 
     /// Geschwindigkeit der Augen-Laser: **halbe Spielerschuss-Geschwindigkeit** (Spieler = 600).
     public static let laserSpeed: CGFloat = 300.0
@@ -397,16 +401,49 @@ public final class SpaceCat: SKNode {
 
     private func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
 
+    // Aufbau einer sitzenden Vektor-Katze: ein Körper (untere Hälfte) mit aufgesetztem, bewusst
+    // kleinerem Kopf darüber. Der Ursprung (0,0) liegt ungefähr im Körper-/Kopf-Übergang ≈ Mitte der
+    // Gesamtfigur, sodass der Kollisionskreis (collisionRadius) Körper und Kopf abdeckt.
     private func buildArt() {
-        // Gesicht (geschlossene Kontur).
+        // ---- Körper (sitzender Rumpf, unter dem Kopf) ----
+        let bodyPath = CGMutablePath()
+        bodyPath.move(to: P(0, 3))
+        bodyPath.addQuadCurve(to: P(15, -11), control: P(15, -2))
+        bodyPath.addQuadCurve(to: P(11, -25), control: P(18, -20))
+        bodyPath.addLine(to: P(-11, -25))
+        bodyPath.addQuadCurve(to: P(-15, -11), control: P(-18, -20))
+        bodyPath.addQuadCurve(to: P(0, 3), control: P(-15, -2))
+        bodyPath.closeSubpath()
+        let bodyNode = SKShapeNode(path: bodyPath)
+        bodyNode.strokeColor = body
+        bodyNode.fillColor = body.withAlphaComponent(0.12)
+        bodyNode.lineWidth = 1.8
+        bodyNode.lineJoin = .round
+        addChild(bodyNode)
+
+        // Vorderpfötchen (zwei kurze Beinchen am Körperboden).
+        addChild(whiskers([[P(-6, -25), P(-6, -29)], [P(6, -25), P(6, -29)]], width: 2.2, color: body))
+
+        // Schweif (geschwungene Linie, die seitlich nach oben kringelt – signalisiert „Katze").
+        let tail = CGMutablePath()
+        tail.move(to: P(13, -17))
+        tail.addQuadCurve(to: P(27, -3), control: P(31, -19))
+        let tailNode = SKShapeNode(path: tail)
+        tailNode.strokeColor = body
+        tailNode.fillColor = .clear
+        tailNode.lineWidth = 2.2
+        tailNode.lineCap = .round
+        addChild(tailNode)
+
+        // ---- Kopf (bewusst kleiner, oben aufgesetzt) ----
         let face = CGMutablePath()
-        face.move(to: P(-14, 8))
-        face.addLine(to: P(-17, -2))
-        face.addLine(to: P(-12, -13))
-        face.addLine(to: P(0, -17))
-        face.addLine(to: P(12, -13))
-        face.addLine(to: P(17, -2))
-        face.addLine(to: P(14, 8))
+        face.move(to: P(-9, 21))
+        face.addLine(to: P(-11, 13))
+        face.addLine(to: P(-7, 7))
+        face.addLine(to: P(0, 5))
+        face.addLine(to: P(7, 7))
+        face.addLine(to: P(11, 13))
+        face.addLine(to: P(9, 21))
         face.closeSubpath()
         let faceNode = SKShapeNode(path: face)
         faceNode.strokeColor = body
@@ -416,44 +453,33 @@ public final class SpaceCat: SKNode {
         addChild(faceNode)
 
         // Ohren (gefüllte Dreiecke).
-        addChild(triangle(P(-14, 7), P(-19, 20), P(-5, 10)))
-        addChild(triangle(P(14, 7), P(19, 20), P(5, 10)))
+        addChild(triangle(P(-9, 20), P(-12, 30), P(-2, 22)))
+        addChild(triangle(P(9, 20), P(12, 30), P(2, 22)))
 
         // Schnurrhaare (dünne Linien beidseits).
         addChild(whiskers([
-            [P(-4, -7), P(-18, -5)], [P(-4, -9), P(-18, -12)],
-            [P(4, -7), P(18, -5)],  [P(4, -9), P(18, -12)]
+            [P(-3, 10), P(-13, 11)], [P(-3, 8), P(-13, 5)],
+            [P(3, 10), P(13, 11)],  [P(3, 8), P(13, 5)]
         ]))
 
         // Nase (kleines Dreieck nach unten).
-        let nose = triangle(P(-2.5, -6), P(2.5, -6), P(0, -10))
+        let nose = triangle(P(-1.8, 11), P(1.8, 11), P(0, 8))
         nose.fillColor = glow
         addChild(nose)
 
-        // Schweif (eine geschwungene Linie, die seitlich nach oben kringelt – signalisiert „Katze").
-        let tail = CGMutablePath()
-        tail.move(to: P(15, -6))
-        tail.addQuadCurve(to: P(26, 12), control: P(31, -2))
-        let tailNode = SKShapeNode(path: tail)
-        tailNode.strokeColor = body
-        tailNode.fillColor = .clear
-        tailNode.lineWidth = 2.2
-        tailNode.lineCap = .round
-        addChild(tailNode)
-
-        // Glühende Schlitz-Augen (die „Laseraugen").
-        leftEye = eyeNode(at: P(-7, -1))
-        rightEye = eyeNode(at: P(7, -1))
+        // Glühende Schlitz-Augen (die „Laseraugen") – kleiner, passend zum kleineren Kopf.
+        leftEye = eyeNode(at: P(-4.5, 15), scale: 0.78)
+        rightEye = eyeNode(at: P(4.5, 15), scale: 0.78)
         addChild(leftEye)
         addChild(rightEye)
     }
 
     /// Ein glühendes Katzenauge: helle Mandel mit dunklem senkrechten Schlitz (Pupille).
-    private func eyeNode(at center: CGPoint) -> SKShapeNode {
+    private func eyeNode(at center: CGPoint, scale: CGFloat = 1.0) -> SKShapeNode {
         let node = SKShapeNode()
         let p = CGMutablePath()
         // Mandelform (breiter als hoch).
-        p.addEllipse(in: CGRect(x: -4.0, y: -2.6, width: 8.0, height: 5.2))
+        p.addEllipse(in: CGRect(x: -4.0 * scale, y: -2.6 * scale, width: 8.0 * scale, height: 5.2 * scale))
         node.path = p
         node.fillColor = glow
         node.strokeColor = glow
@@ -462,7 +488,7 @@ public final class SpaceCat: SKNode {
         node.position = center
 
         // Senkrechte Schlitz-Pupille.
-        let slit = SKShapeNode(rect: CGRect(x: -0.7, y: -2.0, width: 1.4, height: 4.0))
+        let slit = SKShapeNode(rect: CGRect(x: -0.7 * scale, y: -2.0 * scale, width: 1.4 * scale, height: 4.0 * scale))
         slit.fillColor = SKColor(red: 0.1, green: 0.02, blue: 0.0, alpha: 1.0)
         slit.strokeColor = .clear
         node.addChild(slit)
@@ -483,7 +509,8 @@ public final class SpaceCat: SKNode {
         return node
     }
 
-    private func whiskers(_ segments: [[CGPoint]]) -> SKShapeNode {
+    /// Baut einen dünnen Linienzug (Schnurrhaare, Pfötchen). `color == nil` nutzt die Schnurrhaar-Farbe.
+    private func whiskers(_ segments: [[CGPoint]], width: CGFloat = 1.0, color: SKColor? = nil) -> SKShapeNode {
         let p = CGMutablePath()
         for seg in segments {
             guard let first = seg.first else { continue }
@@ -491,9 +518,9 @@ public final class SpaceCat: SKNode {
             for pt in seg.dropFirst() { p.addLine(to: pt) }
         }
         let node = SKShapeNode(path: p)
-        node.strokeColor = whisk
+        node.strokeColor = color ?? whisk
         node.fillColor = .clear
-        node.lineWidth = 1.0
+        node.lineWidth = width
         node.lineCap = .round
         return node
     }

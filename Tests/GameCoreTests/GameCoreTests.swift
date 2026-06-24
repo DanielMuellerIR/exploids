@@ -1600,7 +1600,7 @@ final class GameCoreTests: XCTestCase {
         XCTAssertGreaterThan(cos(shot.angle), 0.1, "Predictive Aim soll dem Ziel vorhalten")
     }
 
-    func testPlayerLaserDestroysSpaceCatAfterTwoHits() {
+    func testPlayerLaserDestroysSpaceCatAfterEnoughHits() {
         let scene = GameScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
@@ -1617,16 +1617,90 @@ final class GameCoreTests: XCTestCase {
         cat.position = CGPoint(x: 220, y: 0)   // abseits vom Schiff, damit es nicht rammt
         let scoreBefore = scene.score
 
-        // Zwei überlappende Spielerschüsse -> zwei Treffer -> Katze (2 HP) zerstört.
-        scene.addLaserForTesting(Laser(position: CGPoint(x: 220, y: 0), angle: 0, type: .normal))
-        scene.addLaserForTesting(Laser(position: CGPoint(x: 220, y: 0), angle: 0, type: .normal))
+        // Genau hitsToDestroy überlappende Spielerschüsse -> Katze zerstört (HP-getrieben, robust
+        // gegen künftige HP-Änderungen).
+        for _ in 0..<SpaceCat.hitsToDestroy {
+            scene.addLaserForTesting(Laser(position: CGPoint(x: 220, y: 0), angle: 0, type: .normal))
+        }
 
         scene.update(1.0)    // initialisiert lastUpdateTime (früher Return; nicht 0, sonst Sentinel)
         scene.update(1.05)   // Bewegung + Kollision + Zerstörung
 
-        XCTAssertTrue(scene.activeCats.isEmpty, "Die Katze soll nach zwei Treffern zerstört sein")
+        XCTAssertTrue(scene.activeCats.isEmpty, "Die Katze soll nach genug Treffern zerstört sein")
         XCTAssertGreaterThanOrEqual(scene.score - scoreBefore, cat.pointValue,
                                     "Das Zerstören soll Punkte geben")
+        XCTAssertTrue(scene.entityTrackingConsistentForTesting, "Keine verwaisten Nodes nach dem Kill")
+    }
+
+    func testBeamDestroysUFO() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+        scene.simulateKeyDown(keyCode: 49)
+        scene.isSpawningEnabled = false
+        scene.clearAllEntitiesForTesting()
+
+        // UFO entlang des Strahls (Schiff bei (0,0), Blickrichtung +x).
+        scene.addUFOForTesting(at: CGPoint(x: 200, y: 0))
+        scene.fireBeamForTesting(currentTime: 1.0)
+
+        XCTAssertTrue(scene.activeUFOs.isEmpty, "Der Laserbeam muss UFOs zerstören können")
+        XCTAssertTrue(scene.entityTrackingConsistentForTesting)
+    }
+
+    func testBeamDestroysSpaceCatThrottled() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+        scene.simulateKeyDown(keyCode: 49)
+        scene.isSpawningEnabled = false
+        scene.clearAllEntitiesForTesting()
+
+        let cat = scene.spawnSpaceCatForTesting(startOnLeft: true)
+        cat.position = CGPoint(x: 200, y: 0)   // entlang des Strahls
+
+        // Ein einzelner Beam-Frame darf die Katze NICHT sofort zerschmelzen (Drosselung).
+        scene.fireBeamForTesting(currentTime: 1.0)
+        XCTAssertFalse(scene.activeCats.isEmpty, "Ein einzelner Beam-Frame darf die Katze nicht sofort töten")
+
+        // Über mehrere gedrosselte Treffer (Zeit jeweils > beamHitInterval) wird sie zerstört.
+        for i in 1...SpaceCat.hitsToDestroy {
+            scene.fireBeamForTesting(currentTime: 1.0 + Double(i) * 0.2)
+        }
+        XCTAssertTrue(scene.activeCats.isEmpty, "Anhaltender Laserbeam muss die Katze zerstören")
+        XCTAssertTrue(scene.entityTrackingConsistentForTesting)
+    }
+
+    func testNoOrphanEntitiesAfterBombOnMixedField() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+        scene.simulateKeyDown(keyCode: 49)
+        scene.isSpawningEnabled = false
+        scene.clearAllEntitiesForTesting()
+
+        // Gemischtes Feld weit weg vom Schiff (damit das Schiff nicht stirbt/einsammelt).
+        for i in 0..<4 {
+            let ast = Asteroid(sizeClass: .large, isImplodingType: false, isWobblingType: false)
+            ast.position = CGPoint(x: 250 + CGFloat(i) * 30, y: 250)
+            scene.addAsteroidForTesting(ast)
+        }
+        for _ in 0..<3 { scene.addUFOForTesting(at: CGPoint(x: 300, y: -250)) }
+        let cat = scene.spawnSpaceCatForTesting(startOnLeft: true)
+        cat.position = CGPoint(x: -300, y: 250)
+        scene.spawnPowerUpForTesting(type: .shield, position: CGPoint(x: -300, y: -250))
+
+        // Bombe genau beim Schiff -> wird eingesammelt -> Detonation -> Wirkung auf alle Objekte.
+        scene.addPowerUpForTesting(PowerUp(type: .bomb, position: .zero))
+
+        scene.update(1.0)
+        scene.update(1.05)
+
+        // Invariante: KEIN Entity-Typ darf verwaiste Nodes im Szenengraph hinterlassen.
+        XCTAssertTrue(scene.entityTrackingConsistentForTesting,
+                      "Nach einer Bombe auf gemischtem Feld dürfen keine verwaisten Nodes übrig bleiben")
+        // Die Bombe wirkt wie ein direkter Schuss: UFOs sind sofort weg.
+        XCTAssertTrue(scene.activeUFOs.isEmpty, "Die Bombe muss alle UFOs erledigen")
     }
 
     func testSpaceCatLaserKillsShipWithOwnDeathCause() {

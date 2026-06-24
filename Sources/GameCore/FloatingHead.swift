@@ -37,6 +37,10 @@ public final class FloatingHead: SKNode {
     /// Asteroid (Radius 40).
     public let collisionRadius: CGFloat = 68.0
 
+    /// Zeitpunkt des letzten Laserbeam-Treffers (Treffer-Drosselung des Dauer-Strahls, damit der
+    /// Boss nicht in Sekundenbruchteilen zerschmilzt). Wird von der GameScene gesetzt.
+    public var lastBeamHitTime: TimeInterval = 0.0
+
     /// Aktueller Mund-Öffnungsgrad (0 = zu, 1 = ganz offen) – steuert u.a. die Boss-Stimme.
     public var mouthOpenness: CGFloat { mouthProgress }
 

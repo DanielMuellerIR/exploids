@@ -213,14 +213,22 @@ völlig gezielt, kein sinnloses Herumtreiben. Code: `Sources/GameCore/SpaceCat.s
   ausweichen** (`repositioning` mit seitlichem Impuls); danach **Flucht zum Bildschirmrand — kein
   Wrap** (verschwindet, kommt nicht zurück).
 - **Entscheidungen zu den vormals offenen Punkten (zentral justierbar, im Playtest abstimmbar):**
-  - **HP = 2** (`SpaceCat.hitsToDestroy`, mehr als ein UFO mit 1, weit weniger als der Boss mit 10).
+  - **HP = 3** (`SpaceCat.hitsToDestroy`, mehr als ein UFO mit 1, weit weniger als der Boss mit 10).
+    Nach dem ersten Playtest von 2 auf 3 erhöht (waren zu leicht).
   - **Punkte = 750** (`pointValue`, zwischen kleinem UFO 500 und Boss 2000).
-  - **Vektor-Design:** violettes Linien-Katzengesicht mit Ohren, Schnurrhaaren, Schweif und
-    glühenden orangen Schlitz-Augen (pulsen beim Feuern/Treffer). Kollisionsradius 20.
+  - **Vektor-Design:** violette sitzende Linien-Katze mit **Körper** (Rumpf + Pfötchen + Schweif) und
+    aufgesetztem, bewusst **kleinerem Kopf** (Ohren, Schnurrhaare, glühende orange Schlitz-Augen, die
+    beim Feuern/Treffer pulsen). Kollisionsradius 26 (deckt Körper + Kopf ab). Körper nach dem ersten
+    Playtest ergänzt (vorher nur ein Kopf).
   - **Auslöser/Häufigkeit:** ab **Level 3**, zeitgesteuert (erster Auftritt 12–25 s nach Eignung,
     danach Abstand 35–60 s), **max. 1 gleichzeitig**, und **nie zusammen mit dem Kopf-Boss**.
-- **Kollisionen:** Schiff-Kontakt = Tod (Katze überlebt, Miniboss); Augenlaser-Treffer = Tod; ein
-  Bomben-Treffer zählt wie ein direkter Schuss (1 Stufe Schaden, nicht zwingend tödlich).
-  Death-Causes `.spaceCat`/`.spaceCatLaser` mit eigenen Highscore-Meldungen.
+- **Kollisionen / Waffenwirkung:** Schiff-Kontakt = Tod (Katze überlebt, Miniboss); Augenlaser-Treffer
+  = Tod; alle Spielerschüsse (Normal/Triple/Rapid/Rear/Drohnen) treffen sie; ein Bomben-Treffer zählt
+  wie ein direkter Schuss (1 Stufe Schaden); der **Laserbeam** trifft sie ebenfalls (gedrosselt, sonst
+  würde der Dauer-Strahl pro Frame Schaden machen). Death-Causes `.spaceCat`/`.spaceCatLaser`.
+- **Laserbeam-Fix (Playtest):** Der Beam traf zuvor NUR Asteroiden – UFOs, Katzen und Boss konnten
+  damit gar nicht zerstört werden. Jetzt trifft er alle (UFOs sofort, Mehr-HP-Gegner gedrosselt über
+  `lastBeamHitTime`). Regressionstests decken die Waffe×Gegner-Matrix + eine „keine verwaisten Nodes"-
+  Invariante (`entityTrackingConsistentForTesting`) ab.
 - *Offen / Tuning:* Feinabstimmung von Frequenz/Schwierigkeit nach dem Playtest; ggf. Sound für
   den Augenlaser (aktuell der UFO-Sound wiederverwendet); optionaler Glossar-Eintrag.
