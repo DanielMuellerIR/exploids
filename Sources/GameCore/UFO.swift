@@ -55,7 +55,7 @@ public final class UFO: SKShapeNode {
     ///   - isSmall: True if the UFO is small and aims at the player, false if it is large and shoots randomly.
     ///   - startOnLeft: True if it enters from the left edge of the screen, false if it enters from the right.
     ///   - screenSize: The screen dimensions to determine bounds and spawn heights.
-    public init(isSmall: Bool, startOnLeft: Bool, screenSize: CGSize) {
+    public init(isSmall: Bool, startOnLeft: Bool, screenSize: CGSize, using rng: inout GameRandom) {
         self.isSmall = isSmall
         self.fireCooldown = isSmall ? 1.5 : 2.2
         super.init()
@@ -93,7 +93,7 @@ public final class UFO: SKShapeNode {
         // Initialize position completely off-screen
         let halfWidth = screenSize.width / 2
         let startX = startOnLeft ? -halfWidth - 50.0 : halfWidth + 50.0
-        let startY = CGFloat.random(in: -screenSize.height * 0.25...screenSize.height * 0.25)
+        let startY = CGFloat.random(in: -screenSize.height * 0.25...screenSize.height * 0.25, using: &rng)
         self.position = CGPoint(x: startX, y: startY)
         
         // Initialize velocity (horizontal constant, wavy vertical)
@@ -104,6 +104,13 @@ public final class UFO: SKShapeNode {
         )
     }
     
+    /// Convenience-Initializer ohne Seed für Tests/Helfer — würfelt aus dem System-RNG.
+    /// NICHT im deterministischen Gameplay-Pfad verwenden (dafür den Initializer mit `using rng:`).
+    public convenience init(isSmall: Bool, startOnLeft: Bool, screenSize: CGSize) {
+        var throwaway = GameRandom(seed: GameRandom.systemSeed())
+        self.init(isSmall: isSmall, startOnLeft: startOnLeft, screenSize: screenSize, using: &throwaway)
+    }
+
     public required init?(coder aDecoder: NSCoder) {
         self.isSmall = false
         self.fireCooldown = 2.0
@@ -159,18 +166,18 @@ public final class UFO: SKShapeNode {
     }
     
     /// Shoots a warning laser directed towards a target position or randomly.
-    public func shoot(target: CGPoint, currentTime: TimeInterval) -> Laser? {
+    public func shoot(target: CGPoint, currentTime: TimeInterval, using rng: inout GameRandom) -> Laser? {
         guard currentTime - lastFireTime >= fireCooldown else { return nil }
         lastFireTime = currentTime
-        
+
         let angle: CGFloat
         if isSmall {
             // Snipes at player ship with minor random error
             let baseAngle = atan2(target.y - position.y, target.x - position.x)
-            angle = baseAngle + CGFloat.random(in: -0.12...0.12)
+            angle = baseAngle + CGFloat.random(in: -0.12...0.12, using: &rng)
         } else {
             // Large saucer fires in a completely random direction
-            angle = CGFloat.random(in: 0..<(2.0 * .pi))
+            angle = CGFloat.random(in: 0..<(2.0 * .pi), using: &rng)
         }
         
         // Spawn laser slightly offset from center

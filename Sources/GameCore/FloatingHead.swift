@@ -46,8 +46,10 @@ public final class FloatingHead: SKNode {
 
     // MARK: - Tuning (für Tests überschreibbar)
 
-    /// Lauer-Dauer in Sekunden, bis der Mund aufgeht (im Spiel zufällig ~3–5 s, ø 4).
-    public var lurkDuration: TimeInterval = Double.random(in: 3.0...5.0)
+    /// Lauer-Dauer in Sekunden, bis der Mund aufgeht (im Spiel zufällig ~3–5 s, ø 4). Wird im
+    /// deterministischen Initializer aus dem `rng` gesetzt; der Literal-Default 4.0 dient nur als
+    /// Platzhalter (z. B. für den Archivierungs-Pfad) und wird von Tests ohnehin überschrieben.
+    public var lurkDuration: TimeInterval = 4.0
     /// Dauer des Mund-Öffnens bzw. -Schließens.
     public var mouthMoveDuration: TimeInterval = 0.45
     /// Abstand zwischen zwei ausgespienen UFOs.
@@ -113,11 +115,14 @@ public final class FloatingHead: SKNode {
 
     /// Erzeugt den Kopf-Boss für eine gegebene Szenengröße. Er startet über dem oberen Bildrand und
     /// schwebt in den oberen Bildbereich hinein.
-    public init(screenSize: CGSize) {
+    public init(screenSize: CGSize, using rng: inout GameRandom) {
         self.screenSize = screenSize
         self.hoverTarget = CGPoint(x: 0, y: screenSize.height * 0.18)
         self.offscreenY = screenSize.height * 0.5 + 280.0
         super.init()
+
+        // Lauer-Dauer deterministisch aus dem geteilten rng (statt globalem System-RNG).
+        self.lurkDuration = Double.random(in: 3.0...5.0, using: &rng)
 
         // Container aufrecht (die Textur ist bereits korrekt orientiert; keine Mockup-Spiegelung mehr).
         addChild(art)
@@ -125,6 +130,13 @@ public final class FloatingHead: SKNode {
 
         self.position = CGPoint(x: 0, y: offscreenY)
         self.zPosition = 5
+    }
+
+    /// Convenience-Initializer ohne Seed für Tests/Helfer — würfelt aus dem System-RNG.
+    /// NICHT im deterministischen Gameplay-Pfad verwenden (dafür den Initializer mit `using rng:`).
+    public convenience init(screenSize: CGSize) {
+        var throwaway = GameRandom(seed: GameRandom.systemSeed())
+        self.init(screenSize: screenSize, using: &throwaway)
     }
 
     public required init?(coder aDecoder: NSCoder) {

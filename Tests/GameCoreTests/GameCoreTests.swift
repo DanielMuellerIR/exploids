@@ -948,7 +948,8 @@ final class GameCoreTests: XCTestCase {
         
         // Force a shoot check by calling shoot
         let now = ProcessInfo.processInfo.systemUptime
-        if let laser = ufo.shoot(target: scene.ship.position, currentTime: now) {
+        var rng = GameRandom(seed: 1)
+        if let laser = ufo.shoot(target: scene.ship.position, currentTime: now, using: &rng) {
             scene.addLaserForTesting(laser)
         }
         
@@ -1581,9 +1582,10 @@ final class GameCoreTests: XCTestCase {
 
         var shots = 0
         var finished = false
+        var rng = GameRandom(seed: 1)
         for _ in 0..<5000 {
             if let shot = cat.update(deltaTime: 0.05, shipPosition: CGPoint(x: 0, y: 300),
-                                     shipVelocity: .zero) {
+                                     shipVelocity: .zero, using: &rng) {
                 shots += 1
                 XCTAssertEqual(shot.origins.count, 2, "Doppelschuss = zwei Laser-Ursprünge")
             }
@@ -1601,8 +1603,9 @@ final class GameCoreTests: XCTestCase {
         // Schiff genau ÜBER der Katze, aber nach rechts fliegend -> Voraushalten muss nach rechts
         // zielen (cos des Winkels deutlich > 0), nicht senkrecht nach oben (cos ~ 0).
         let shipPos = CGPoint(x: cat.position.x, y: cat.position.y + 300)
+        var rng = GameRandom(seed: 1)
         let shot = cat.update(deltaTime: 0.016, shipPosition: shipPos,
-                              shipVelocity: CGPoint(x: 300, y: 0))
+                              shipVelocity: CGPoint(x: 300, y: 0), using: &rng)
         XCTAssertNotNil(shot)
         guard let shot = shot else { return }
 

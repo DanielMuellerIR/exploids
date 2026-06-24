@@ -39,14 +39,21 @@ public final class PowerUp: SKShapeNode {
     /// - Parameters:
     ///   - type: The power-up type. If nil, a random one is chosen.
     ///   - position: The spawning position in scene coordinates.
-    public init(type: PowerUpType? = nil, position: CGPoint) {
-        self.type = type ?? PowerUpType.allCases.randomElement()!
+    public init(type: PowerUpType? = nil, position: CGPoint, using rng: inout GameRandom) {
+        self.type = type ?? PowerUpType.allCases.randomElement(using: &rng)!
         super.init()
-        
+
         self.position = position
-        setupPowerUp()
+        setupPowerUp(using: &rng)
     }
-    
+
+    /// Convenience-Initializer ohne Seed für Tests/Helfer — würfelt aus dem System-RNG.
+    /// NICHT im deterministischen Gameplay-Pfad verwenden (dafür den Initializer mit `using rng:`).
+    public convenience init(type: PowerUpType? = nil, position: CGPoint) {
+        var throwaway = GameRandom(seed: GameRandom.systemSeed())
+        self.init(type: type, position: position, using: &throwaway)
+    }
+
     public required init?(coder aDecoder: NSCoder) {
         self.type = .shield
         super.init(coder: aDecoder)
@@ -54,7 +61,7 @@ public final class PowerUp: SKShapeNode {
     
     // MARK: - Setup
     
-    private func setupPowerUp() {
+    private func setupPowerUp(using rng: inout GameRandom) {
         let path = CGMutablePath()
         let strokeColor: SKColor
         let fillColor: SKColor
@@ -214,8 +221,8 @@ public final class PowerUp: SKShapeNode {
         self.addChild(labelNode)
         
         // Setup slow random drift velocity
-        let speed = CGFloat.random(in: 25.0...55.0)
-        let angle = CGFloat.random(in: 0..<(2.0 * .pi))
+        let speed = CGFloat.random(in: 25.0...55.0, using: &rng)
+        let angle = CGFloat.random(in: 0..<(2.0 * .pi), using: &rng)
         self.velocity = CGPoint(
             x: speed * cos(angle),
             y: speed * sin(angle)

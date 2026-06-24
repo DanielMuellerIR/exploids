@@ -127,17 +127,24 @@ public final class SpaceCat: SKNode {
 
     /// Erzeugt eine Weltraumkatze für eine gegebene Szenengröße. Sie startet komplett außerhalb des
     /// Bildrands (links oder rechts) und schwebt in den sichtbaren Bereich; danach übernimmt die KI.
-    public init(screenSize: CGSize, startOnLeft: Bool) {
+    public init(screenSize: CGSize, startOnLeft: Bool, using rng: inout GameRandom) {
         self.screenSize = screenSize
         self.attacksRemaining = totalAttacks
         let halfW = screenSize.width / 2
-        let entryY = CGFloat.random(in: -screenSize.height * 0.25...screenSize.height * 0.25)
+        let entryY = CGFloat.random(in: -screenSize.height * 0.25...screenSize.height * 0.25, using: &rng)
         self.entryTarget = CGPoint(x: startOnLeft ? -halfW * 0.45 : halfW * 0.45, y: entryY)
         super.init()
 
         self.position = CGPoint(x: startOnLeft ? -halfW - 50.0 : halfW + 50.0, y: entryY)
         self.zPosition = 5
         buildArt()
+    }
+
+    /// Convenience-Initializer ohne Seed für Tests/Helfer — würfelt aus dem System-RNG.
+    /// NICHT im deterministischen Gameplay-Pfad verwenden (dafür den Initializer mit `using rng:`).
+    public convenience init(screenSize: CGSize, startOnLeft: Bool) {
+        var throwaway = GameRandom(seed: GameRandom.systemSeed())
+        self.init(screenSize: screenSize, startOnLeft: startOnLeft, using: &throwaway)
     }
 
     public required init?(coder aDecoder: NSCoder) {
@@ -161,7 +168,8 @@ public final class SpaceCat: SKNode {
     public func update(deltaTime: TimeInterval, shipPosition: CGPoint, shipVelocity: CGPoint,
                        coverObjects: [(position: CGPoint, radius: CGFloat)] = [],
                        laserThreats: [(position: CGPoint, velocity: CGPoint)] = [],
-                       canFire: Bool = true) -> TwinLaserShot? {
+                       canFire: Bool = true,
+                       using rng: inout GameRandom) -> TwinLaserShot? {
         var shot: TwinLaserShot? = nil
 
         // Blickrichtung an das Schiff koppeln (außer auf der Flucht, wo sie geradlinig rausgleitet).
@@ -186,7 +194,7 @@ public final class SpaceCat: SKNode {
                     flashEyes()
                     attacksRemaining -= 1
                     if attacksRemaining > 0 {
-                        enterRepositioning(awayFrom: shipPosition)
+                        enterRepositioning(awayFrom: shipPosition, using: &rng)
                     } else {
                         enterFleeing(awayFrom: shipPosition)
                     }
@@ -235,14 +243,14 @@ public final class SpaceCat: SKNode {
         stateTime = 0.0
     }
 
-    private func enterRepositioning(awayFrom shipPos: CGPoint) {
+    private func enterRepositioning(awayFrom shipPos: CGPoint, using rng: inout GameRandom) {
         phase = .repositioning
         stateTime = 0.0
         // Seitlicher Ausweich-Impuls senkrecht zur Linie Katze→Schiff (zufällige Seite).
         let dx = position.x - shipPos.x, dy = position.y - shipPos.y
         let d = max(1.0, hypot(dx, dy))
         let perpX = -dy / d, perpY = dx / d
-        let side: CGFloat = Bool.random() ? 1.0 : -1.0
+        let side: CGFloat = Bool.random(using: &rng) ? 1.0 : -1.0
         moveVelocity.x += perpX * side * maxMoveSpeed
         moveVelocity.y += perpY * side * maxMoveSpeed
     }

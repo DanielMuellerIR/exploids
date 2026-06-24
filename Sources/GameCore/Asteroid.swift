@@ -73,35 +73,49 @@ public final class Asteroid: SKShapeNode {
     
     // MARK: - Initializer
     
-    /// Initializes a new procedurally generated asteroid of a given size class.
-    public init(sizeClass: AsteroidSize = .large, isImplodingType: Bool = false, isWobblingType: Bool = false) {
+    /// Deterministischer Initializer: zieht ALLE Zufallswerte (Form, Geschwindigkeit, Spin) aus dem
+    /// übergebenen `rng`. Das ist der Pfad, den das echte Spiel nutzt, damit ein Lauf bei gleichem
+    /// Seed bit-genau reproduzierbar ist.
+    public init(sizeClass: AsteroidSize = .large, isImplodingType: Bool = false, isWobblingType: Bool = false,
+                using rng: inout GameRandom) {
         self.isImplodingType = isImplodingType
         self.isWobblingType = isWobblingType
         // Wobbling type always starts small
         self.sizeClass = isWobblingType ? .small : sizeClass
         super.init()
-        setupAsteroid()
+        setupAsteroid(using: &rng)
     }
-    
+
+    /// Convenience-Initializer ohne Seed für Tests/Editor-Vorschauen — würfelt aus dem System-RNG.
+    /// NICHT im deterministischen Gameplay-Pfad verwenden (dafür den Initializer mit `using rng:`).
+    public convenience init(sizeClass: AsteroidSize = .large, isImplodingType: Bool = false, isWobblingType: Bool = false) {
+        var throwaway = GameRandom(seed: GameRandom.systemSeed())
+        self.init(sizeClass: sizeClass, isImplodingType: isImplodingType, isWobblingType: isWobblingType, using: &throwaway)
+    }
+
     public required init?(coder aDecoder: NSCoder) {
         self.sizeClass = .large
         self.isImplodingType = false
         self.isWobblingType = false
         super.init(coder: aDecoder)
-        setupAsteroid()
+        // Archivierungs-Pfad ist nicht Teil des deterministischen Spiels → System-RNG genügt.
+        var throwaway = GameRandom(seed: GameRandom.systemSeed())
+        setupAsteroid(using: &throwaway)
     }
-    
+
     // MARK: - Setup Helpers
-    
-    public func growToNextSize(newSize: AsteroidSize) {
+
+    /// Lässt einen wobbelnden Asteroiden auf die nächste Größe wachsen und baut seine Form neu auf.
+    /// Da das im Gameplay passiert, muss der `rng` durchgereicht werden (Determinismus).
+    public func growToNextSize(newSize: AsteroidSize, using rng: inout GameRandom) {
         guard isWobblingType else { return }
         self.sizeClass = newSize
-        setupAsteroid()
+        setupAsteroid(using: &rng)
         self.xScale = 1.0
         self.yScale = 1.0
     }
-    
-    private func setupAsteroid() {
+
+    private func setupAsteroid(using rng: inout GameRandom) {
         let radius = sizeClass.rawValue
         
         // Reset 3D wireframe configuration arrays to allow clean re-generation when growing
@@ -109,11 +123,11 @@ public final class Asteroid: SKShapeNode {
         edges.removeAll()
         
         // 1. Setup 2D Silhouette (for backdrop and collision)
-        let numVertices = Int.random(in: 8...12)
+        let numVertices = Int.random(in: 8...12, using: &rng)
         var generatedPoints: [CGPoint] = []
         for i in 0..<numVertices {
             let angle = (CGFloat(i) / CGFloat(numVertices)) * 2.0 * .pi
-            let perturbedRadius = radius * CGFloat.random(in: 0.75...1.25)
+            let perturbedRadius = radius * CGFloat.random(in: 0.75...1.25, using: &rng)
             let x = perturbedRadius * cos(angle)
             let y = perturbedRadius * sin(angle)
             generatedPoints.append(CGPoint(x: x, y: y))
@@ -175,7 +189,7 @@ public final class Asteroid: SKShapeNode {
         
         // Perturb 3D vertices
         self.local3DVertices = unitVertices.map { v in
-            let perturbedRadius = radius * CGFloat.random(in: 0.75...1.25)
+            let perturbedRadius = radius * CGFloat.random(in: 0.75...1.25, using: &rng)
             return Vector3D(
                 x: v.x * perturbedRadius,
                 y: v.y * perturbedRadius,
@@ -207,17 +221,17 @@ public final class Asteroid: SKShapeNode {
         }
         
         // 3. Setup Velocities
-        let randomSpeed = CGFloat.random(in: 40.0...100.0)
-        let randomAngle = CGFloat.random(in: 0..<(2.0 * .pi))
+        let randomSpeed = CGFloat.random(in: 40.0...100.0, using: &rng)
+        let randomAngle = CGFloat.random(in: 0..<(2.0 * .pi), using: &rng)
         self.velocity = CGPoint(
             x: randomSpeed * cos(randomAngle),
             y: randomSpeed * sin(randomAngle)
         )
         
         // Spin velocities
-        self.angularVelocity = CGFloat.random(in: -1.2...1.2)
-        self.pitchVelocity = CGFloat.random(in: -1.0...1.0)
-        self.yawVelocity = CGFloat.random(in: -1.0...1.0)
+        self.angularVelocity = CGFloat.random(in: -1.2...1.2, using: &rng)
+        self.pitchVelocity = CGFloat.random(in: -1.0...1.0, using: &rng)
+        self.yawVelocity = CGFloat.random(in: -1.0...1.0, using: &rng)
         
         // Draw the initial frame
         updateWireframePath()

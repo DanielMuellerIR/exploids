@@ -867,8 +867,11 @@ public final class GameScene: SKScene {
                         if isSpawningEnabled && currentTime - lastUFOSpawnTime >= ufoInt {
                             lastUFOSpawnTime = currentTime
                             if activeUFOs.count < 2 {
-                                let isSmallUFO = Double.random(in: 0...1) < 0.45
-                                let ufo = UFO(isSmall: isSmallUFO, startOnLeft: Bool.random(), screenSize: size)
+                                let isSmallUFO = Double.random(in: 0...1, using: &rng) < 0.45
+                                // startOnLeft VOR dem Init in eine lokale Variable (Exklusivität: der
+                                // UFO-Init nimmt rng als inout, da darf nicht parallel daraus gezogen werden).
+                                let startOnLeft = Bool.random(using: &rng)
+                                let ufo = UFO(isSmall: isSmallUFO, startOnLeft: startOnLeft, screenSize: size, using: &rng)
                                 self.addChild(ufo)
                                 self.activeUFOs.append(ufo)
                             }
@@ -888,8 +891,8 @@ public final class GameScene: SKScene {
                                 var attempts = 0
                                 repeat {
                                     spawnPos = CGPoint(
-                                        x: CGFloat.random(in: -halfW * 0.5...halfW * 0.5),
-                                        y: CGFloat.random(in: -halfH * 0.5...halfH * 0.5)
+                                        x: CGFloat.random(in: -halfW * 0.5...halfW * 0.5, using: &rng),
+                                        y: CGFloat.random(in: -halfH * 0.5...halfH * 0.5, using: &rng)
                                     )
                                     attempts += 1
                                 } while attempts < 50 && distanceBetween(spawnPos, ship.position) < 220.0
@@ -1238,7 +1241,7 @@ public final class GameScene: SKScene {
                         scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
                         
                         // Drop power-up on UFO hit
-                        if Double.random(in: 0...1) <= 0.20 {
+                        if Double.random(in: 0...1, using: &rng) <= 0.20 {
                             spawnPowerUp(at: ufo.position)
                         }
                         
@@ -1333,7 +1336,7 @@ public final class GameScene: SKScene {
                             createShipExplosion(at: cat.position)
                             shakeCamera(amplitude: 6.0, numberOfShakes: 7, durationPerShake: 0.03)
                             // Miniboss: etwas großzügigere Beute als ein normales UFO.
-                            if Double.random(in: 0...1) <= 0.5 {
+                            if Double.random(in: 0...1, using: &rng) <= 0.5 {
                                 spawnPowerUp(at: cat.position)
                             }
                             deadCats.insert(cat)
@@ -1391,10 +1394,10 @@ public final class GameScene: SKScene {
                     asteroid.timeInCurrentPhase = 0.0
                     if asteroid.wobblePhase == 0 {
                         asteroid.wobblePhase = 1
-                        asteroid.growToNextSize(newSize: .medium)
+                        asteroid.growToNextSize(newSize: .medium, using: &rng)
                     } else if asteroid.wobblePhase == 1 {
                         asteroid.wobblePhase = 2
-                        asteroid.growToNextSize(newSize: .large)
+                        asteroid.growToNextSize(newSize: .large, using: &rng)
                     } else if asteroid.wobblePhase == 2 {
                         let spawned = detonateWobblingAsteroid(asteroid)
                         remainingAsteroids.append(contentsOf: spawned)
@@ -1427,7 +1430,7 @@ public final class GameScene: SKScene {
 
             // Shoot at player ship
             if !ship.isHidden {
-                if let laser = ufo.shoot(target: ship.position, currentTime: currentTime) {
+                if let laser = ufo.shoot(target: ship.position, currentTime: currentTime, using: &rng) {
                     self.addChild(laser)
                     self.activeLasers.append(laser)
                     SoundManager.shared.playUfoSound()
@@ -1549,14 +1552,14 @@ public final class GameScene: SKScene {
     
     /// Spawns a new procedurally generated asteroid far away from the ship's center.
     public func spawnAsteroid() {
-        let sizeClass = Asteroid.AsteroidSize.allCases.randomElement() ?? .large
-        
+        let sizeClass = Asteroid.AsteroidSize.allCases.randomElement(using: &rng) ?? .large
+
         let config = currentConfig()
         let totalWeight = config.normalWeight + config.implodingWeight + config.wobblingWeight
         let isImploding: Bool
         let isWobbling: Bool
         if totalWeight > 0 {
-            let rand = Int.random(in: 0..<totalWeight)
+            let rand = Int.random(in: 0..<totalWeight, using: &rng)
             if rand < config.normalWeight {
                 isImploding = false
                 isWobbling = false
@@ -1572,8 +1575,8 @@ public final class GameScene: SKScene {
             isWobbling = false
         }
         
-        let asteroid = Asteroid(sizeClass: sizeClass, isImplodingType: isImploding, isWobblingType: isWobbling)
-        
+        let asteroid = Asteroid(sizeClass: sizeClass, isImplodingType: isImploding, isWobblingType: isWobbling, using: &rng)
+
         // Fallback for zero screen size setup bounds
         let width = size.width > 100 ? size.width : 1024.0
         let height = size.height > 100 ? size.height : 768.0
@@ -1589,8 +1592,8 @@ public final class GameScene: SKScene {
         let minSafeDistance: CGFloat = 250.0
         
         repeat {
-            let angle = CGFloat.random(in: 0..<(2.0 * .pi))
-            let distance = spawnRadius + CGFloat.random(in: 0...50)
+            let angle = CGFloat.random(in: 0..<(2.0 * .pi), using: &rng)
+            let distance = spawnRadius + CGFloat.random(in: 0...50, using: &rng)
             spawnPos = CGPoint(
                 x: distance * cos(angle),
                 y: distance * sin(angle)
@@ -1611,7 +1614,7 @@ public final class GameScene: SKScene {
         
         if attempts >= 50 {
             // Fallback: Choose a random angle outside the front cone relative to the ship (between 45 and 315 degrees)
-            let safeAngleOffset = CGFloat.random(in: (.pi / 4.0)...(7.0 * .pi / 4.0))
+            let safeAngleOffset = CGFloat.random(in: (.pi / 4.0)...(7.0 * .pi / 4.0), using: &rng)
             let theta = ship.zRotation + safeAngleOffset
             let dx = cos(theta)
             let dy = sin(theta)
@@ -1638,10 +1641,10 @@ public final class GameScene: SKScene {
         // zufälligen Punkt im INNEREN Spielfeld-Bereich gezielt. So ist garantiert, dass seine
         // Bahn das sichtbare Rechteck durchquert (Mittelpunkt tritt ein) — er bleibt nicht durch
         // einen zu steilen Winkel am Bild vorbei hängen (siehe Asteroid.hasEnteredScreen).
-        let targetX = CGFloat.random(in: -halfWidth * 0.6...halfWidth * 0.6)
-        let targetY = CGFloat.random(in: -halfHeight * 0.6...halfHeight * 0.6)
+        let targetX = CGFloat.random(in: -halfWidth * 0.6...halfWidth * 0.6, using: &rng)
+        let targetY = CGFloat.random(in: -halfHeight * 0.6...halfHeight * 0.6, using: &rng)
         let movementAngle = atan2(targetY - asteroid.position.y, targetX - asteroid.position.x)
-        let speed = CGFloat.random(in: 40.0...100.0) * config.speedMultiplier
+        let speed = CGFloat.random(in: 40.0...100.0, using: &rng) * config.speedMultiplier
         asteroid.velocity = CGPoint(
             x: speed * cos(movementAngle),
             y: speed * sin(movementAngle)
@@ -1689,7 +1692,7 @@ public final class GameScene: SKScene {
         var spawned: [Asteroid] = []
         let directions = [0.0, .pi / 2.0, .pi, 3.0 * .pi / 2.0]
         for angle in directions {
-            let smallAst = Asteroid(sizeClass: .small)
+            let smallAst = Asteroid(sizeClass: .small, using: &rng)
             smallAst.position = ast.position
             // Splitter entstehen am Ort des Eltern-Asteroiden (im Bild) und nehmen dessen
             // Eintritts-Status mit, damit sie sofort normal am Kanten-Umlauf teilnehmen.
@@ -1715,14 +1718,14 @@ public final class GameScene: SKScene {
         
         var children: [Asteroid] = []
         for i in 0..<2 {
-            let child = Asteroid(sizeClass: childSize)
+            let child = Asteroid(sizeClass: childSize, using: &rng)
             child.position = parent.position
             // Splitter erben den Eintritts-Status des Eltern-Asteroiden (siehe wrapAround).
             child.hasEnteredScreen = parent.hasEnteredScreen
 
             // Angle parent velocity +/- 30 degrees, speed up by 1.35x
             let baseAngle = atan2(parent.velocity.y, parent.velocity.x)
-            let deviation = (i == 0 ? 0.52 : -0.52) + CGFloat.random(in: -0.08...0.08)
+            let deviation = (i == 0 ? 0.52 : -0.52) + CGFloat.random(in: -0.08...0.08, using: &rng)
             let newAngle = baseAngle + deviation
             let newSpeed = sqrt(parent.velocity.x * parent.velocity.x + parent.velocity.y * parent.velocity.y) * 1.35
             
@@ -1739,7 +1742,11 @@ public final class GameScene: SKScene {
     
     /// Spawns a floating Power-Up capsule (gewichtete Typ-Auswahl).
     private func spawnPowerUp(at pos: CGPoint) {
-        let powerUp = PowerUp(type: randomPowerUpType(), position: pos)
+        // Typ ZUERST in eine lokale Variable ziehen: randomPowerUpType() mutiert rng, und der
+        // PowerUp-Init nimmt rng als inout — beides im selben Ausdruck würde gegen Swifts
+        // Exklusivitätsprüfung verstoßen.
+        let type = randomPowerUpType()
+        let powerUp = PowerUp(type: type, position: pos, using: &rng)
         self.addChild(powerUp)
         self.activePowerUps.append(powerUp)
     }
@@ -1754,7 +1761,7 @@ public final class GameScene: SKScene {
             (.beam, 9), (.rear, 10), (.compress, 9), (.extraLife, extraLifeWeight)
         ]
         let total = weights.reduce(0) { $0 + $1.1 }
-        var r = Int.random(in: 0..<total)
+        var r = Int.random(in: 0..<total, using: &rng)
         for (type, w) in weights {
             if r < w { return type }
             r -= w
@@ -1897,7 +1904,7 @@ public final class GameScene: SKScene {
         // mögliche Power-up-Beute, Explosion). Gleiche Wirkung wie ein Laser-Treffer.
         for ufo in activeUFOs {
             self.score += ufo.pointValue
-            if Double.random(in: 0...1) <= 0.20 {
+            if Double.random(in: 0...1, using: &rng) <= 0.20 {
                 spawnPowerUp(at: ufo.position)
             }
             createShipExplosion(at: ufo.position)
@@ -1913,7 +1920,7 @@ public final class GameScene: SKScene {
             createShipExplosion(at: cat.position)
             if destroyed {
                 self.score += cat.pointValue
-                if Double.random(in: 0...1) <= 0.5 {
+                if Double.random(in: 0...1, using: &rng) <= 0.5 {
                     spawnPowerUp(at: cat.position)
                 }
                 cat.removeFromParent()
@@ -1962,7 +1969,7 @@ public final class GameScene: SKScene {
             self.score += 200
             scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
 
-            if Double.random(in: 0...1) <= config.powerUpChance * powerUpDropScale {
+            if Double.random(in: 0...1, using: &rng) <= config.powerUpChance * powerUpDropScale {
                 spawnPowerUp(at: asteroid.position)
             }
 
@@ -1987,7 +1994,7 @@ public final class GameScene: SKScene {
             self.score += points
             scoreLabel.text = "SCORE: \(String(format: "%05d", score))"
 
-            if Double.random(in: 0...1) <= config.powerUpChance * powerUpDropScale {
+            if Double.random(in: 0...1, using: &rng) <= config.powerUpChance * powerUpDropScale {
                 spawnPowerUp(at: asteroid.position)
             }
 
@@ -2103,7 +2110,7 @@ public final class GameScene: SKScene {
         for ufo in hitUFOs {
             self.score += ufo.pointValue
             scoreChanged = true
-            if Double.random(in: 0...1) <= 0.20 { spawnPowerUp(at: ufo.position) }
+            if Double.random(in: 0...1, using: &rng) <= 0.20 { spawnPowerUp(at: ufo.position) }
             SoundManager.shared.playExplosion()
             createShipExplosion(at: ufo.position)
             ufo.removeFromParent()
@@ -2121,7 +2128,7 @@ public final class GameScene: SKScene {
             if destroyed {
                 self.score += cat.pointValue
                 scoreChanged = true
-                if Double.random(in: 0...1) <= 0.5 { spawnPowerUp(at: cat.position) }
+                if Double.random(in: 0...1, using: &rng) <= 0.5 { spawnPowerUp(at: cat.position) }
                 deadCats.append(cat)
             }
         }
@@ -2348,7 +2355,7 @@ public final class GameScene: SKScene {
                 updateLivesLabel()
 
                 // Kopf-Boss pro Spiel neu auswürfeln/zurücksetzen.
-                bossFirstTargetLevel = Int.random(in: 5...7)
+                bossFirstTargetLevel = Int.random(in: 5...7, using: &rng)
                 bossFirstDone = false
                 bossLevel10Done = false
                 nextBossTimeLevel10 = 0.0
@@ -2690,14 +2697,14 @@ public final class GameScene: SKScene {
                 if !bossLevel10Done {
                     spawn = true
                     bossLevel10Done = true
-                    nextBossTimeLevel10 = currentTime + Double.random(in: 240.0...420.0)
+                    nextBossTimeLevel10 = currentTime + Double.random(in: 240.0...420.0, using: &rng)
                 } else if currentTime >= nextBossTimeLevel10 {
                     spawn = true
-                    nextBossTimeLevel10 = currentTime + Double.random(in: 240.0...420.0)
+                    nextBossTimeLevel10 = currentTime + Double.random(in: 240.0...420.0, using: &rng)
                 }
             }
             if spawn {
-                let head = FloatingHead(screenSize: size)
+                let head = FloatingHead(screenSize: size, using: &rng)
                 self.addChild(head)
                 self.activeHead = head
             }
@@ -2749,8 +2756,9 @@ public final class GameScene: SKScene {
     /// Erzeugt ein einzelnes Armada-UFO am Mund-Mittelpunkt (Mix groß/klein) – umgeht bewusst das
     /// normale 2er-Limit für reguläre UFO-Spawns.
     private func spawnArmadaUFO(at position: CGPoint) {
-        let isSmall = Double.random(in: 0...1) < 0.4
-        let ufo = UFO(isSmall: isSmall, startOnLeft: Bool.random(), screenSize: size)
+        let isSmall = Double.random(in: 0...1, using: &rng) < 0.4
+        let startOnLeft = Bool.random(using: &rng)
+        let ufo = UFO(isSmall: isSmall, startOnLeft: startOnLeft, screenSize: size, using: &rng)
         ufo.position = position
         self.addChild(ufo)
         self.activeUFOs.append(ufo)
@@ -2764,10 +2772,10 @@ public final class GameScene: SKScene {
             && activeCats.count < maxActiveCats {
             if !catTimerArmed {
                 catTimerArmed = true
-                nextCatTime = currentTime + Double.random(in: 12.0...25.0)   // erster Auftritt
+                nextCatTime = currentTime + Double.random(in: 12.0...25.0, using: &rng)   // erster Auftritt
             } else if currentTime >= nextCatTime {
                 spawnSpaceCat()
-                nextCatTime = currentTime + Double.random(in: 35.0...60.0)   // Abstand danach
+                nextCatTime = currentTime + Double.random(in: 35.0...60.0, using: &rng)   // Abstand danach
             }
         }
 
@@ -2788,7 +2796,7 @@ public final class GameScene: SKScene {
             let shot = cat.update(deltaTime: deltaTime, shipPosition: ship.position,
                                   shipVelocity: ship.isHidden ? .zero : ship.velocity,
                                   coverObjects: cover, laserThreats: threats,
-                                  canFire: !ship.isHidden)
+                                  canFire: !ship.isHidden, using: &rng)
             if let shot = shot {
                 fireCatTwinLaser(shot)
                 SoundManager.shared.playUfoSound()
@@ -2838,7 +2846,8 @@ public final class GameScene: SKScene {
     }
 
     private func spawnSpaceCat() {
-        let cat = SpaceCat(screenSize: size, startOnLeft: Bool.random())
+        let startOnLeft = Bool.random(using: &rng)
+        let cat = SpaceCat(screenSize: size, startOnLeft: startOnLeft, using: &rng)
         self.addChild(cat)
         self.activeCats.append(cat)
     }
@@ -3308,7 +3317,7 @@ public final class GameScene: SKScene {
         }
 
         let speed = fieldSpeedRadPerSec(forLevel: currentLevel)
-        fieldRotationDirection = Bool.random() ? 1.0 : -1.0
+        fieldRotationDirection = Bool.random(using: &rng) ? 1.0 : -1.0
         fieldAngularVelocity = fieldRotationDirection * speed
 
         if currentLevel >= 10 {
@@ -3354,7 +3363,7 @@ public final class GameScene: SKScene {
             if currentLevel >= 10 {
                 nextDirectionChangeTime = currentTime + directionChangeInterval
                 // Gelegentlich wird aus dem Wechsel ein Plattenscratch statt einer sauberen Umkehr.
-                if Double.random(in: 0...1) < MadRotation.scratchChance {
+                if Double.random(in: 0...1, using: &rng) < MadRotation.scratchChance {
                     scratchActive = true
                     scratchElapsed = 0.0
                     return

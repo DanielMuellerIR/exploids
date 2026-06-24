@@ -27,6 +27,14 @@ public struct GameRandom: RandomNumberGenerator {
         self.state = seed
     }
 
+    /// Zieht einen frischen Seed aus dem System-RNG. Nur für nicht-deterministische Pfade gedacht
+    /// (z. B. Convenience-Initializer in Tests/Editor-Vorschauen, die keinen reproduzierbaren Lauf
+    /// brauchen). Im echten Spiel wird der Seed EINMAL beim Spielstart gewürfelt und überall geteilt.
+    public static func systemSeed() -> UInt64 {
+        var sys = SystemRandomNumberGenerator()
+        return sys.next()
+    }
+
     /// Liefert die nächste 64-Bit-Zufallszahl (Kern des `RandomNumberGenerator`-Protokolls).
     ///
     /// Ablauf von SplitMix64:
