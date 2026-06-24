@@ -11,6 +11,9 @@ assets/dmg-background.png
 # Lokale, private Agent-/Tool-Konfiguration (nicht öffentlich)
 .agents/
 .claude/
+# Lokale Signing-/Notary-Konfiguration (Team-ID, Identity, Keychain-Profil) –
+# maschinen-/account-spezifisch, gehört nicht ins öffentliche Repo
+wrappers/release.local.sh
 # iOS-XcodeGen-Artefakte (regenerierbar aus ios/project.yml)
 ios/*.xcodeproj
 ios/.build/

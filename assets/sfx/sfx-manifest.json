@@ -1,5 +1,5 @@
 {
-  "note": "Generierte Retro-SFX (Stable Audio 3 / M5), kuratiert in Number One, als kleine AAC (.m4a). Mehrere Dateien pro Effekt -> der SoundManager spielt sie abwechselnd.",
+  "note": "Generierte Retro-SFX (Stable Audio 3), als kleine AAC (.m4a). Mehrere Dateien pro Effekt -> der SoundManager spielt sie abwechselnd.",
   "effects": [
     {
       "name": "laser",
