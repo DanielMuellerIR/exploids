@@ -1,9 +1,18 @@
 # Plan: Deterministisches Replay-System
 
-Stand: 2026-06-24. **Status: nur Planung — noch nichts implementiert.** Umsetzung startet in
-einer neuen Session. Dieses Dokument ist die Arbeitsgrundlage; jeder Unterschritt ist so
-formuliert, dass er einzeln (auch von einem günstigeren Modell) umgesetzt werden kann, mit einem
-prüfbaren Erfolgskriterium.
+Stand: 2026-06-24. **Status: Phase 1 abgeschlossen (Determinismus-Fundament, Tests grün).**
+Phase 2 (Aufnahme→Wiedergabe) und Phase 3 (Fixed-Timestep + headless GIF) folgen. Dieses Dokument
+ist die Arbeitsgrundlage; jeder Unterschritt ist so formuliert, dass er einzeln (auch von einem
+günstigeren Modell) umgesetzt werden kann, mit einem prüfbaren Erfolgskriterium.
+
+**Umsetzungsnotiz Phase 1 (erledigt):** PRNG `GameRandom` (SplitMix64) eingeführt; alle
+gameplay-relevanten `.random`-Aufrufe ziehen aus einem pro Lauf geseedeten `rng` (Entities über
+`init(..., using rng:)` + Convenience-Init für Tests). Zeit vereinheitlicht auf akkumulierte
+`gameTime` (keine `systemUptime`/rohe `currentTime`-Lesestellen im Gameplay-Pfad mehr).
+Determinismus-Probe in `GameCoreTests` (gleicher Seed ⇒ bit-identisch; anderer Seed ⇒ Divergenz;
+inkl. Mad-Modus). **Bewusst NICHT geseedet** (separater Stream, ohne Sim-Einfluss): Ship-Flacker,
+SoundManager-Jitter, Kamera-Shake, Sternenfeld. Testaufruf braucht Xcode-SDK:
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test`.
 
 ## Ziel
 

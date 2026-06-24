@@ -34,13 +34,15 @@ public enum GameState: Sendable {
     case settings
 }
 
-/// Auswählbarer Spielmodus.
-public enum GameMode: Sendable {
+/// Auswählbarer Spielmodus. `UInt8`-rawValue + `Codable` für stabile Persistenz im Replay-Format
+/// (ancientAsteroids = 0, madMeteoroids = 1 – Reihenfolge nicht ändern, sonst werden alte Replays
+/// falsch dekodiert).
+public enum GameMode: UInt8, Sendable, Codable {
     /// Klassischer Modus: festes Spielfeld, Objekte wrappen an den Bildschirmkanten.
-    case ancientAsteroids
+    case ancientAsteroids = 0
     /// Neuer Modus: das gesamte Spielfeld (Objekte + Sternenfeld) rotiert kontinuierlich um die
     /// Bildschirmmitte, nur das Spieler-Raumschiff bleibt davon unberührt (vgl. Crazy Comets).
-    case madMeteoroids
+    case madMeteoroids = 1
 }
 
 /// Zentrale Tuning-Konstanten für die Feld-Rotation im Mad-Meteoroids-Modus.
@@ -230,6 +232,23 @@ public final class GameScene: SKScene {
     /// hängt ein Lauf nur an (Seed + dt-Folge) und ist reproduzierbar. Wird bei jedem frischen
     /// Spielstart auf 0 zurückgesetzt.
     private(set) var gameTime: TimeInterval = 0.0
+
+    /// Aufzeichnung des laufenden Spiels (Seed + Eingaben + dt-Folge). Wird bei jedem frischen
+    /// Spielstart neu angelegt (außer während eines Replays) und bei Game Over zu `lastReplay`
+    /// finalisiert.
+    var recorder: ReplayRecorder?
+
+    /// Läuft gerade eine Replay-Wiedergabe? Dann ist dieser Player gesetzt; er liefert pro Frame das
+    /// aufgezeichnete `dt` und speist die aufgezeichneten Eingaben ein. Live-Eingaben sind gesperrt.
+    var replayPlayer: ReplayPlayer?
+
+    /// Schutzflag: true, während der `replayPlayer` gerade eine aufgezeichnete Eingabe einspeist –
+    /// so unterscheidet `handleKeyDown/Up` injizierte von (gesperrten) Live-Eingaben.
+    private var isInjectingReplay = false
+
+    /// Die zuletzt fertig aufgezeichnete Aufnahme (gesetzt bei Game Over). Grundlage, um ein Replay
+    /// an einen Highscore zu hängen (Phase 2.4).
+    public private(set) var lastReplay: Replay?
 
     // Difficulty and Time state
     public private(set) var playTime: TimeInterval = 0.0
@@ -500,6 +519,18 @@ public final class GameScene: SKScene {
     ///   - charactersIgnoringModifiers: Zeichen ohne Modifier (Cmd+Q, „M"-Musik-Toggle), ggf. nil
     ///   - isCommandDown: ob die Command-Taste gehalten wird (für Cmd+Q)
     private func handleKeyDown(keyCode: UInt16, characters: String?, charactersIgnoringModifiers: String?, isCommandDown: Bool) {
+        // Während einer Replay-Wiedergabe sind LIVE-Eingaben gesperrt (nur der Player selbst speist
+        // über `injectReplayInput` ein, das setzt `isInjectingReplay`). So kann der Zuschauer das
+        // laufende Replay nicht verfälschen.
+        if replayPlayer != nil && !isInjectingReplay {
+            return
+        }
+        // Aufnahme: jedes Tastenereignis im laufenden Spiel festhalten. (Injizierte Replay-Eingaben
+        // tragen keine `characters`/Modifier, lösen also weder den M- noch den Cmd-Q-Zweig aus.)
+        if gameState == .playing {
+            recorder?.recordEvent(keyCode: keyCode, isDown: true)
+        }
+
         if isCommandDown, charactersIgnoringModifiers?.lowercased() == "q" {
             onQuit?()
             return
@@ -647,7 +678,12 @@ public final class GameScene: SKScene {
 
     /// Plattformunabhängige Verarbeitung des Loslassens einer Taste.
     private func handleKeyUp(keyCode: UInt16) {
+        // Live-Eingaben während eines Replays sperren (siehe handleKeyDown).
+        if replayPlayer != nil && !isInjectingReplay {
+            return
+        }
         if gameState == .playing {
+            recorder?.recordEvent(keyCode: keyCode, isDown: false)
             activeKeys.remove(keyCode)
             if keyCode == 49 { // Feuertaste losgelassen: Dauerfeuer beenden
                 isSpaceHeld = false
@@ -727,8 +763,25 @@ public final class GameScene: SKScene {
             lastUpdateTime = wallTime
             return
         }
-        let deltaTime = wallTime - lastUpdateTime
+        var deltaTime = wallTime - lastUpdateTime
         lastUpdateTime = wallTime
+
+        // Replay-Wiedergabe: die Echtzeit-`deltaTime` verwerfen und stattdessen das aufgezeichnete
+        // `dt` anwenden + die für diesen Frame aufgezeichneten Eingaben einspeisen. So läuft die
+        // Wiedergabe exakt wie die Aufnahme (Lauf hängt nur an Seed + Eingaben + dt-Folge).
+        if let player = replayPlayer {
+            guard let recordedDt = player.nextFrameDt(injectingInto: self) else {
+                finishReplay()
+                return
+            }
+            deltaTime = recordedDt
+        }
+
+        // dt auf Float-Präzision quantisieren. Die Aufnahme speichert dt als `Float` (kompakt); damit
+        // die Wiedergabe bit-exakt ist, muss schon die LAUFENDE Simulation mit demselben quantisierten
+        // dt rechnen (sonst driftet Replay-`Double(Float(dt))` minimal von der Aufnahme ab). Der
+        // Genauigkeitsverlust liegt weit unter jeder Wahrnehmungsschwelle. Idempotent während Replay.
+        deltaTime = TimeInterval(Float(deltaTime))
 
         // Eine Quelle der Wahrheit für Zeit: akkumulierte dt. Ab hier benennt die lokale Konstante
         // `currentTime` die SPIELZEIT (nicht die Echtzeit-`wallTime`) – so rechnet der gesamte
@@ -736,6 +789,10 @@ public final class GameScene: SKScene {
         // Grundlage für deterministisches Replay (Lauf hängt nur an Seed + dt-Folge).
         gameTime += deltaTime
         let currentTime = gameTime
+
+        // Aufnahme: das `dt` dieses Simulationsframes festhalten (nur im laufenden Spiel, nicht
+        // während einer Wiedergabe – dort ist `recorder` ohnehin nil).
+        if gameState == .playing { recorder?.recordFrame(dt: deltaTime) }
 
         if gameState == .quitConfirmation {
             return
@@ -2184,6 +2241,13 @@ public final class GameScene: SKScene {
     
     /// Triggers the Game Over state.
     private func triggerGameOver() {
+        // Aufnahme dieses Laufs abschließen und als `lastReplay` bereitstellen (für die Anbindung an
+        // einen Highscore). Während einer Wiedergabe läuft kein Recorder, daher passiert hier nichts.
+        if let recorder = recorder {
+            lastReplay = recorder.makeReplay()
+            self.recorder = nil
+        }
+
         ship.isHidden = true
         ship.velocity = .zero
         ship.shieldLevel = 0
@@ -2200,8 +2264,9 @@ public final class GameScene: SKScene {
         // Trigger large camera shake
         shakeCamera(amplitude: 8.0, numberOfShakes: 8, durationPerShake: 0.04)
         
-        // Check for high score
-        if isNewHighScore(score: score) {
+        // Check for high score. Während einer Wiedergabe NICHT in die Initialen-Eingabe springen –
+        // wir schauen den Lauf nur an, der Score steht bereits in der Bestenliste.
+        if replayPlayer == nil && isNewHighScore(score: score) {
             transitionTo(.nameEntry)
         } else {
             transitionTo(.gameOver)
@@ -2222,7 +2287,50 @@ public final class GameScene: SKScene {
         gameState = .startScreen
         transitionTo(.playing)
     }
-    
+
+    // MARK: - Replay-Wiedergabe (Phase 2.3)
+
+    /// Startet die Wiedergabe einer Aufnahme: frisches Spiel mit deren Seed/Level/Modus, danach
+    /// treibt der `replayPlayer` die Szene Frame für Frame (siehe update()). Inkompatible Aufnahmen
+    /// (fremdes Logik-Tag) werden abgelehnt; Rückgabe `false`.
+    @discardableResult
+    public func startReplay(_ replay: Replay) -> Bool {
+        guard replay.isCompatible else { return false }
+        replayPlayer = ReplayPlayer(replay: replay)
+        // Anfangsbedingungen der Aufnahme übernehmen und frisch starten. Da `replayPlayer` gesetzt
+        // ist, legt der Fresh-Game-Pfad KEINEN Recorder an (wir zeichnen die Wiedergabe nicht auf).
+        selectedStartLevel = replay.startLevel
+        selectedMode = replay.gameMode
+        startNewGame(seed: replay.seed)
+        return true
+    }
+
+    /// Speist eine aufgezeichnete Eingabe während der Wiedergabe ein. Setzt `isInjectingReplay`, um
+    /// die Live-Eingabe-Sperre in den Tasten-Handlern gezielt zu umgehen.
+    func injectReplayInput(keyCode: UInt16, isDown: Bool) {
+        isInjectingReplay = true
+        if isDown {
+            handleKeyDown(keyCode: keyCode, characters: nil, charactersIgnoringModifiers: nil, isCommandDown: false)
+        } else {
+            handleKeyUp(keyCode: keyCode)
+        }
+        isInjectingReplay = false
+    }
+
+    /// Räumt eine beendete Wiedergabe ab. Die Simulation hat den Lauf bereits selbst beendet
+    /// (deterministisch dasselbe Game Over wie in der Aufnahme), daher hier nur den Player lösen.
+    private func finishReplay() {
+        replayPlayer = nil
+    }
+
+    /// Läuft gerade eine Replay-Wiedergabe?
+    public var isReplaying: Bool { replayPlayer != nil }
+
+    /// Für Tests: die aktuelle (noch laufende) Aufnahme als `Replay` abgreifen, ohne sie zu beenden.
+    public func currentReplayForTesting() -> Replay? {
+        recorder?.makeReplay()
+    }
+
     /// Transitions between game states, configuring visible overlay nodes and sound.
     public func transitionTo(_ newState: GameState) {
         let previousState = self.gameState
@@ -2347,6 +2455,14 @@ public final class GameScene: SKScene {
                 currentSeed = pendingSeed ?? UInt64.random(in: UInt64.min...UInt64.max)
                 pendingSeed = nil
                 rng = GameRandom(seed: currentSeed)
+
+                // Aufnahme dieses Laufs starten – aber NICHT während einer Replay-Wiedergabe (sonst
+                // zeichneten wir die Wiedergabe selbst wieder auf). Modus/Level werden gleich gesetzt;
+                // der Recorder hält Seed + diese Startwerte fest (gameMode wird unten zugewiesen).
+                if replayPlayer == nil {
+                    recorder = ReplayRecorder(seed: currentSeed, startLevel: selectedStartLevel, gameMode: selectedMode)
+                    lastReplay = nil
+                }
 
                 // Spielzeit + alle zeitbasierten Timer auf den gemeinsamen Nullpunkt setzen, damit der
                 // Lauf bei gameTime 0 beginnt (sonst würden Spawn-/Power-up-Timer aus der Menü-Phase

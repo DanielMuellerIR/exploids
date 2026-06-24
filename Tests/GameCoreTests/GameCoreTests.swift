@@ -1918,5 +1918,102 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(stateSnapshot(a), stateSnapshot(b),
                        "Auch Mad-Modus/höheres Level muss bei gleichem Seed reproduzierbar sein")
     }
+
+    // MARK: - Replay-Datenmodell (Phase 2.1)
+
+    /// Round-Trip: kodieren → dekodieren ergibt exakt das Original.
+    func testReplayRoundTripEncodeDecode() {
+        let events = [
+            InputEvent(frameIndex: 0, keyCode: 49, isDown: true),
+            InputEvent(frameIndex: 1, keyCode: 49, isDown: false),
+            InputEvent(frameIndex: 12, keyCode: 13, isDown: true),
+            InputEvent(frameIndex: 90, keyCode: 13, isDown: false)
+        ]
+        let dt = (0..<300).map { _ in Float(1.0 / 60.0) }
+        let original = Replay(seed: 0xCAFEBABE, startLevel: 3, gameMode: .madMeteoroids,
+                              events: events, dtSequence: dt)
+
+        let data = try! original.encoded()
+        let restored = try! Replay(data: data)
+        XCTAssertEqual(original, restored, "Round-Trip muss das Original exakt erhalten")
+
+        // Größenabschätzung dokumentieren: ~300 Frames dt + paar Events sollten klein bleiben.
+        XCTAssertLessThan(data.count, 8000, "Eine 5-Sekunden-Aufnahme sollte wenige KB groß sein (war \(data.count) B)")
+    }
+
+    /// Versions-Tag: eine Aufnahme mit fremdem version-Tag gilt als inkompatibel.
+    func testReplayVersionCompatibility() {
+        let ok = Replay(seed: 1, startLevel: 1, gameMode: .ancientAsteroids, events: [], dtSequence: [])
+        XCTAssertTrue(ok.isCompatible)
+        let stale = Replay(version: Replay.currentLogicVersion + 1, seed: 1, startLevel: 1,
+                           gameMode: .ancientAsteroids, events: [], dtSequence: [])
+        XCTAssertFalse(stale.isCompatible, "Fremdes version-Tag muss als inkompatibel erkannt werden")
+    }
+
+    // MARK: - Aufnahme → Wiedergabe (Phase 2.2 + 2.3)
+
+    /// Treibt eine Szene mit einem festen, nur vom Frame-Index abhängigen Skript: NUR Drehen + Feuern,
+    /// KEIN Schub. So bleibt das Schiff in der Bildmitte und fliegt garantiert nicht in einen frisch
+    /// gespawnten Asteroiden – der Lauf endet im Fenster nicht (sauberer Aufnahme/Wiedergabe-Vergleich).
+    @MainActor
+    private func driveNoThrustScript(_ s: GameScene, frames: Int, base: TimeInterval) {
+        var fireDown = false
+        for f in 0..<frames {
+            if f == 30 { s.simulateKeyDown(keyCode: 0) }      // Drehung links an
+            if f == 90 { s.simulateKeyUp(keyCode: 0) }        // links aus
+            if f == 100 { s.simulateKeyDown(keyCode: 2) }     // Drehung rechts an
+            if f == 150 { s.simulateKeyUp(keyCode: 2) }       // rechts aus
+            if f % 7 == 0 { s.simulateKeyDown(keyCode: 49); fireDown = true }
+            else if fireDown { s.simulateKeyUp(keyCode: 49); fireDown = false }
+            s.update(base + Double(f) / 60.0)
+        }
+    }
+
+    /// Kernprobe Phase 2: Ein aufgezeichneter Lauf, anschließend abgespielt, ergibt exakt denselben
+    /// Endzustand – damit ist die Recorder→Player-Mechanik (Eingaben + dt-Folge) validiert.
+    func testRecordThenReplayReproducesRun() {
+        let frames = 200
+        let seed: UInt64 = 0x1234_5678
+
+        // --- Aufnahme ---
+        let a = GameScene(size: CGSize(width: 1000, height: 800))
+        let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        viewA.presentScene(a)
+        a.startNewGameForTesting(seed: seed, startLevel: 1)
+        driveNoThrustScript(a, frames: frames, base: 1000.0)
+
+        XCTAssertEqual(a.gameState, .playing, "Aufnahme-Lauf darf im Testfenster nicht enden")
+        let snapA = stateSnapshot(a)
+        guard let replay = a.currentReplayForTesting() else {
+            return XCTFail("Es muss eine laufende Aufnahme geben")
+        }
+        // Frame 0 ist der Priming-Frame (kein dt) → frameCount = frames - 1.
+        XCTAssertEqual(replay.frameCount, frames - 1)
+        XCTAssertFalse(replay.events.isEmpty, "Das Skript muss Tastenereignisse erzeugt haben")
+
+        // --- Wiedergabe in frische Szene ---
+        let b = GameScene(size: CGSize(width: 1000, height: 800))
+        let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        viewB.presentScene(b)
+        XCTAssertTrue(b.startReplay(replay), "Kompatibles Replay muss starten")
+        // Priming-Frame + alle aufgezeichneten Frames + ein Abschluss-Frame (löst finishReplay aus).
+        for f in 0...(replay.frameCount + 1) {
+            b.update(2000.0 + Double(f) / 60.0)
+        }
+
+        XCTAssertEqual(stateSnapshot(b), snapA, "Wiedergabe muss die Aufnahme bit-genau reproduzieren")
+        XCTAssertFalse(b.isReplaying, "Nach allen Frames ist die Wiedergabe beendet")
+    }
+
+    /// Inkompatible Aufnahmen (fremdes Logik-Tag) dürfen nicht abgespielt werden.
+    func testStartReplayRejectsIncompatibleVersion() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        let stale = Replay(version: Replay.currentLogicVersion + 1, seed: 1, startLevel: 1,
+                           gameMode: .ancientAsteroids, events: [], dtSequence: [Float(1.0/60.0)])
+        XCTAssertFalse(scene.startReplay(stale), "Inkompatible Aufnahme darf nicht starten")
+        XCTAssertFalse(scene.isReplaying)
+    }
 }
 
