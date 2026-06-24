@@ -388,6 +388,9 @@ public final class GameScene: SKScene {
     private let gameOverLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private let finalScoreLabel = SKLabelNode(fontNamed: "Courier")
     private let restartLabel = SKLabelNode(fontNamed: "Courier")
+
+    /// Overlay-Hinweis „▶ REPLAY", oben sichtbar, solange eine Aufnahme abgespielt wird.
+    private let replayOverlayLabel = SKLabelNode(fontNamed: "Courier-Bold")
     
     private let highScoresTitleLabel = SKLabelNode(fontNamed: "Courier-Bold")
     private var highScoreLineLabels: [SKLabelNode] = []
@@ -526,8 +529,9 @@ public final class GameScene: SKScene {
     private func handleKeyDown(keyCode: UInt16, characters: String?, charactersIgnoringModifiers: String?, isCommandDown: Bool) {
         // Während einer Replay-Wiedergabe sind LIVE-Eingaben gesperrt (nur der Player selbst speist
         // über `injectReplayInput` ein, das setzt `isInjectingReplay`). So kann der Zuschauer das
-        // laufende Replay nicht verfälschen.
+        // laufende Replay nicht verfälschen. Einzige Ausnahme: ESC bricht die Wiedergabe ab.
         if replayPlayer != nil && !isInjectingReplay {
+            if keyCode == 53 { exitReplay() } // Escape
             return
         }
         // Aufnahme: jedes Tastenereignis im laufenden Spiel festhalten. (Injizierte Replay-Eingaben
@@ -584,6 +588,10 @@ public final class GameScene: SKScene {
             } else if keyCode == 126 || keyCode == 125 { // Up or Down arrow -> toggle game mode
                 selectedMode = (selectedMode == .ancientAsteroids) ? .madMeteoroids : .ancientAsteroids
                 updateModeSelectionLabel()
+            } else if let digit = digitForKey(keyCode: keyCode, characters: characters), (1...5).contains(digit) {
+                // Zahlentaste 1–5: Replay des entsprechenden Highscore-Eintrags ansehen (falls einer
+                // mit gespeicherter, kompatibler Aufnahme existiert).
+                watchHighScoreReplay(at: digit - 1)
             } else if let characters = characters?.lowercased() {
                 if characters == "i" {
                     transitionTo(.glossary)
@@ -2322,10 +2330,40 @@ public final class GameScene: SKScene {
         isInjectingReplay = false
     }
 
-    /// Räumt eine beendete Wiedergabe ab. Die Simulation hat den Lauf bereits selbst beendet
-    /// (deterministisch dasselbe Game Over wie in der Aufnahme), daher hier nur den Player lösen.
+    /// Räumt eine zu Ende gelaufene Wiedergabe ab und kehrt zum Startbildschirm zurück. Die
+    /// Simulation hat den Lauf bereits selbst beendet (deterministisch dasselbe Game Over wie in der
+    /// Aufnahme); hier nur Player lösen und Ansicht wechseln.
     private func finishReplay() {
         replayPlayer = nil
+        transitionTo(.startScreen)
+    }
+
+    /// Bricht eine laufende Wiedergabe vorzeitig ab (ESC) und kehrt zum Startbildschirm zurück.
+    private func exitReplay() {
+        replayPlayer = nil
+        transitionTo(.startScreen)
+    }
+
+    /// Startet die Wiedergabe des Highscore-Eintrags mit gegebenem Index (0-basiert), falls dieser
+    /// eine kompatible Aufnahme trägt. Einstiegspunkt für die Highscore-Ansicht (Tasten 1–5).
+    @discardableResult
+    public func watchHighScoreReplay(at index: Int) -> Bool {
+        guard index >= 0, index < highScores.count else { return false }
+        guard let replay = replay(for: highScores[index]) else { return false }
+        return startReplay(replay)
+    }
+
+    /// Ermittelt die Ziffer 1–9 aus einem Tastendruck – entweder aus den Zeichen (macOS-keyDown,
+    /// iOS) oder aus den Zifferntasten-Keycodes der oberen Reihe (für headless/Controller). `nil`,
+    /// wenn es keine Ziffer ist.
+    private func digitForKey(keyCode: UInt16, characters: String?) -> Int? {
+        if let c = characters, let n = Int(c) { return n }
+        switch keyCode {
+        case 18: return 1; case 19: return 2; case 20: return 3
+        case 21: return 4; case 23: return 5; case 22: return 6
+        case 26: return 7; case 28: return 8; case 25: return 9
+        default: return nil
+        }
     }
 
     /// Läuft gerade eine Replay-Wiedergabe?
@@ -2375,7 +2413,9 @@ public final class GameScene: SKScene {
         glossaryPromptLabel.isHidden = true
         quitPromptLabel.isHidden = true
         quitSubPromptLabel.isHidden = true
-        
+        // Replay-Overlay nur während einer laufenden Wiedergabe im Spielzustand sichtbar (unten gesetzt).
+        replayOverlayLabel.isHidden = true
+
         // Stop sound engine hum
         SoundManager.shared.setThrustActive(false)
         SoundManager.shared.setChargingActive(false)
@@ -2554,6 +2594,8 @@ public final class GameScene: SKScene {
                 }
             }
             updateLivesLabel()
+            // Während einer Replay-Wiedergabe das „▶ REPLAY"-Overlay einblenden.
+            replayOverlayLabel.isHidden = !isReplaying
 
         case .nameEntry:
             ship.isHidden = true
@@ -3237,6 +3279,16 @@ public final class GameScene: SKScene {
         restartLabel.zPosition = 100
         restartLabel.isHidden = true
         self.addChild(restartLabel)
+
+        // „▶ REPLAY"-Overlay (Wiedergabe eines Highscore-Laufs). Oben am Bildrand, dezent.
+        replayOverlayLabel.text = "▶ REPLAY  (ESC TO EXIT)"
+        replayOverlayLabel.fontName = RetroFont.pixel
+        replayOverlayLabel.fontSize = 16
+        replayOverlayLabel.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
+        replayOverlayLabel.position = CGPoint(x: 0, y: 250)
+        replayOverlayLabel.zPosition = 200
+        replayOverlayLabel.isHidden = true
+        self.addChild(replayOverlayLabel)
         
         // High scores
         highScoresTitleLabel.text = "HIGH SCORES"

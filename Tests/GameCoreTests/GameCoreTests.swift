@@ -1996,13 +1996,14 @@ final class GameCoreTests: XCTestCase {
         let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewB.presentScene(b)
         XCTAssertTrue(b.startReplay(replay), "Kompatibles Replay muss starten")
-        // Priming-Frame + alle aufgezeichneten Frames + ein Abschluss-Frame (löst finishReplay aus).
-        for f in 0...(replay.frameCount + 1) {
+        // Priming-Frame + alle aufgezeichneten Frames (GENAU – ein weiterer Frame würde finishReplay
+        // auslösen und damit zum Startbildschirm wechseln, also den Spielzustand verwerfen).
+        for f in 0...replay.frameCount {
             b.update(2000.0 + Double(f) / 60.0)
         }
 
         XCTAssertEqual(stateSnapshot(b), snapA, "Wiedergabe muss die Aufnahme bit-genau reproduzieren")
-        XCTAssertFalse(b.isReplaying, "Nach allen Frames ist die Wiedergabe beendet")
+        XCTAssertTrue(b.isReplaying, "Nach genau allen Frames läuft die Wiedergabe noch (Abschluss erst im Folgeframe)")
     }
 
     /// Inkompatible Aufnahmen (fremdes Logik-Tag) dürfen nicht abgespielt werden.
@@ -2078,10 +2079,77 @@ final class GameCoreTests: XCTestCase {
             return XCTFail("Neugeladene Aufnahme nicht dekodierbar")
         }
         XCTAssertTrue(b.startReplay(restored))
-        for f in 0...(restored.frameCount + 1) {
+        // Genau alle Frames konsumieren (kein Abschluss-Frame, sonst Wechsel zum Startbildschirm).
+        for f in 0...restored.frameCount {
             b.update(2000.0 + Double(f) / 60.0)
         }
         XCTAssertEqual(stateSnapshot(b), snapA, "Persistierte Aufnahme muss nach Neuladen identisch abspielen")
+    }
+
+    // MARK: - In-App-Replay-UI (Phase 2.5)
+
+    /// Baut eine Szene, spielt kurz, erzwingt Game Over und trägt den Lauf als Highscore-Eintrag #1
+    /// mit angehängter Aufnahme ein. Rückgabe: die Szene (Startbildschirm).
+    @MainActor
+    private func makeSceneWithRecordedHighScore(seed: UInt64, frames: Int) -> GameScene {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.startNewGameForTesting(seed: seed, startLevel: 1)
+        driveNoThrustScript(scene, frames: frames, base: 1000.0)
+        scene.addScoreForTesting(99999)
+        var guardCount = 0
+        while scene.gameState == .playing && guardCount < 5 {
+            scene.damageShipForTesting(); guardCount += 1
+        }
+        scene.simulateTypeCharacter("X")
+        scene.simulateTypeCharacter("Y")
+        scene.simulateTypeCharacter("Z")
+        scene.simulateKeyDown(keyCode: 36) // Enter -> recordHighScore
+        scene.transitionTo(.startScreen)
+        return scene
+    }
+
+    /// Zahlentaste startet das Replay; ESC bricht ab und kehrt zum Startbildschirm zurück.
+    func testInAppReplayLaunchAndExit() {
+        let scene = makeSceneWithRecordedHighScore(seed: 0x5EED, frames: 80)
+        XCTAssertNotNil(scene.highScores.first?.replayData, "Setup: Eintrag muss eine Aufnahme tragen")
+
+        scene.simulateTypeCharacter("1") // Ziffer 1 -> Replay des ersten Eintrags
+        XCTAssertTrue(scene.isReplaying, "Ziffer 1 muss das Replay starten")
+        XCTAssertEqual(scene.gameState, .playing)
+
+        var t = 3000.0
+        for _ in 0..<10 { scene.update(t); t += 1.0 / 60.0 }
+        XCTAssertTrue(scene.isReplaying, "Während der Wiedergabe läuft das Replay weiter")
+
+        scene.simulateKeyDown(keyCode: 53) // Escape
+        XCTAssertFalse(scene.isReplaying, "ESC muss die Wiedergabe abbrechen")
+        XCTAssertEqual(scene.gameState, .startScreen, "Nach Abbruch zurück zum Startbildschirm")
+    }
+
+    /// Eine vollständig abgespielte Aufnahme beendet sich selbst und kehrt zum Startbildschirm zurück.
+    func testInAppReplayRunsToEndAndReturns() {
+        let scene = makeSceneWithRecordedHighScore(seed: 0xF00D, frames: 80)
+        guard let replay = scene.replay(for: scene.highScores.first!) else {
+            return XCTFail("Setup: Aufnahme fehlt")
+        }
+        XCTAssertTrue(scene.watchHighScoreReplay(at: 0))
+
+        var t = 4000.0
+        for _ in 0...(replay.frameCount + 2) { scene.update(t); t += 1.0 / 60.0 }
+        XCTAssertFalse(scene.isReplaying, "Nach allen Frames ist die Wiedergabe beendet")
+        XCTAssertEqual(scene.gameState, .startScreen, "und kehrt zum Startbildschirm zurück")
+    }
+
+    /// Ein ungültiger Index startet kein Replay (deterministisch, unabhängig von persistierten Scores).
+    func testWatchReplayNoOpForInvalidIndex() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        XCTAssertFalse(scene.watchHighScoreReplay(at: 999), "Index außerhalb der Liste startet nichts")
+        XCTAssertFalse(scene.watchHighScoreReplay(at: -1), "Negativer Index startet nichts")
+        XCTAssertFalse(scene.isReplaying)
     }
 }
 
