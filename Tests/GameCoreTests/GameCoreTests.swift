@@ -2006,6 +2006,55 @@ final class GameCoreTests: XCTestCase {
         XCTAssertTrue(b.isReplaying, "Nach genau allen Frames läuft die Wiedergabe noch (Abschluss erst im Folgeframe)")
     }
 
+    /// Regression: Ein mit AUTO-FEUER gespielter Lauf muss sich exakt reproduzieren. Auto-Feuer
+    /// lässt das Schiff ohne Tastendruck schießen; wäre der Zustand nicht in der Aufnahme gespeichert
+    /// und beim Abspielen wiederhergestellt, würde das Replay nicht feuern und völlig abweichen.
+    func testRecordThenReplayReproducesAutoFireRun() {
+        let frames = 300
+        let seed: UInt64 = 0x0A07_0F19
+
+        // --- Aufnahme mit Auto-Feuer, OHNE manuelles Schießen (nur Drehen) ---
+        let a = GameScene(size: CGSize(width: 1000, height: 800))
+        let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        viewA.presentScene(a)
+        a.autoFire = true
+        a.startNewGameForTesting(seed: seed, startLevel: 1)
+        var rotLeft = false
+        for f in 0..<frames {
+            let wantLeft = (f % 80) < 40
+            if wantLeft != rotLeft {
+                if wantLeft { a.simulateKeyDown(keyCode: 0) } else { a.simulateKeyUp(keyCode: 0) }
+                rotLeft = wantLeft
+            }
+            a.update(1000.0 + Double(f) / 60.0)
+        }
+        XCTAssertEqual(a.gameState, .playing, "Auto-Feuer-Lauf darf im Fenster nicht enden")
+        let snapA = stateSnapshot(a)
+        guard let replay = a.currentReplayForTesting() else { return XCTFail("keine Aufnahme") }
+        XCTAssertTrue(replay.autoFire, "Die Aufnahme muss den Auto-Feuer-Zustand festhalten")
+
+        // --- Wiedergabe in frische Szene mit Auto-Feuer AUS als Default ---
+        let b = GameScene(size: CGSize(width: 1000, height: 800))
+        let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        viewB.presentScene(b)
+        XCTAssertFalse(b.autoFire, "Frische Szene hat Auto-Feuer per Default aus")
+        XCTAssertTrue(b.startReplay(replay))
+        XCTAssertTrue(b.autoFire, "startReplay muss den Auto-Feuer-Zustand der Aufnahme wiederherstellen")
+        for f in 0...replay.frameCount {
+            b.update(2000.0 + Double(f) / 60.0)
+        }
+        XCTAssertEqual(stateSnapshot(b), snapA, "Auto-Feuer-Lauf muss sich bit-genau reproduzieren")
+    }
+
+    /// Round-Trip mit gesetztem autoFire-Feld (Persistenz des neuen Feldes).
+    func testReplayAutoFieldRoundTrips() {
+        let r = Replay(seed: 5, startLevel: 2, gameMode: .ancientAsteroids,
+                       events: [], dtSequence: [Float(1.0/60.0)], autoFire: true)
+        let restored = try! Replay(data: try! r.encoded())
+        XCTAssertTrue(restored.autoFire)
+        XCTAssertEqual(r, restored)
+    }
+
     /// Inkompatible Aufnahmen (fremdes Logik-Tag) dürfen nicht abgespielt werden.
     func testStartReplayRejectsIncompatibleVersion() {
         let scene = GameScene(size: CGSize(width: 1000, height: 800))

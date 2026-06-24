@@ -2,6 +2,16 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.11.1] — 2026-06-24
+- Replay fix: the auto-fire setting is now recorded in a replay and restored on playback. Before
+  this, a run played with auto-fire on would not reproduce (the replayed ship barely fired and died
+  early). Replay format bumped to v2; pre-fix replays are rejected as incompatible.
+- Replay GIF renderer gained `--from <frame>`, `--max-frames <n>` and `--auto-fire` options, plus a
+  `--replay-verify` diagnostic.
+- Note: faithful replay requires the exact binary that recorded the run — a rebuilt binary can drift
+  (floating-point reproducibility is binary-specific). In-app replays and GIFs from the same
+  installed build are reliable.
+
 ## [0.11.0] — 2026-06-24
 - Deterministic replay system: every run is recorded (seed + inputs) and the simulation is now
   bit-exact reproducible. High-score runs can be watched again in-app — press 1–5 on the title

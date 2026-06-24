@@ -240,9 +240,13 @@ struct Main {
               --test-mode   Run a headless game simulation for 10 frames and print telemetry, then exit.
               --export-replay <i> --out <file>
                             Export the replay attached to high-score entry <i> (0-based) to a file.
-              --render-replay <file> --out <gif> [--scale S] [--fps N] [--stride N] [--show-hud]
+              --render-replay <file> --out <gif> [--scale S] [--fps N] [--stride N]
+                                       [--from F] [--max-frames N] [--auto-fire] [--show-hud]
                             Headlessly render a replay file to an animated GIF (no window). Default
-                            scale 480x360, fps 30, stride 2, HUD hidden.
+                            scale 480x360, fps 30, stride 2, HUD hidden. --from picks a start frame
+                            (segment of a long run); --auto-fire forces auto-fire on for old replays.
+              --replay-verify <file> [--auto-fire]
+                            Replay a file headlessly (no render) and print the final state — diagnostic.
               --version, -v Show application version.
               --help, -h    Show this help message.
             """)
@@ -262,6 +266,12 @@ struct Main {
         // 2c. Headless: Replay-Datei zu animiertem GIF rendern (cursorfrei, reproduzierbar).
         if let i = arguments.firstIndex(of: "--render-replay") {
             runRenderReplay(arguments: arguments, flagIndex: i)
+        }
+
+        // 2c2. Diagnose: Replay über den getesteten scene.update()-Pfad fahren (ohne Rendering) und
+        // melden, wie weit der Lauf kommt – zum Vergleich mit dem aufgezeichneten Highscore.
+        if let i = arguments.firstIndex(of: "--replay-verify") {
+            runReplayVerify(arguments: arguments, flagIndex: i)
         }
 
         // 2d. Headless: einen kurzen, skriptgesteuerten Demo-Lauf erzeugen und zu GIF rendern
@@ -345,6 +355,38 @@ struct Main {
         }
     }
 
+    /// `--replay-verify <file>`: spielt ein Replay über den getesteten `scene.update()`-Pfad ab (ohne
+    /// Rendering) und meldet Endzustand/Score/Level + den Frame, an dem die Wiedergabe endete.
+    private static func runReplayVerify(arguments: [String], flagIndex: Int) {
+        guard flagIndex + 1 < arguments.count else {
+            FileHandle.standardError.write(Data("Fehler: --replay-verify braucht eine Datei.\n".utf8)); exit(2)
+        }
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: arguments[flagIndex + 1]))
+            let replay = try Replay(data: data)
+            let view = SKView(frame: CGRect(x: 0, y: 0, width: 480, height: 360))
+            let scene = GameScene(size: CGSize(width: 480, height: 360))
+            view.presentScene(scene)
+            if arguments.contains("--auto-fire") { scene.replayAutoFireOverride = true }
+            if arguments.contains("--no-auto-fire") { scene.replayAutoFireOverride = false }
+            guard scene.startReplay(replay) else {
+                FileHandle.standardError.write(Data("Fehler: Replay inkompatibel.\n".utf8)); exit(3)
+            }
+            print("Replay: seed=\(replay.seed) frames=\(replay.frameCount) startLevel=\(replay.startLevel)")
+            var endedAtFrame = -1
+            var t = 1000.0
+            for f in 0...(replay.frameCount + 1) {
+                let wasReplaying = scene.isReplaying
+                scene.update(t); t += 1.0 / 60.0
+                if wasReplaying && !scene.isReplaying && endedAtFrame < 0 { endedAtFrame = f }
+            }
+            print("Endstand via scene.update(): score=\(scene.score) level=\(scene.currentLevel) state=\(scene.gameState) endedAtFrame=\(endedAtFrame)")
+            exit(0)
+        } catch {
+            FileHandle.standardError.write(Data("Fehler: \(error)\n".utf8)); exit(4)
+        }
+    }
+
     /// `--render-demo --out <gif>`: skriptet intern einen kurzen Lauf, nimmt ihn auf und rendert ihn
     /// zu einem GIF. Dient dem Pipeline-Selbsttest und als schnelles Demo-GIF ohne Highscore.
     private static func runRenderDemo(arguments: [String]) {
@@ -356,13 +398,17 @@ struct Main {
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 480, height: 360))
         let scene = GameScene(size: CGSize(width: 480, height: 360))
         view.presentScene(scene)
+        if arguments.contains("--auto-fire") { scene.autoFire = true }
         // Höheres Start-Level → mehr Asteroiden/Gegner im Demo-GIF.
         scene.startNewGameForTesting(seed: 0xC0FFEE, startLevel: startLevel, mode: .ancientAsteroids)
 
+        let still = arguments.contains("--still")  // stationär: nur drehen, kein Schub (überlebt mit Auto-Feuer)
         var fireDown = false
         for f in 0..<frames {
-            let wantThrust = (f % 120) < 70
-            if wantThrust { scene.simulateKeyDown(keyCode: 13) } else { scene.simulateKeyUp(keyCode: 13) }
+            if !still {
+                let wantThrust = (f % 120) < 70
+                if wantThrust { scene.simulateKeyDown(keyCode: 13) } else { scene.simulateKeyUp(keyCode: 13) }
+            }
             if (f % 90) < 30 { scene.simulateKeyDown(keyCode: 0) } else { scene.simulateKeyUp(keyCode: 0) }
             if (f % 90) >= 45 && (f % 90) < 70 { scene.simulateKeyDown(keyCode: 2) } else { scene.simulateKeyUp(keyCode: 2) }
             if f % 6 == 0 { scene.simulateKeyDown(keyCode: 49); fireDown = true }
@@ -372,6 +418,12 @@ struct Main {
         }
         guard let replay = scene.currentReplayForTesting() ?? scene.lastReplay else {
             FileHandle.standardError.write(Data("Fehler: Demo-Aufnahme leer.\n".utf8)); exit(4)
+        }
+
+        // Optional die Demo-Aufnahme als Replay-Datei sichern (für Determinismus-Tests).
+        if let savePath = argValue(arguments, "--save-replay") {
+            try? replay.encoded().write(to: URL(fileURLWithPath: savePath))
+            print("Demo-Replay gespeichert: \(savePath) (\(replay.frameCount) Frames, Endstate \(scene.gameState))")
         }
 
         do {
@@ -406,7 +458,11 @@ struct Main {
         }
         if let f = argValue(arguments, "--fps"), let fps = Int(f), fps > 0 { options.fps = fps }
         if let st = argValue(arguments, "--stride"), let stride = Int(st), stride > 0 { options.frameStride = stride }
+        if let fr = argValue(arguments, "--from"), let from = Int(fr), from >= 0 { options.startFrame = from }
+        if let mx = argValue(arguments, "--max-frames"), let mx2 = Int(mx), mx2 >= 0 { options.maxFrames = mx2 }
         if arguments.contains("--show-hud") { options.hideHUD = false }
+        if arguments.contains("--auto-fire") { options.autoFireOverride = true }
+        if arguments.contains("--no-auto-fire") { options.autoFireOverride = false }
 
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: inPath))

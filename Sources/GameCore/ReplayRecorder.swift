@@ -11,14 +11,16 @@ public final class ReplayRecorder {
     private let seed: UInt64
     private let startLevel: Int
     private let gameMode: GameMode
+    private let autoFire: Bool
 
     private var events: [InputEvent] = []
     private var dts: [Float] = []
 
-    public init(seed: UInt64, startLevel: Int, gameMode: GameMode) {
+    public init(seed: UInt64, startLevel: Int, gameMode: GameMode, autoFire: Bool) {
         self.seed = seed
         self.startLevel = startLevel
         self.gameMode = gameMode
+        self.autoFire = autoFire
     }
 
     /// Index des nächsten aufzuzeichnenden Frames (= Anzahl bereits aufgezeichneter Frames). Ein
@@ -39,6 +41,6 @@ public final class ReplayRecorder {
     /// zwischendurch (z. B. in Tests) aufgerufen werden, ohne die Aufnahme zu beenden.
     public func makeReplay() -> Replay {
         Replay(seed: seed, startLevel: startLevel, gameMode: gameMode,
-               events: events, dtSequence: dts)
+               events: events, dtSequence: dts, autoFire: autoFire)
     }
 }

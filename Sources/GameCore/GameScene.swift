@@ -251,6 +251,12 @@ public final class GameScene: SKScene {
     /// so unterscheidet `handleKeyDown/Up` injizierte von (gesperrten) Live-Eingaben.
     private var isInjectingReplay = false
 
+    /// Erzwingt beim nächsten `startReplay` einen Auto-Feuer-Zustand, unabhängig von dem in der
+    /// Aufnahme gespeicherten. Nötig für ALTE Aufnahmen (vor dem autoFire-Fix), die das Feld nicht
+    /// enthalten – z. B. um einen mit Auto-Feuer gespielten Lauf korrekt nachzustellen. `nil` = den
+    /// in der Aufnahme gespeicherten Wert verwenden.
+    public var replayAutoFireOverride: Bool?
+
     /// Die zuletzt fertig aufgezeichnete Aufnahme (gesetzt bei Game Over). Grundlage, um ein Replay
     /// an einen Highscore zu hängen (Phase 2.4).
     public private(set) var lastReplay: Replay?
@@ -2318,6 +2324,10 @@ public final class GameScene: SKScene {
         // ist, legt der Fresh-Game-Pfad KEINEN Recorder an (wir zeichnen die Wiedergabe nicht auf).
         selectedStartLevel = replay.startLevel
         selectedMode = replay.gameMode
+        // Auto-Feuer-Zustand der Aufnahme wiederherstellen (beeinflusst das Feuern in update() und
+        // damit den Spielverlauf). `replayAutoFireOverride` erlaubt es, das für alte Aufnahmen ohne
+        // gespeichertes Feld (vor dem Fix) von außen zu erzwingen.
+        autoFire = replayAutoFireOverride ?? replay.autoFire
         startNewGame(seed: replay.seed)
         return true
     }
@@ -2526,7 +2536,8 @@ public final class GameScene: SKScene {
                 // zeichneten wir die Wiedergabe selbst wieder auf). Modus/Level werden gleich gesetzt;
                 // der Recorder hält Seed + diese Startwerte fest (gameMode wird unten zugewiesen).
                 if replayPlayer == nil {
-                    recorder = ReplayRecorder(seed: currentSeed, startLevel: selectedStartLevel, gameMode: selectedMode)
+                    recorder = ReplayRecorder(seed: currentSeed, startLevel: selectedStartLevel,
+                                              gameMode: selectedMode, autoFire: autoFire)
                     lastReplay = nil
                 }
 

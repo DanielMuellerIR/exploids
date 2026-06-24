@@ -30,6 +30,12 @@ enum ReplayRenderer {
         var hideHUD: Bool = true
         /// Maximale Anzahl gerenderter Frames (Sicherheitsdeckel gegen riesige GIFs). 0 = unbegrenzt.
         var maxFrames: Int = 900
+        /// Erst ab diesem Simulationsframe rendern (vorherige Frames werden nur simuliert, nicht
+        /// aufgenommen). Damit lässt sich ein Ausschnitt aus der Mitte/dem Ende eines langen Laufs greifen.
+        var startFrame: Int = 0
+        /// Auto-Feuer-Zustand erzwingen (für alte Aufnahmen ohne gespeichertes Feld). `nil` = den
+        /// in der Aufnahme gespeicherten Wert nutzen.
+        var autoFireOverride: Bool? = nil
     }
 
     enum RenderError: Error, CustomStringConvertible {
@@ -61,6 +67,7 @@ enum ReplayRenderer {
         let view = SKView(frame: CGRect(x: 0, y: 0, width: width, height: height))
         view.presentScene(scene)
         if options.hideHUD { scene.setHUDHiddenForRender(true) }
+        scene.replayAutoFireOverride = options.autoFireOverride
         guard scene.startReplay(replay) else { throw RenderError.noFramesRendered }
 
         // Offscreen-Renderer + Ziel-Textur (Apple Silicon: .shared erlaubt direktes getBytes).
@@ -88,7 +95,13 @@ enum ReplayRenderer {
             renderer.update(atTime: simTime) // treibt Replay-Frame + SKActions
             if !scene.isReplaying { break }   // letzter Frame hat die Wiedergabe beendet
 
-            if simFrame % max(1, options.frameStride) == 0 {
+            // Frames vor dem gewünschten Startpunkt nur simulieren, nicht aufnehmen (Ausschnitt-Wahl).
+            if simFrame < options.startFrame {
+                simFrame += 1
+                continue
+            }
+
+            if (simFrame - options.startFrame) % max(1, options.frameStride) == 0 {
                 if let img = renderFrame(renderer: renderer, commandQueue: commandQueue,
                                          texture: texture, viewport: viewport) {
                     images.append(img)

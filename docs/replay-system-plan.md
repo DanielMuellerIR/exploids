@@ -233,6 +233,27 @@ renderbar.
 
 ---
 
+## Nachtrag 2026-06-24: zwei real aufgetretene Grenzen (beim ersten echten Lauf entdeckt)
+
+Beim Versuch, einen echten ~11-Minuten-Highscore-Lauf als GIF zu rendern, kamen zwei Dinge ans
+Licht, die die kurzen Unit-Tests nicht abdeckten:
+
+1. **Auto-Feuer war nicht Teil der Aufnahme (Bug, behoben in v0.11.1).** `autoFire` ist eine
+   Einstellung, die das Schiff in `update()` ohne Tastendruck feuern lässt — also Sim-relevant —,
+   wurde aber nicht im `Replay` gespeichert. Ein mit Auto-Feuer gespielter Lauf ließ sich dadurch
+   nicht reproduzieren (das Replay-Schiff feuerte kaum und starb früh). Fix: `autoFire` ins Format
+   aufgenommen (v2) und beim `startReplay` wiederhergestellt; Regressionstest ergänzt. **Lehre:**
+   Jede Einstellung, die die Simulation beeinflusst, MUSS in die Aufnahme — ein erneuter Audit der
+   Settings (aktuell: nur `autoFire` ist sim-relevant; Musik/SFX-Stil sind reine Audio-Optionen)
+   ist Pflicht, bevor man sich auf Replays verlässt.
+2. **Float-Determinismus ist BINARY-spezifisch, nicht nur architektur-spezifisch.** Ein Lauf, der
+   von Binary A aufgezeichnet wurde, reproduziert sich auf einem NEU gebauten Binary B nicht
+   zuverlässig — winzige Float-Unterschiede schaukeln sich über zehntausende Frames auf, bis das
+   Schiff anders stirbt. In-App-Replay und GIF-Render aus DEMSELBEN installierten Build sind
+   zuverlässig; ein Replay über einen Rebuild hinweg ist es nicht. Das Versions-Tag deckt nur
+   Logik-Änderungen ab, NICHT die Binary-Identität. (Konkret nicht mehr rekonstruierbar: der erste
+   echte v0.11.0-Lauf, da pre-autoFire-Fix UND vom inzwischen ersetzten Build aufgezeichnet.)
+
 ## Querschnitt: Risiken & Caveats
 
 - **Float-Determinismus** gilt nur für dieselbe Binary auf derselber CPU-Architektur (Apple Silicon).
