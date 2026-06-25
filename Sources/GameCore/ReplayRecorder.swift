@@ -13,15 +13,20 @@ public final class ReplayRecorder {
     private let startLevel: Int
     private let gameMode: GameMode
     private let autoFire: Bool
+    private let width: Int
+    private let height: Int
 
     private var events: [InputEvent] = []
     private var steps: UInt32 = 0
 
-    public init(seed: UInt64, startLevel: Int, gameMode: GameMode, autoFire: Bool) {
+    public init(seed: UInt64, startLevel: Int, gameMode: GameMode, autoFire: Bool,
+                width: Int, height: Int) {
         self.seed = seed
         self.startLevel = startLevel
         self.gameMode = gameMode
         self.autoFire = autoFire
+        self.width = width
+        self.height = height
     }
 
     /// Index des nächsten aufzuzeichnenden Schritts (= Anzahl bereits aufgezeichneter Schritte). Ein
@@ -42,6 +47,7 @@ public final class ReplayRecorder {
     /// zwischendurch (z. B. in Tests) aufgerufen werden, ohne die Aufnahme zu beenden.
     public func makeReplay() -> Replay {
         Replay(seed: seed, startLevel: startLevel, gameMode: gameMode,
-               events: events, frameCount: Int(steps), autoFire: autoFire)
+               events: events, frameCount: Int(steps), autoFire: autoFire,
+               width: width, height: height)
     }
 }

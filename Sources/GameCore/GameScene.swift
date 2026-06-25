@@ -2583,8 +2583,11 @@ public final class GameScene: SKScene {
                 // zeichneten wir die Wiedergabe selbst wieder auf). Modus/Level werden gleich gesetzt;
                 // der Recorder hält Seed + diese Startwerte fest (gameMode wird unten zugewiesen).
                 if replayPlayer == nil {
+                    // Szenengröße mit aufnehmen: die Wiedergabe muss in derselben Größe laufen, sonst
+                    // driftet der Lauf (size beeinflusst Spawns/Wrap/Bounds).
                     recorder = ReplayRecorder(seed: currentSeed, startLevel: selectedStartLevel,
-                                              gameMode: selectedMode, autoFire: autoFire)
+                                              gameMode: selectedMode, autoFire: autoFire,
+                                              width: Int(size.width), height: Int(size.height))
                     lastReplay = nil
                 }
 

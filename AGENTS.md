@@ -288,6 +288,13 @@ ExploidsMac-Target treibt die Sim direkt per `advanceOneStep()` (`externalStepDr
 automatisch auf Echtzeit. **Replay-Format v3** (Fixed-Timestep, ohne dt-Folge); v2-Aufnahmen (variabler
 Zeitschritt, mit Auto-Feuer) werden als inkompatibel abgelehnt.
 
+**Aufnahme-Größe (seit v0.12.1):** Das `Replay` speichert die Szenengröße (Default macOS-Fenster
+1024×768); Renderer und `--replay-verify` nutzen sie automatisch. Das ist kritisch — die Simulation
+hängt an `size` (Spawn-Positionen, Wrap-Grenzen, Gegner-Eintritt), eine Wiedergabe in anderer Größe
+driftet komplett. Die früher vermutete „binary-spezifische Float-Drift" war in Wahrheit genau dieser
+Größen-Bug: ein GameCore-Rebuild reproduziert denselben Lauf bit-genau, solange Größe + Seed + Inputs
+stimmen. Der GIF-Renderer entkoppelt Sim- von Ausgabegröße (`--sim-scale` Sim, `--scale` GIF).
+
 **Replay-Archiv (seit v0.12.0):** Bei Game Over wird die Aufnahme JEDES Laufs als Datei nach
 `~/Library/Application Support/Exploids/replays` geschrieben (host-gesetzt über `replaySaveDirectory`;
 Default aus, damit Tests/Headless nichts schreiben) — unabhängig vom Highscore, damit sich nach einem
@@ -300,4 +307,5 @@ guten Spiel ein GIF rendern lässt, ohne dass der Lauf in die Liste muss. CLI:
 über einen Playtest abzunehmen (auf 120 Hz im Idealfall ein Sim-Schritt pro Bild wie zuvor). **Bekannte
 Einschränkung:** treue Wiedergabe braucht exakt die Binary, die den Lauf aufgenommen hat — eine neu
 gebaute Binary kann driften (Float-Reproduzierbarkeit ist binary-spezifisch); In-App-Replays und GIFs
-aus demselben installierten Build sind zuverlässig.
+aus demselben installierten Build sind zuverlässig. (Korrektur: die scheinbare Binary-Drift war in
+Wahrheit der Größen-Bug — siehe Abschnitt „Aufnahme-Größe" oben; jetzt behoben.)

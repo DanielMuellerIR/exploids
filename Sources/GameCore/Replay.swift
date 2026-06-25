@@ -52,6 +52,12 @@ public struct Replay: Codable, Equatable, Sendable {
     /// fürs Replay festgehalten und wiederhergestellt werden. Bei alten Aufnahmen ohne dieses Feld
     /// (vor dem Fix) wird `false` angenommen.
     public let autoFire: Bool
+    /// Szenengröße der Aufnahme (Pixel). Die Simulation hängt an `size` (Spawn-Positionen, Wrap-Grenzen,
+    /// Gegner-Eintritt), darum MUSS die Wiedergabe dieselbe Größe verwenden, sonst driftet der Lauf.
+    /// Default 1024×768 = macOS-Fenster-Standardgröße; v3-Aufnahmen ohne dieses Feld (vor dem Fix)
+    /// werden damit korrekt interpretiert.
+    public let width: Int
+    public let height: Int
 
     public init(version: Int = Replay.currentLogicVersion,
                 seed: UInt64,
@@ -59,7 +65,9 @@ public struct Replay: Codable, Equatable, Sendable {
                 gameMode: GameMode,
                 events: [InputEvent],
                 frameCount: Int,
-                autoFire: Bool = false) {
+                autoFire: Bool = false,
+                width: Int = 1024,
+                height: Int = 768) {
         self.version = version
         self.seed = seed
         self.startLevel = startLevel
@@ -67,13 +75,15 @@ public struct Replay: Codable, Equatable, Sendable {
         self.events = events
         self.frameCount = frameCount
         self.autoFire = autoFire
+        self.width = width
+        self.height = height
     }
 
     // `dtSequence` bleibt nur als Legacy-Decodier-Schlüssel: alte v2-Aufnahmen tragen statt
     // `frameCount` noch die dt-Folge. Daraus leiten wir die Schrittzahl ab, damit das Dekodieren
     // nicht wirft – die Aufnahme wird dann ohnehin über `isCompatible` (v3) abgelehnt.
     private enum CodingKeys: String, CodingKey {
-        case version, seed, startLevel, gameMode, events, frameCount, autoFire, dtSequence
+        case version, seed, startLevel, gameMode, events, frameCount, autoFire, width, height, dtSequence
     }
 
     public init(from decoder: Decoder) throws {
@@ -90,9 +100,12 @@ public struct Replay: Codable, Equatable, Sendable {
             self.frameCount = (try c.decodeIfPresent([Float].self, forKey: .dtSequence))?.count ?? 0
         }
         self.autoFire = try c.decodeIfPresent(Bool.self, forKey: .autoFire) ?? false
+        // Größe fehlt in v3-Aufnahmen vor dem Fix → macOS-Fenster-Standard 1024×768 annehmen.
+        self.width = try c.decodeIfPresent(Int.self, forKey: .width) ?? 1024
+        self.height = try c.decodeIfPresent(Int.self, forKey: .height) ?? 768
     }
 
-    /// Schreibt die kompakte v3-Form (ohne dt-Folge).
+    /// Schreibt die kompakte v3-Form (ohne dt-Folge, mit Aufnahme-Größe).
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(version, forKey: .version)
@@ -102,6 +115,8 @@ public struct Replay: Codable, Equatable, Sendable {
         try c.encode(events, forKey: .events)
         try c.encode(frameCount, forKey: .frameCount)
         try c.encode(autoFire, forKey: .autoFire)
+        try c.encode(width, forKey: .width)
+        try c.encode(height, forKey: .height)
     }
 
     /// Stimmt die Aufnahme mit der aktuellen Spiel-Logik überein? Bei `false` darf sie nicht

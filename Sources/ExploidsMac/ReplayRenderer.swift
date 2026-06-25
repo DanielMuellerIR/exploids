@@ -19,9 +19,14 @@ enum ReplayRenderer {
 
     /// Render-Optionen mit vernünftigen Defaults für ein Promo-GIF.
     struct Options {
-        /// Auflösung des GIFs (quadratisch passt zur Szene; Default kompakt für ein Web-GIF).
+        /// Auflösung des GIFs (Ausgabe). Default kompakt für ein Web-GIF.
         var width: Int = 480
         var height: Int = 360
+        /// Simulationsgröße (Szenengröße). MUSS der Aufnahme entsprechen, sonst driftet der Lauf
+        /// (Spawns/Wrap/Bounds hängen an `size`). `nil` = wie Ausgabegröße. Für Aufnahmen aus dem
+        /// macOS-Fenster (Default 1024×768) hier 1024×768 setzen; die Ausgabe wird beim Rendern skaliert.
+        var simWidth: Int? = nil
+        var simHeight: Int? = nil
         /// Nur jeden N-ten Simulationsschritt ins GIF aufnehmen. `nil` = automatisch so wählen, dass
         /// das GIF in Echtzeit läuft (Sim-Rate / fps, z. B. 120/30 → jeder 4.). Explizit setzen, um
         /// Zeitlupe/Zeitraffer zu erzwingen.
@@ -64,9 +69,14 @@ enum ReplayRenderer {
         let width = options.width
         let height = options.height
 
-        // Szene aufsetzen (didMove-Setup über eine Offscreen-SKView auslösen) und Replay starten.
-        let scene = GameScene(size: CGSize(width: width, height: height))
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        // Szene in SIMULATIONSGRÖSSE aufsetzen — per Default die in der Aufnahme gespeicherte Größe
+        // (sonst driftet der Lauf); gerendert wird in die Ausgabe-Textur (width×height), SpriteKit
+        // skaliert via scaleMode .fill. `--sim-scale` kann die Größe überschreiben.
+        let simW = options.simWidth ?? replay.width
+        let simH = options.simHeight ?? replay.height
+        let scene = GameScene(size: CGSize(width: simW, height: simH))
+        scene.scaleMode = .fill
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: simW, height: simH))
         view.presentScene(scene)
         if options.hideHUD { scene.setHUDHiddenForRender(true) }
         scene.replayAutoFireOverride = options.autoFireOverride

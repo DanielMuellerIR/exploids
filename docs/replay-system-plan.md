@@ -258,6 +258,14 @@ Licht, die die kurzen Unit-Tests nicht abdeckten:
    Logik-Änderungen ab, NICHT die Binary-Identität. (Konkret nicht mehr rekonstruierbar: der erste
    echte v0.11.0-Lauf, da pre-autoFire-Fix UND vom inzwischen ersetzten Build aufgezeichnet.)
 
+   **KORREKTUR (2026-06-25, v0.12.1):** Diese „binary-spezifische Drift" war eine Fehldiagnose. Der
+   wahre Grund war die **Szenengröße**: Renderer/`--replay-verify` liefen mit 480×360, echte Läufe
+   aber in Fenstergröße (1024×768), und `size` beeinflusst die Simulation (Spawns/Wrap/Bounds) →
+   kompletter Drift, der wie Float-Drift aussah. Ein GameCore-Rebuild reproduziert einen Lauf
+   bit-genau, solange **Größe + Seed + Inputs** stimmen (an einem echten ~8-Min-Lauf verifiziert).
+   Fix: die Aufnahme-Größe wird jetzt im `Replay` gespeichert (Default 1024×768 für Alt-Aufnahmen)
+   und von Renderer/Verify automatisch genutzt.
+
 ## Querschnitt: Risiken & Caveats
 
 - **Float-Determinismus** gilt nur für dieselbe Binary auf derselber CPU-Architektur (Apple Silicon).

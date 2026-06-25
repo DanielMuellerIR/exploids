@@ -240,11 +240,12 @@ struct Main {
               --test-mode   Run a headless game simulation for 10 frames and print telemetry, then exit.
               --export-replay <i> --out <file>
                             Export the replay attached to high-score entry <i> (0-based) to a file.
-              --render-replay <file> --out <gif> [--scale S] [--fps N] [--stride N]
+              --render-replay <file> --out <gif> [--scale S] [--sim-scale S] [--fps N] [--stride N]
                                        [--from F] [--max-frames N] [--auto-fire] [--show-hud]
-                            Headlessly render a replay file to an animated GIF (no window). Default
-                            scale 480x360, fps 30, stride auto (real-time), HUD hidden. --from picks a start frame
-                            (segment of a long run); --auto-fire forces auto-fire on for old replays.
+                            Headlessly render a replay file to an animated GIF (no window). The sim runs
+                            at the recorded scene size by default (--sim-scale overrides); --scale sets the
+                            GIF output size. Default output 480x360, fps 30, stride auto (real-time), HUD
+                            hidden. --from picks a start frame (segment of a long run).
               --render-last-replay --out <gif> [same options as --render-replay]
                             Render the newest archived replay (the last game played) to a GIF. Replays
                             are auto-saved to ~/Library/Application Support/Exploids/replays on game over.
@@ -379,15 +380,19 @@ struct Main {
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: arguments[flagIndex + 1]))
             let replay = try Replay(data: data)
-            let view = SKView(frame: CGRect(x: 0, y: 0, width: 480, height: 360))
-            let scene = GameScene(size: CGSize(width: 480, height: 360))
+            // Szenengröße beeinflusst die Simulation (Spawns/Wrap/Bounds) → für treue Wiedergabe die in
+            // der Aufnahme gespeicherte Größe nehmen; --width/--height überschreiben.
+            let w = argValue(arguments, "--width").flatMap { Int($0) } ?? replay.width
+            let h = argValue(arguments, "--height").flatMap { Int($0) } ?? replay.height
+            let view = SKView(frame: CGRect(x: 0, y: 0, width: w, height: h))
+            let scene = GameScene(size: CGSize(width: w, height: h))
             view.presentScene(scene)
             if arguments.contains("--auto-fire") { scene.replayAutoFireOverride = true }
             if arguments.contains("--no-auto-fire") { scene.replayAutoFireOverride = false }
             guard scene.startReplay(replay) else {
                 FileHandle.standardError.write(Data("Fehler: Replay inkompatibel.\n".utf8)); exit(3)
             }
-            print("Replay: seed=\(replay.seed) frames=\(replay.frameCount) startLevel=\(replay.startLevel)")
+            print("Replay: seed=\(replay.seed) frames=\(replay.frameCount) startLevel=\(replay.startLevel) recSize=\(replay.width)x\(replay.height) simSize=\(w)x\(h)")
             var endedAtFrame = 0
             while scene.isReplaying {
                 if !scene.advanceOneStep() { break }   // false = Aufnahme zu Ende (Wiedergabe beendet)
@@ -506,9 +511,13 @@ struct Main {
 
         var options = ReplayRenderer.Options()
         if let s = argValue(arguments, "--scale"), let scale = Double(s), scale > 0 {
-            // Quadratisches Szenen-Seitenverhältnis ist 4:3; --scale setzt die Breite, Höhe folgt 3:4.
+            // 4:3-Seitenverhältnis; --scale setzt die Ausgabe-Breite, Höhe folgt 3:4.
             options.width = Int(scale)
             options.height = Int(scale * 3.0 / 4.0)
+        }
+        // --sim-scale: Simulationsgröße (muss der Aufnahme entsprechen). Für Fenster-Aufnahmen 1024.
+        if let s = argValue(arguments, "--sim-scale"), let sim = Int(s), sim > 0 {
+            options.simWidth = sim; options.simHeight = sim * 3 / 4
         }
         if let f = argValue(arguments, "--fps"), let fps = Int(f), fps > 0 { options.fps = fps }
         if let st = argValue(arguments, "--stride"), let stride = Int(st), stride > 0 { options.frameStride = stride }

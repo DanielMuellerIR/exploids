@@ -2,6 +2,15 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.12.1] — 2026-06-25
+- Replay fix: a recording now stores the scene size it was played at. The simulation depends on the
+  scene size (spawn positions, wrap bounds, enemy entry), so replaying or rendering at a different
+  size made the run drift completely. The headless renderer and `--replay-verify` now use the
+  recorded size by default; older recordings without the field assume the macOS window default of
+  1024×768 (so existing replays render correctly without manual flags).
+- The GIF renderer can now decouple simulation size from output size (`--sim-scale` for the sim,
+  `--scale` for the GIF), so a faithful 1024×768 run can be rendered to a compact GIF.
+
 ## [0.12.0] — 2026-06-25
 - Fixed-timestep simulation: the game loop now advances in fixed steps (1/120 s) driven by a
   time accumulator, decoupled from the display refresh rate, instead of integrating one variable
