@@ -10,6 +10,9 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
   1024×768 (so existing replays render correctly without manual flags).
 - The GIF renderer can now decouple simulation size from output size (`--sim-scale` for the sim,
   `--scale` for the GIF), so a faithful 1024×768 run can be rendered to a compact GIF.
+- New CLI `--render-video <file> --out <mp4>`: render a whole replay to a real-time h264 video
+  (via AVAssetWriter). For long runs that would be absurdly large as a GIF — scrub it to pick a
+  GIF segment.
 
 ## [0.12.0] — 2026-06-25
 - Fixed-timestep simulation: the game loop now advances in fixed steps (1/120 s) driven by a

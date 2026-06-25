@@ -249,6 +249,9 @@ struct Main {
               --render-last-replay --out <gif> [same options as --render-replay]
                             Render the newest archived replay (the last game played) to a GIF. Replays
                             are auto-saved to ~/Library/Application Support/Exploids/replays on game over.
+              --render-video <file> --out <mp4> [--scale S] [--fps N] [--from F] [--hide-hud]
+                            Render a whole replay to an h264 video (mp4). For long runs that would be huge
+                            as a GIF — real-time, scrub it to pick a GIF segment. HUD shown by default.
               --reset-highscores
                             Clear the saved high-score list. Run via the app binary with the game closed.
               --replay-verify <file> [--auto-fire]
@@ -277,6 +280,11 @@ struct Main {
         // 2c1. Headless: die NEUESTE Archiv-Aufnahme (letztes gespieltes Spiel) zu GIF rendern.
         if arguments.contains("--render-last-replay") {
             runRenderLastReplay(arguments: arguments)
+        }
+
+        // 2c1a. Headless: ganzes Replay als h264-Video (mp4) – für lange Läufe (zum Durchscrubben).
+        if let i = arguments.firstIndex(of: "--render-video") {
+            runRenderVideo(arguments: arguments, flagIndex: i)
         }
 
         // 2c1b. Highscore-Liste leeren (über die App-Binary ausführen; Spiel vorher beenden).
@@ -535,6 +543,50 @@ struct Main {
             }
             try ReplayRenderer.renderToGIF(replay, outputURL: URL(fileURLWithPath: outPath), options: options)
             print("GIF gerendert: \(outPath)")
+            exit(0)
+        } catch {
+            FileHandle.standardError.write(Data("Fehler beim Rendern: \(error)\n".utf8)); exit(4)
+        }
+    }
+
+    /// `--render-video <file> --out <mp4> [--scale S] [--fps N] [--from F] [--max-frames N] [--hide-hud]`:
+    /// rendert eine Replay-Datei headless als h264-Video. Für lange Läufe gedacht (ein 8-Min-Lauf wäre
+    /// als GIF absurd groß): Echtzeit-Video zum Durchscrubben und Auswählen eines GIF-Ausschnitts.
+    private static func runRenderVideo(arguments: [String], flagIndex: Int) {
+        guard flagIndex + 1 < arguments.count else {
+            FileHandle.standardError.write(Data("Fehler: --render-video braucht eine Datei.\n".utf8)); exit(2)
+        }
+        guard let outPath = argValue(arguments, "--out") else {
+            FileHandle.standardError.write(Data("Fehler: --out <mp4> fehlt.\n".utf8)); exit(2)
+        }
+        do {
+            let replay = try Replay(data: try Data(contentsOf: URL(fileURLWithPath: arguments[flagIndex + 1])))
+            guard replay.isCompatible else {
+                FileHandle.standardError.write(Data("Fehler: Aufnahme inkompatibel (andere Logik-Version).\n".utf8)); exit(3)
+            }
+            var options = ReplayRenderer.Options()
+            // Video-Defaults: ganzes Replay, Ausgabe = Aufnahme-Größe (1:1, scharf), 30 fps, HUD AN
+            // (Score/Timer/Level helfen beim Wählen des Ausschnitts), kein Frame-Deckel.
+            options.width = replay.width
+            options.height = replay.height
+            options.hideHUD = false
+            options.maxFrames = 0
+            options.fps = 30
+            if let s = argValue(arguments, "--scale"), let scale = Double(s), scale > 0 {
+                options.width = Int(scale); options.height = Int(scale * 3.0 / 4.0)
+            }
+            if let s = argValue(arguments, "--sim-scale"), let sim = Int(s), sim > 0 {
+                options.simWidth = sim; options.simHeight = sim * 3 / 4
+            }
+            if let f = argValue(arguments, "--fps"), let fps = Int(f), fps > 0 { options.fps = fps }
+            if let fr = argValue(arguments, "--from"), let from = Int(fr), from >= 0 { options.startFrame = from }
+            if let mx = argValue(arguments, "--max-frames"), let mx2 = Int(mx), mx2 >= 0 { options.maxFrames = mx2 }
+            if arguments.contains("--hide-hud") { options.hideHUD = true }
+            if arguments.contains("--auto-fire") { options.autoFireOverride = true }
+            if arguments.contains("--no-auto-fire") { options.autoFireOverride = false }
+            try ReplayRenderer.renderToVideo(replay, outputURL: URL(fileURLWithPath: outPath), options: options)
+            let secs = Double(replay.frameCount) / Double(GameScene.simStepsPerSecond)
+            print(String(format: "Video gerendert: %@ (%d Frames Aufnahme, ~%.0f s Echtzeit)", outPath, replay.frameCount, secs))
             exit(0)
         } catch {
             FileHandle.standardError.write(Data("Fehler beim Rendern: \(error)\n".utf8)); exit(4)

@@ -3,6 +3,7 @@ import SpriteKit
 import Metal
 import ImageIO
 import UniformTypeIdentifiers
+import AVFoundation
 import GameCore
 
 /// Headless-Renderer: erzeugt aus einer `Replay`-Aufnahme deterministisch eine animierte GIF-Datei –
@@ -49,6 +50,7 @@ enum ReplayRenderer {
         case noMetalDevice
         case textureCreationFailed
         case gifDestinationFailed
+        case videoWriterFailed
         case noFramesRendered
 
         var description: String {
@@ -56,6 +58,7 @@ enum ReplayRenderer {
             case .noMetalDevice: return "Kein Metal-Gerät verfügbar (Offscreen-Rendering nicht möglich)."
             case .textureCreationFailed: return "Offscreen-Textur konnte nicht erstellt werden."
             case .gifDestinationFailed: return "GIF-Ziel konnte nicht erstellt werden."
+            case .videoWriterFailed: return "Video-Writer konnte nicht erstellt/gestartet werden."
             case .noFramesRendered: return "Es wurden keine Frames gerendert (leere Aufnahme?)."
             }
         }
@@ -126,6 +129,111 @@ enum ReplayRenderer {
 
         guard !images.isEmpty else { throw RenderError.noFramesRendered }
         try encodeGIF(images: images, fps: options.fps, to: outputURL)
+    }
+
+    /// Rendert die Aufnahme als h264-Video (mp4). Für lange Läufe gedacht, die als GIF zu groß wären –
+    /// in Echtzeit (Video-Zeit = Spielzeit), zum Durchscrubben und Auswählen eines GIF-Ausschnitts.
+    /// Gleiche treue Simulation wie der GIF-Pfad (Sim in Aufnahme-Größe), Frames gehen aber über einen
+    /// `AVAssetWriter` statt ImageIO.
+    static func renderToVideo(_ replay: Replay, outputURL: URL, options: Options = Options()) throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw RenderError.noMetalDevice }
+        guard let commandQueue = device.makeCommandQueue() else { throw RenderError.noMetalDevice }
+
+        let width = options.width
+        let height = options.height
+        let simW = options.simWidth ?? replay.width
+        let simH = options.simHeight ?? replay.height
+        let scene = GameScene(size: CGSize(width: simW, height: simH))
+        scene.scaleMode = .fill
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: simW, height: simH))
+        view.presentScene(scene)
+        if options.hideHUD { scene.setHUDHiddenForRender(true) }
+        scene.replayAutoFireOverride = options.autoFireOverride
+        guard scene.startReplay(replay) else { throw RenderError.noFramesRendered }
+
+        let renderer = SKRenderer(device: device)
+        renderer.scene = scene
+        let texDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
+        texDesc.usage = [.renderTarget, .shaderRead]
+        texDesc.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: texDesc) else {
+            throw RenderError.textureCreationFailed
+        }
+        let viewport = CGRect(x: 0, y: 0, width: width, height: height)
+
+        // AVAssetWriter (h264/mp4) – ohne Fenster, rein dateibasiert (passt zur Headless-Linie).
+        try? FileManager.default.removeItem(at: outputURL)
+        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
+            throw RenderError.videoWriterFailed
+        }
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height
+        ])
+        input.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height
+            ])
+        guard writer.canAdd(input) else { throw RenderError.videoWriterFailed }
+        writer.add(input)
+        guard writer.startWriting() else { throw RenderError.videoWriterFailed }
+        writer.startSession(atSourceTime: .zero)
+
+        let fps = max(1, options.fps)
+        let stride = max(1, options.frameStride ?? (GameScene.simStepsPerSecond / fps))
+        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+        var videoFrame = 0
+        var simFrame = 0
+        var simTime: TimeInterval = 0.0
+        scene.externalStepDriving = true
+        while scene.advanceOneStep() {
+            simTime += GameScene.simStep
+            renderer.update(atTime: simTime)
+            if simFrame < options.startFrame { simFrame += 1; continue }
+            if (simFrame - options.startFrame) % stride == 0 {
+                if let img = renderFrame(renderer: renderer, commandQueue: commandQueue,
+                                         texture: texture, viewport: viewport),
+                   let buf = makePixelBuffer(from: img, width: width, height: height) {
+                    while !input.isReadyForMoreMediaData { usleep(500) }
+                    adaptor.append(buf, withPresentationTime:
+                        CMTimeMultiply(frameDuration, multiplier: Int32(videoFrame)))
+                    videoFrame += 1
+                }
+                if options.maxFrames > 0 && videoFrame >= options.maxFrames { break }
+            }
+            simFrame += 1
+        }
+
+        input.markAsFinished()
+        let sem = DispatchSemaphore(value: 0)
+        writer.finishWriting { sem.signal() }
+        sem.wait()
+        guard videoFrame > 0, writer.status == .completed else { throw RenderError.videoWriterFailed }
+    }
+
+    /// Zeichnet ein `CGImage` in einen frischen BGRA-`CVPixelBuffer` für den Video-Writer.
+    private static func makePixelBuffer(from image: CGImage, width: Int, height: Int) -> CVPixelBuffer? {
+        var pb: CVPixelBuffer?
+        let attrs = [kCVPixelBufferCGImageCompatibilityKey: true,
+                     kCVPixelBufferCGBitmapContextCompatibilityKey: true] as CFDictionary
+        guard CVPixelBufferCreate(kCFAllocatorDefault, width, height,
+                                  kCVPixelFormatType_32BGRA, attrs, &pb) == kCVReturnSuccess,
+              let buffer = pb else { return nil }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        guard let ctx = CGContext(
+            data: CVPixelBufferGetBaseAddress(buffer), width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return nil }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return buffer
     }
 
     /// Rendert den aktuellen Szenenzustand in die Textur und liest ihn als `CGImage` zurück.
