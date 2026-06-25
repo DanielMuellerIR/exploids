@@ -96,6 +96,13 @@ exploids/
         └── GameCoreTests.swift # 54 unit tests (physics, wrap-around, lasers, power-ups, modes)
 ```
 
+**Releases are on-demand only — intentionally no auto-release CI.** A signed,
+notarized DMG plus the matching GitHub release is produced by running
+`bash wrappers/sign-and-release.sh --publish` (build → codesign → DMG → notarize →
+staple → tag `vX.Y.Z` → upload to the release page). This is run manually when a
+release is wanted; it is a deliberate decision *not* to trigger releases on every
+push (notarization takes minutes and the VERSION-derived tag would collide).
+
 ---
 
 ## Current Status: v0.6.1 — Game Modes
