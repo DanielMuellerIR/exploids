@@ -440,7 +440,28 @@ public final class GameScene: SKScene {
     
     /// The timestamp of the last update.
     private var lastUpdateTime: TimeInterval = 0.0
-    
+
+    // MARK: - Fixed-Timestep
+
+    /// Schritte pro Sekunde der Simulation. 120 passt zu ProMotion (120 Hz): im Idealfall genau ein
+    /// Sim-Schritt pro Bild → praktisch identisches Spielgefühl wie der frühere variable Zeitschritt,
+    /// nur eben fest. Bei spürbarem Stottern auf 240 erhöhen (feiner, robuster gegen Takt-Jitter).
+    public static let simStepsPerSecond: Int = 120
+    /// Fester Simulationszeitschritt in Sekunden. Jeder Schritt rechnet mit exakt diesem `dt`; dadurch
+    /// hängt ein Lauf nur an (Seed + Eingaben) und das Replay ist ohne aufgezeichnete dt-Folge bit-exakt.
+    public static let simStep: TimeInterval = 1.0 / Double(simStepsPerSecond)
+    /// Aufgelaufene Echtzeit, die noch nicht in Sim-Schritte umgesetzt wurde (Fixed-Timestep-Akkumulator).
+    private var timeAccumulator: TimeInterval = 0.0
+    /// Obergrenze für die pro Bild verarbeitete Echtzeit. Nach einem Hänger (Fenster-Drag, App im
+    /// Hintergrund) wird NICHT die ganze aufgestaute Zeit als Sim-Schritte nachgeholt (sonst langer
+    /// Catch-up-Hänger / Zeit-Sprung). Default `.infinity` = aus; die echten App-Hosts (`ExploidsMac`,
+    /// iOS) setzen einen sinnvollen Wert (0.25 s). Tests/Headless lassen ihn aus, damit sie die
+    /// Simulation per großem `update(_:)`-Sprung deterministisch vorspulen können.
+    public var maxFrameDelta: TimeInterval = .infinity
+    /// Wenn `true`, wird die Simulation von außen über `advanceOneStep()` getrieben (headless
+    /// GIF-Renderer, Tests) und der Echtzeit-Akkumulator in `update(_:)` macht nichts.
+    public var externalStepDriving: Bool = false
+
     /// The timestamp when the last laser was fired.
     private var lastLaserTime: TimeInterval = 0.0
     
@@ -782,40 +803,56 @@ public final class GameScene: SKScene {
     // MARK: - Game Loop
     
     public override func update(_ wallTime: TimeInterval) {
+        // Headless/Tests treiben die Simulation extern über `advanceOneStep()` → hier nichts tun.
+        if externalStepDriving { return }
+
         if lastUpdateTime == 0 {
             lastUpdateTime = wallTime
             return
         }
-        var deltaTime = wallTime - lastUpdateTime
+        var frameDelta = wallTime - lastUpdateTime
         lastUpdateTime = wallTime
+        if frameDelta > maxFrameDelta { frameDelta = maxFrameDelta }   // Hänger nicht nachholen
 
-        // Replay-Wiedergabe: die Echtzeit-`deltaTime` verwerfen und stattdessen das aufgezeichnete
-        // `dt` anwenden + die für diesen Frame aufgezeichneten Eingaben einspeisen. So läuft die
-        // Wiedergabe exakt wie die Aufnahme (Lauf hängt nur an Seed + Eingaben + dt-Folge).
-        if let player = replayPlayer {
-            guard let recordedDt = player.nextFrameDt(injectingInto: self) else {
-                finishReplay()
-                return
-            }
-            deltaTime = recordedDt
+        // Fixed-Timestep: die reale Frame-Zeit aufsummieren und die Simulation in festen Schritten
+        // (`simStep`) voranbringen – unabhängig von der Bildwiederholrate. Dadurch hängt ein Lauf nur
+        // noch an (Seed + Eingaben), nicht mehr an einer dt-Folge; das Replay ist ohne aufgezeichnete
+        // dt-Werte bit-exakt. Gerendert wird der jeweils erreichte Sim-Zustand (ohne Interpolation;
+        // bei simStep ≈ Bildperiode unnötig, siehe `simStepsPerSecond`).
+        timeAccumulator += frameDelta
+        while timeAccumulator >= GameScene.simStep {
+            timeAccumulator -= GameScene.simStep
+            if !advanceOneStep() { break }   // false = Wiedergabe zu Ende (wurde hier beendet)
         }
+    }
 
-        // dt auf Float-Präzision quantisieren. Die Aufnahme speichert dt als `Float` (kompakt); damit
-        // die Wiedergabe bit-exakt ist, muss schon die LAUFENDE Simulation mit demselben quantisierten
-        // dt rechnen (sonst driftet Replay-`Double(Float(dt))` minimal von der Aufnahme ab). Der
-        // Genauigkeitsverlust liegt weit unter jeder Wahrnehmungsschwelle. Idempotent während Replay.
-        deltaTime = TimeInterval(Float(deltaTime))
+    /// Treibt die Simulation um GENAU einen festen Schritt (`simStep`) voran. Gemeinsamer Einstieg
+    /// für den Echtzeit-Akkumulator (oben), den headless GIF-Renderer und die Tests. Während einer
+    /// Wiedergabe werden zuerst die für diesen Schritt aufgezeichneten Eingaben eingespeist; im
+    /// laufenden Spiel wird der Schritt für die Aufnahme mitgezählt. Rückgabe `false`, wenn eine
+    /// Wiedergabe zu Ende ist (dann wurde sie hier beendet) – der Aufrufer soll abbrechen.
+    @discardableResult
+    public func advanceOneStep() -> Bool {
+        if let player = replayPlayer {
+            guard player.advanceStep(injectingInto: self) else {
+                finishReplay()
+                return false
+            }
+        } else if gameState == .playing {
+            recorder?.recordStep()
+        }
+        stepSimulation(deltaTime: GameScene.simStep)
+        return true
+    }
 
-        // Eine Quelle der Wahrheit für Zeit: akkumulierte dt. Ab hier benennt die lokale Konstante
-        // `currentTime` die SPIELZEIT (nicht die Echtzeit-`wallTime`) – so rechnet der gesamte
-        // restliche Methodenrumpf und alle aufgerufenen Helfer gegen `gameTime`. Das ist die
-        // Grundlage für deterministisches Replay (Lauf hängt nur an Seed + dt-Folge).
+    /// Ein einzelner Simulationsschritt mit festem `deltaTime`. Enthält den gesamten Spiel-Logik-Rumpf
+    /// (Spawning, Bewegung, Kollision, HUD); wird von `advanceOneStep()` getrieben.
+    private func stepSimulation(deltaTime: TimeInterval) {
+        // Eine Quelle der Wahrheit für Zeit: akkumulierte Spielzeit. Ab hier benennt `currentTime` die
+        // SPIELZEIT (nicht die Echtzeit) – der gesamte restliche Rumpf und alle Helfer rechnen gegen
+        // `gameTime`. Grundlage für deterministisches Replay (Lauf hängt nur an Seed + Eingaben).
         gameTime += deltaTime
         let currentTime = gameTime
-
-        // Aufnahme: das `dt` dieses Simulationsframes festhalten (nur im laufenden Spiel, nicht
-        // während einer Wiedergabe – dort ist `recorder` ohnehin nil).
-        if gameState == .playing { recorder?.recordFrame(dt: deltaTime) }
 
         if gameState == .quitConfirmation {
             return
@@ -2545,6 +2582,10 @@ public final class GameScene: SKScene {
                 // Lauf bei gameTime 0 beginnt (sonst würden Spawn-/Power-up-Timer aus der Menü-Phase
                 // nachwirken und der Lauf wäre nicht reproduzierbar).
                 gameTime = 0.0
+                // Fixed-Timestep-Akkumulator leeren und das nächste `update(_:)` neu primen lassen,
+                // damit aufgestaute Menü-Zeit den frischen Lauf nicht beeinflusst.
+                timeAccumulator = 0.0
+                lastUpdateTime = 0.0
                 lastSpawnTime = 0.0
                 lastUFOSpawnTime = 0.0
                 lastGravityWellSpawnTime = 0.0
@@ -3946,6 +3987,12 @@ public final class GameScene: SKScene {
     /// For testing: sets the level time remaining.
     public func setLevelTimeRemainingForTesting(_ time: TimeInterval) {
         self.levelTimeRemaining = time
+    }
+
+    /// For testing: sets the accumulated play time (drives `difficultyFactor`). Lets a formula test
+    /// skip simulating minutes of real frames.
+    public func setPlayTimeForTesting(_ time: TimeInterval) {
+        self.playTime = time
     }
     
     /// For testing: clears all active asteroids and lasers.

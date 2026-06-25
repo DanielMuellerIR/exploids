@@ -94,7 +94,7 @@ exploids/
 │   ├── Collision.swift        # world-space collision helpers
 │   ├── GameRandom.swift       # seeded PRNG (SplitMix64) — deterministic gameplay RNG
 │   ├── Replay.swift           # replay model (Codable, compact binary plist)
-│   ├── ReplayRecorder.swift   # records seed + inputs + dt sequence per run
+│   ├── ReplayRecorder.swift   # records seed + inputs + step count per run (fixed-timestep)
 │   ├── ReplayPlayer.swift     # plays a recording back bit-exactly into a GameScene
 │   ├── SoundManager.swift     # real-time procedural SFX + optional recorded-sample mode
 │   ├── MusicPlayer.swift      # chiptune background music (M toggle)
@@ -126,7 +126,7 @@ push (notarization takes minutes and the VERSION-derived tag would collide).
 
 ---
 
-## Current Status: v0.11.1
+## Current Status: v0.12.0
 
 Shipped feature set (signed + notarized macOS release; the iOS target is an early WIP):
 two game modes, nine power-ups, gravity wells, enemy UFO saucers, two bosses (the
@@ -272,22 +272,25 @@ völlig gezielt, kein sinnloses Herumtreiben. Code: `Sources/GameCore/SpaceCat.s
 - *Offen / Tuning:* Feinabstimmung von Frequenz/Schwierigkeit nach dem Playtest; ggf. Sound für
   den Augenlaser (aktuell der UFO-Sound wiederverwendet); optionaler Glossar-Eintrag.
 
-### Deterministisches Replay-System — IMPLEMENTIERT (v0.11.0 / v0.11.1)
+### Deterministisches Replay-System — IMPLEMENTIERT (v0.11.0–v0.12.0)
 
 Die Spielsimulation ist **bit-exakt reproduzierbar**: ein geseedeter PRNG (`GameRandom`,
 SplitMix64) speist alle gameplay-relevanten Zufallszahlen, und die Zeit läuft über eine einzige
-akkumulierte `gameTime` (keine Wall-Clock-Lesestellen mehr im Gameplay-Pfad) — das macht nebenbei
-die Testsuite deterministisch. Jeder Lauf wird aufgezeichnet (Seed + Eingaben + `dt`-Folge, wenige
-KB; `Replay` / `ReplayRecorder` / `ReplayPlayer`) und bei Game Over an den Highscore gehängt.
-**In-App-Wiedergabe:** Titelbildschirm, Zifferntaste 1–5 für den Highscore-Eintrag, ESC verlässt.
-**Headless-GIF-Rendering:** `ReplayRenderer` (SKRenderer + Offscreen-Metal + ImageIO) im
-ExploidsMac-Target, CLI `exploids --render-replay <file> --out <gif>` (plus `--export-replay`,
-`--render-demo`). Replay-Format v2 (seit v0.11.1 ist auch die Auto-Feuer-Einstellung Teil der
-Aufnahme).
+akkumulierte `gameTime`. Seit v0.12.0 läuft die Simulation im **Fixed-Timestep**: `update(_:)`
+summiert die reale Frame-Zeit in einem Akkumulator und treibt die Sim in festen Schritten
+(`GameScene.simStep` = 1/120 s) über `advanceOneStep()` → `stepSimulation(deltaTime:)`. Damit hängt
+ein Lauf nur noch an (Seed + Eingaben). Jeder Lauf wird aufgezeichnet (`Replay` / `ReplayRecorder` /
+`ReplayPlayer`, nur Seed + Eingaben + `frameCount`, wenige KB) und bei Game Over an den Highscore
+gehängt. **In-App-Wiedergabe:** Titelbildschirm, Zifferntaste 1–5 für den Highscore-Eintrag, ESC
+verlässt. **Headless-GIF-Rendering:** `ReplayRenderer` (SKRenderer + Offscreen-Metal + ImageIO) im
+ExploidsMac-Target treibt die Sim direkt per `advanceOneStep()` (`externalStepDriving`); CLI
+`exploids --render-replay <file> --out <gif>` (plus `--export-replay`, `--render-demo`), Capture-Stride
+automatisch auf Echtzeit. **Replay-Format v3** (Fixed-Timestep, ohne dt-Folge); v2-Aufnahmen (variabler
+Zeitschritt, mit Auto-Feuer) werden als inkompatibel abgelehnt.
 
 **Voller Plan + Erfolgskriterien:** [`docs/replay-system-plan.md`](docs/replay-system-plan.md)
-(Phase 1 + 2 fertig, Phase 3 bis auf 3.1 fertig). **Bewusst zurückgestellt:** 3.1 Fixed-Timestep
-(höchstes Spielgefühl-Risiko, fürs GIF nicht nötig, da das `dt`-basierte Replay bereits bit-exakt
-reproduziert). **Bekannte Einschränkung:** treue Wiedergabe braucht exakt die Binary, die den Lauf
-aufgenommen hat — eine neu gebaute Binary kann driften (Float-Reproduzierbarkeit ist
-binary-spezifisch); In-App-Replays und GIFs aus demselben installierten Build sind zuverlässig.
+(Phase 1 + 2 + 3 vollständig, inkl. 3.1 Fixed-Timestep). **Spielgefühl** des Fixed-Timestep ist final
+über einen Playtest abzunehmen (auf 120 Hz im Idealfall ein Sim-Schritt pro Bild wie zuvor). **Bekannte
+Einschränkung:** treue Wiedergabe braucht exakt die Binary, die den Lauf aufgenommen hat — eine neu
+gebaute Binary kann driften (Float-Reproduzierbarkeit ist binary-spezifisch); In-App-Replays und GIFs
+aus demselben installierten Build sind zuverlässig.

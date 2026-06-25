@@ -243,7 +243,7 @@ struct Main {
               --render-replay <file> --out <gif> [--scale S] [--fps N] [--stride N]
                                        [--from F] [--max-frames N] [--auto-fire] [--show-hud]
                             Headlessly render a replay file to an animated GIF (no window). Default
-                            scale 480x360, fps 30, stride 2, HUD hidden. --from picks a start frame
+                            scale 480x360, fps 30, stride auto (real-time), HUD hidden. --from picks a start frame
                             (segment of a long run); --auto-fire forces auto-fire on for old replays.
               --replay-verify <file> [--auto-fire]
                             Replay a file headlessly (no render) and print the final state — diagnostic.
@@ -355,8 +355,8 @@ struct Main {
         }
     }
 
-    /// `--replay-verify <file>`: spielt ein Replay über den getesteten `scene.update()`-Pfad ab (ohne
-    /// Rendering) und meldet Endzustand/Score/Level + den Frame, an dem die Wiedergabe endete.
+    /// `--replay-verify <file>`: spielt ein Replay über den festen Sim-Schritt (`advanceOneStep`) ab
+    /// (ohne Rendering) und meldet Endzustand/Score/Level + den Frame, an dem die Wiedergabe endete.
     private static func runReplayVerify(arguments: [String], flagIndex: Int) {
         guard flagIndex + 1 < arguments.count else {
             FileHandle.standardError.write(Data("Fehler: --replay-verify braucht eine Datei.\n".utf8)); exit(2)
@@ -373,14 +373,12 @@ struct Main {
                 FileHandle.standardError.write(Data("Fehler: Replay inkompatibel.\n".utf8)); exit(3)
             }
             print("Replay: seed=\(replay.seed) frames=\(replay.frameCount) startLevel=\(replay.startLevel)")
-            var endedAtFrame = -1
-            var t = 1000.0
-            for f in 0...(replay.frameCount + 1) {
-                let wasReplaying = scene.isReplaying
-                scene.update(t); t += 1.0 / 60.0
-                if wasReplaying && !scene.isReplaying && endedAtFrame < 0 { endedAtFrame = f }
+            var endedAtFrame = 0
+            while scene.isReplaying {
+                if !scene.advanceOneStep() { break }   // false = Aufnahme zu Ende (Wiedergabe beendet)
+                endedAtFrame += 1
             }
-            print("Endstand via scene.update(): score=\(scene.score) level=\(scene.currentLevel) state=\(scene.gameState) endedAtFrame=\(endedAtFrame)")
+            print("Endstand via advanceOneStep(): score=\(scene.score) level=\(scene.currentLevel) state=\(scene.gameState) endedAtFrame=\(endedAtFrame)")
             exit(0)
         } catch {
             FileHandle.standardError.write(Data("Fehler: \(error)\n".utf8)); exit(4)

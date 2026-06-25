@@ -824,17 +824,15 @@ final class GameCoreTests: XCTestCase {
         
         // Initially difficultyFactor should be 1.0
         XCTAssertEqual(scene.difficultyFactor, 1.0, accuracy: 1e-4)
-        
-        // Advance playTime by 300 seconds (5 minutes)
-        scene.update(1.0)
-        scene.update(301.0)
-        
+
+        // difficultyFactor ist eine reine Funktion von playTime → direkt setzen statt Minuten zu
+        // simulieren. Mit Fixed-Timestep wären 300/600 s zehntausende echte Schritte (langsam) und das
+        // unbespielte Schiff stürbe unterwegs an Asteroiden, sodass playTime einfröre.
+        scene.setPlayTimeForTesting(300.0)   // 5 Minuten
         // Factor should be 1.0 + 1.5 * (300 / 600) = 1.75
         XCTAssertEqual(scene.difficultyFactor, 1.75, accuracy: 1e-4)
-        
-        // Advance playTime past 600 seconds (10 minutes)
-        scene.update(901.0)
-        
+
+        scene.setPlayTimeForTesting(900.0)   // 15 Minuten → über dem 600-s-Deckel
         // Factor should be capped at 2.5
         XCTAssertEqual(scene.difficultyFactor, 2.5, accuracy: 1e-4)
     }
@@ -1041,21 +1039,28 @@ final class GameCoreTests: XCTestCase {
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
-        
+        // Schiff soll die 60 s bis zum Level-Ende überleben: mit Fixed-Timestep läuft die Simulation
+        // jetzt wirklich jede Sekunde durch (statt in einem Riesenschritt zu „tunneln"), sonst träfe es
+        // unterwegs ein Asteroid. Felder leeren + Spawnen aus → leeres, sicheres Spielfeld.
+        scene.clearAllEntitiesForTesting()
+        scene.isSpawningEnabled = false
+
         XCTAssertEqual(scene.currentLevel, 1)
         XCTAssertFalse(scene.isLevelClearing)
-        
+
         scene.update(1.0)
         scene.update(61.1)
-        
+
         XCTAssertTrue(scene.isLevelClearing)
         XCTAssertEqual(scene.activeAsteroids.count, 0)
-        
+
         scene.update(65.0)
-        
+
         XCTAssertFalse(scene.isLevelClearing)
         XCTAssertEqual(scene.currentLevel, 2)
-        XCTAssertEqual(scene.levelTimeRemaining, 60.0)
+        // Der Level-2-Timer wird auf 60 s zurückgesetzt; mit Fixed-Timestep decrementiert er nach dem
+        // Übergang noch den Rest des letzten Advance-Schritts (~0.5 s), daher accuracy statt exakt 60.
+        XCTAssertEqual(scene.levelTimeRemaining, 60.0, accuracy: 1.0)
     }
     
     func testLevelSelection() {
@@ -1237,11 +1242,11 @@ final class GameCoreTests: XCTestCase {
         // Power-ups should still exist
         XCTAssertEqual(scene.activePowerUps.count, 2)
         
-        // powerUp1 (which had 5s remaining, minus 4.1s updates = 0.9s) should be extended to 5s remaining
-        // However, on the final frame (5.1 - 4.6 = 0.5s delta), after extension to 5s, it is updated (decayed) by 0.5s.
-        // So remaining1 = 5.0 - 0.5 = 4.5s.
+        // powerUp1 wird beim Level-Ende auf 5.0 s Restlaufzeit gesetzt; mit Fixed-Timestep passiert das
+        // exakt im Übergangs-Schritt, danach decayt sie nur noch den Rest des Advance (~0.1 s) → ~4.9 s
+        // (früher 4.5 s, als der grobe Einzelschritt 0.5 s am Stück abzog).
         let remaining1 = powerUp1.lifetime - powerUp1.elapsedTime
-        XCTAssertEqual(remaining1, 4.5, accuracy: 0.1)
+        XCTAssertEqual(remaining1, 4.9, accuracy: 0.1)
         
         // powerUp2 remaining lifetime started at 10.0s (capped from 20s).
         // Total deltaTime elapsed: 0.6 + 1.0 + 1.0 + 1.0 + 0.5 = 4.1s.
@@ -1305,9 +1310,11 @@ final class GameCoreTests: XCTestCase {
         XCTAssertTrue(scene.isLevelClearing)
         XCTAssertEqual(scene.activePowerUps.count, 1)
         
-        // Remaining lifetime of powerup should be 8.5 - 0.6s delta = 7.9s.
+        // Mit Fixed-Timestep feuert der Level-Clear-Trigger exakt im Schritt, in dem der Timer 0
+        // erreicht (nach 0.5 s der 0.6-s-Advance); die Verlängerung auf 8.5 s passiert dort, danach
+        // decayt die Power-up nur noch die restlichen ~0.1 s → ~8.4 s (früher 7.9 s im groben Einzelschritt).
         let remainingBeforeTransition = powerUp.lifetime - powerUp.elapsedTime
-        XCTAssertEqual(remainingBeforeTransition, 7.9, accuracy: 0.1)
+        XCTAssertEqual(remainingBeforeTransition, 8.4, accuracy: 0.1)
         
         // Step through the rest of the 3.5s transition:
         scene.update(2.6) // +1.0s -> remaining: 6.9s
@@ -1315,13 +1322,14 @@ final class GameCoreTests: XCTestCase {
         scene.update(4.6) // +1.0s -> remaining: 4.9s
         scene.update(5.1) // +0.5s -> transition ends!
         
-        // Transition ends, so it sets remaining lifetime to 5.0s, and then updates by 0.5s delta.
-        // So remaining should be 5.0 - 0.5 = 4.5s.
+        // Beim Level-Ende wird die Restlaufzeit auf 5.0 s gesetzt; mit Fixed-Timestep passiert das exakt
+        // im Übergangs-Schritt, danach decayt sie nur noch den Rest des Advance (~0.1 s) → ~4.9 s
+        // (früher 4.5 s, als der grobe Einzelschritt 0.5 s am Stück abzog).
         XCTAssertFalse(scene.isLevelClearing)
         XCTAssertEqual(scene.activePowerUps.count, 1)
-        
+
         let finalRemaining = powerUp.lifetime - powerUp.elapsedTime
-        XCTAssertEqual(finalRemaining, 4.5, accuracy: 0.1)
+        XCTAssertEqual(finalRemaining, 4.9, accuracy: 0.1)
     }
     
     func testSpawningSafetyFallback() {
@@ -1829,8 +1837,6 @@ final class GameCoreTests: XCTestCase {
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: seed, startLevel: startLevel, mode: mode)
 
-        let dt: TimeInterval = 1.0 / 60.0
-        let base: TimeInterval = 1000.0
         // Tastenzustände, die wir je nach Frame setzen/lösen (deterministisch).
         var thrustHeld = false
         var rotLeftHeld = false
@@ -1859,7 +1865,7 @@ final class GameCoreTests: XCTestCase {
             if f % 9 == 0 { scene.simulateKeyDown(keyCode: 49) }
             if f % 9 == 1 { scene.simulateKeyUp(keyCode: 49) }
 
-            scene.update(base + Double(f) * dt)
+            scene.advanceOneStep()   // ein fester Sim-Schritt (Fixed-Timestep), deterministisch
         }
         return scene
     }
@@ -1965,24 +1971,23 @@ final class GameCoreTests: XCTestCase {
             InputEvent(frameIndex: 12, keyCode: 13, isDown: true),
             InputEvent(frameIndex: 90, keyCode: 13, isDown: false)
         ]
-        let dt = (0..<300).map { _ in Float(1.0 / 60.0) }
         let original = Replay(seed: 0xCAFEBABE, startLevel: 3, gameMode: .madMeteoroids,
-                              events: events, dtSequence: dt)
+                              events: events, frameCount: 300)
 
         let data = try! original.encoded()
         let restored = try! Replay(data: data)
         XCTAssertEqual(original, restored, "Round-Trip muss das Original exakt erhalten")
 
-        // Größenabschätzung dokumentieren: ~300 Frames dt + paar Events sollten klein bleiben.
-        XCTAssertLessThan(data.count, 8000, "Eine 5-Sekunden-Aufnahme sollte wenige KB groß sein (war \(data.count) B)")
+        // Größenabschätzung dokumentieren: paar Events + frameCount sollten winzig bleiben.
+        XCTAssertLessThan(data.count, 8000, "Eine kurze Aufnahme sollte wenige KB groß sein (war \(data.count) B)")
     }
 
     /// Versions-Tag: eine Aufnahme mit fremdem version-Tag gilt als inkompatibel.
     func testReplayVersionCompatibility() {
-        let ok = Replay(seed: 1, startLevel: 1, gameMode: .ancientAsteroids, events: [], dtSequence: [])
+        let ok = Replay(seed: 1, startLevel: 1, gameMode: .ancientAsteroids, events: [], frameCount: 0)
         XCTAssertTrue(ok.isCompatible)
         let stale = Replay(version: Replay.currentLogicVersion + 1, seed: 1, startLevel: 1,
-                           gameMode: .ancientAsteroids, events: [], dtSequence: [])
+                           gameMode: .ancientAsteroids, events: [], frameCount: 0)
         XCTAssertFalse(stale.isCompatible, "Fremdes version-Tag muss als inkompatibel erkannt werden")
     }
 
@@ -2001,7 +2006,7 @@ final class GameCoreTests: XCTestCase {
             if f == 150 { s.simulateKeyUp(keyCode: 2) }       // rechts aus
             if f % 7 == 0 { s.simulateKeyDown(keyCode: 49); fireDown = true }
             else if fireDown { s.simulateKeyUp(keyCode: 49); fireDown = false }
-            s.update(base + Double(f) / 60.0)
+            s.advanceOneStep()   // ein fester Sim-Schritt; `base` ist hier nicht mehr nötig
         }
     }
 
@@ -2023,8 +2028,8 @@ final class GameCoreTests: XCTestCase {
         guard let replay = a.currentReplayForTesting() else {
             return XCTFail("Es muss eine laufende Aufnahme geben")
         }
-        // Frame 0 ist der Priming-Frame (kein dt) → frameCount = frames - 1.
-        XCTAssertEqual(replay.frameCount, frames - 1)
+        // Fixed-Timestep, getrieben per advanceOneStep: ein Schritt pro Skript-Iteration → frameCount = frames.
+        XCTAssertEqual(replay.frameCount, frames)
         XCTAssertFalse(replay.events.isEmpty, "Das Skript muss Tastenereignisse erzeugt haben")
 
         // --- Wiedergabe in frische Szene ---
@@ -2032,10 +2037,10 @@ final class GameCoreTests: XCTestCase {
         let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewB.presentScene(b)
         XCTAssertTrue(b.startReplay(replay), "Kompatibles Replay muss starten")
-        // Priming-Frame + alle aufgezeichneten Frames (GENAU – ein weiterer Frame würde finishReplay
-        // auslösen und damit zum Startbildschirm wechseln, also den Spielzustand verwerfen).
-        for f in 0...replay.frameCount {
-            b.update(2000.0 + Double(f) / 60.0)
+        // GENAU alle aufgezeichneten Schritte abspielen – ein weiterer Schritt würde finishReplay
+        // auslösen und zum Startbildschirm wechseln (Spielzustand verworfen).
+        for _ in 0..<replay.frameCount {
+            b.advanceOneStep()
         }
 
         XCTAssertEqual(stateSnapshot(b), snapA, "Wiedergabe muss die Aufnahme bit-genau reproduzieren")
@@ -2062,7 +2067,7 @@ final class GameCoreTests: XCTestCase {
                 if wantLeft { a.simulateKeyDown(keyCode: 0) } else { a.simulateKeyUp(keyCode: 0) }
                 rotLeft = wantLeft
             }
-            a.update(1000.0 + Double(f) / 60.0)
+            a.advanceOneStep()
         }
         XCTAssertEqual(a.gameState, .playing, "Auto-Feuer-Lauf darf im Fenster nicht enden")
         let snapA = stateSnapshot(a)
@@ -2076,8 +2081,8 @@ final class GameCoreTests: XCTestCase {
         XCTAssertFalse(b.autoFire, "Frische Szene hat Auto-Feuer per Default aus")
         XCTAssertTrue(b.startReplay(replay))
         XCTAssertTrue(b.autoFire, "startReplay muss den Auto-Feuer-Zustand der Aufnahme wiederherstellen")
-        for f in 0...replay.frameCount {
-            b.update(2000.0 + Double(f) / 60.0)
+        for _ in 0..<replay.frameCount {
+            b.advanceOneStep()
         }
         XCTAssertEqual(stateSnapshot(b), snapA, "Auto-Feuer-Lauf muss sich bit-genau reproduzieren")
     }
@@ -2085,7 +2090,7 @@ final class GameCoreTests: XCTestCase {
     /// Round-Trip mit gesetztem autoFire-Feld (Persistenz des neuen Feldes).
     func testReplayAutoFieldRoundTrips() {
         let r = Replay(seed: 5, startLevel: 2, gameMode: .ancientAsteroids,
-                       events: [], dtSequence: [Float(1.0/60.0)], autoFire: true)
+                       events: [], frameCount: 1, autoFire: true)
         let restored = try! Replay(data: try! r.encoded())
         XCTAssertTrue(restored.autoFire)
         XCTAssertEqual(r, restored)
@@ -2097,7 +2102,7 @@ final class GameCoreTests: XCTestCase {
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         let stale = Replay(version: Replay.currentLogicVersion + 1, seed: 1, startLevel: 1,
-                           gameMode: .ancientAsteroids, events: [], dtSequence: [Float(1.0/60.0)])
+                           gameMode: .ancientAsteroids, events: [], frameCount: 1)
         XCTAssertFalse(scene.startReplay(stale), "Inkompatible Aufnahme darf nicht starten")
         XCTAssertFalse(scene.isReplaying)
     }
@@ -2164,9 +2169,9 @@ final class GameCoreTests: XCTestCase {
             return XCTFail("Neugeladene Aufnahme nicht dekodierbar")
         }
         XCTAssertTrue(b.startReplay(restored))
-        // Genau alle Frames konsumieren (kein Abschluss-Frame, sonst Wechsel zum Startbildschirm).
-        for f in 0...restored.frameCount {
-            b.update(2000.0 + Double(f) / 60.0)
+        // Genau alle Schritte konsumieren (kein Abschluss-Schritt, sonst Wechsel zum Startbildschirm).
+        for _ in 0..<restored.frameCount {
+            b.advanceOneStep()
         }
         XCTAssertEqual(stateSnapshot(b), snapA, "Persistierte Aufnahme muss nach Neuladen identisch abspielen")
     }

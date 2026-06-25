@@ -1,12 +1,13 @@
 import Foundation
 
-/// Spielt eine `Replay`-Aufnahme Frame für Frame ab. Der Player ist die Gegenstück-„dumme" Klasse
-/// zum Recorder: Er kennt keine Spiel-Logik, sondern speist nur zum richtigen Frame die
-/// aufgezeichneten Tastenereignisse ein und liefert das aufgezeichnete `dt`.
+/// Spielt eine `Replay`-Aufnahme Schritt für Schritt ab. Der Player ist die Gegenstück-„dumme"
+/// Klasse zum Recorder: Er kennt keine Spiel-Logik, sondern speist nur zum richtigen Schritt die
+/// aufgezeichneten Tastenereignisse ein. Bei Fixed-Timestep ist jeder Schritt gleich lang
+/// (`GameScene.simStep`), darum braucht es kein aufgezeichnetes `dt` mehr.
 ///
-/// Die GameScene fragt pro Frame `nextFrameDt(injectingInto:)`: Erst werden alle Ereignisse dieses
-/// Frames in die Szene eingespeist, dann wird das `dt` zurückgegeben, das die Szene statt der
-/// Echtzeit anwenden soll. Liefert die Methode `nil`, ist die Aufnahme zu Ende.
+/// Die GameScene ruft pro Simulationsschritt `advanceStep(injectingInto:)`: Erst werden alle
+/// Ereignisse dieses Schritts eingespeist, dann wird `true` zurückgegeben (Schritt ausführen).
+/// Liefert die Methode `false`, ist die Aufnahme zu Ende.
 public final class ReplayPlayer {
 
     public let replay: Replay
@@ -17,15 +18,17 @@ public final class ReplayPlayer {
         self.replay = replay
     }
 
-    /// Ist die Wiedergabe durch (alle aufgezeichneten Frames abgespielt)?
-    public var isFinished: Bool { Int(currentFrame) >= replay.dtSequence.count }
+    /// Ist die Wiedergabe durch (alle aufgezeichneten Schritte abgespielt)?
+    public var isFinished: Bool { Int(currentFrame) >= replay.frameCount }
 
-    /// Speist die Tastenereignisse des aktuellen Frames in die Szene ein und gibt das anzuwendende
-    /// `dt` zurück. `nil`, wenn keine weiteren Frames mehr vorliegen.
-    public func nextFrameDt(injectingInto scene: GameScene) -> TimeInterval? {
-        guard Int(currentFrame) < replay.dtSequence.count else { return nil }
+    /// Speist die Tastenereignisse des aktuellen Schritts in die Szene ein und schaltet einen Schritt
+    /// weiter. Rückgabe `false`, wenn keine weiteren Schritte mehr vorliegen (dann wurde nichts mehr
+    /// eingespeist).
+    @discardableResult
+    public func advanceStep(injectingInto scene: GameScene) -> Bool {
+        guard Int(currentFrame) < replay.frameCount else { return false }
 
-        // Alle Ereignisse mit frameIndex == aktuellem Frame einspeisen (Reihenfolge wie aufgezeichnet).
+        // Alle Ereignisse mit frameIndex == aktuellem Schritt einspeisen (Reihenfolge wie aufgezeichnet).
         while nextEventIndex < replay.events.count,
               replay.events[nextEventIndex].frameIndex == currentFrame {
             let e = replay.events[nextEventIndex]
@@ -33,8 +36,7 @@ public final class ReplayPlayer {
             nextEventIndex += 1
         }
 
-        let dt = TimeInterval(replay.dtSequence[Int(currentFrame)])
         currentFrame += 1
-        return dt
+        return true
     }
 }

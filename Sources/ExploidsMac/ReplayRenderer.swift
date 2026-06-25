@@ -9,9 +9,9 @@ import GameCore
 /// ganz ohne sichtbares Fenster (passt zur Headless-/Agent-Linie des Projekts). Genutzt vom
 /// CLI-Flag `--render-replay` (siehe Main.swift).
 ///
-/// Ablauf je Frame: `SKRenderer.update(atTime:)` treibt einen Replay-Frame voran (die GameScene
-/// verwirft die Echtzeit und wendet das aufgezeichnete `dt` an + speist die Eingaben ein) UND
-/// verarbeitet die visuellen SKActions; `SKRenderer.render(...)` zeichnet den Zustand in eine
+/// Ablauf je Schritt: `scene.advanceOneStep()` treibt genau einen festen Simulationsschritt voran
+/// (speist die aufgezeichneten Eingaben ein), `SKRenderer.update(atTime:)` tickt die visuellen
+/// SKActions auf dieselbe Sim-Zeit, und `SKRenderer.render(...)` zeichnet den Zustand in eine
 /// Offscreen-Metal-Textur, die als `CGImage` gelesen und per ImageIO zu einem GIF kodiert wird.
 /// (Läuft im CLI-Pfad ohnehin auf dem Main-Thread; bewusst ohne `@MainActor`, damit der Aufruf aus
 /// der nonisolated `Main.main()` wie die übrigen SpriteKit-Aufrufe nur Concurrency-Warnungen erzeugt.)
@@ -22,8 +22,10 @@ enum ReplayRenderer {
         /// Auflösung des GIFs (quadratisch passt zur Szene; Default kompakt für ein Web-GIF).
         var width: Int = 480
         var height: Int = 360
-        /// Nur jeden N-ten Simulationsframe ins GIF aufnehmen (1 = jeden). Reduziert Größe/Länge.
-        var frameStride: Int = 2
+        /// Nur jeden N-ten Simulationsschritt ins GIF aufnehmen. `nil` = automatisch so wählen, dass
+        /// das GIF in Echtzeit läuft (Sim-Rate / fps, z. B. 120/30 → jeder 4.). Explizit setzen, um
+        /// Zeitlupe/Zeitraffer zu erzwingen.
+        var frameStride: Int? = nil
         /// Bilder pro Sekunde im GIF (Abspieltempo). 30 wirkt flüssig.
         var fps: Int = 30
         /// HUD/Overlay (Score, Timer, „REPLAY") ausblenden für ein sauberes Promo-GIF.
@@ -85,23 +87,24 @@ enum ReplayRenderer {
         let viewport = CGRect(x: 0, y: 0, width: width, height: height)
         var images: [CGImage] = []
 
-        // Replay Frame für Frame abspielen; je `frameStride` ein Bild aufnehmen. Solange das Replay
-        // läuft (isReplaying) und der Sicherheitsdeckel nicht erreicht ist.
+        // Simulation hier explizit Schritt für Schritt treiben (advanceOneStep); der normale
+        // Echtzeit-Akkumulator in update(_:) bleibt damit außen vor. `renderer.update(atTime:)` tickt
+        // nur noch die visuellen SKActions auf dieselbe Sim-Zeit. Je `stride` ein Bild aufnehmen.
+        scene.externalStepDriving = true
+        let stride = max(1, options.frameStride ?? (GameScene.simStepsPerSecond / max(1, options.fps)))
         var simFrame = 0
         var simTime: TimeInterval = 0.0
-        let step: TimeInterval = 1.0 / 60.0
-        while scene.isReplaying {
-            simTime += step
-            renderer.update(atTime: simTime) // treibt Replay-Frame + SKActions
-            if !scene.isReplaying { break }   // letzter Frame hat die Wiedergabe beendet
+        while scene.advanceOneStep() {            // ein fester Sim-Schritt; false = Aufnahme zu Ende
+            simTime += GameScene.simStep
+            renderer.update(atTime: simTime)       // SKActions/visuelle Effekte auf simTime ticken
 
-            // Frames vor dem gewünschten Startpunkt nur simulieren, nicht aufnehmen (Ausschnitt-Wahl).
+            // Schritte vor dem gewünschten Startpunkt nur simulieren, nicht aufnehmen (Ausschnitt-Wahl).
             if simFrame < options.startFrame {
                 simFrame += 1
                 continue
             }
 
-            if (simFrame - options.startFrame) % max(1, options.frameStride) == 0 {
+            if (simFrame - options.startFrame) % stride == 0 {
                 if let img = renderFrame(renderer: renderer, commandQueue: commandQueue,
                                          texture: texture, viewport: viewport) {
                     images.append(img)

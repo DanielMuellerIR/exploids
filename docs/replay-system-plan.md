@@ -1,9 +1,8 @@
 # Plan: Deterministisches Replay-System
 
-Stand: 2026-06-24. **Status: Phase 1 + 2 abgeschlossen; Phase 3 bis auf 3.1 abgeschlossen.**
-Headless-GIF-Rendering läuft (3.2–3.5). **Offen/zurückgestellt: 3.1 (Fixed-Timestep)** – siehe
-Hinweis dort. Dieses Dokument ist die Arbeitsgrundlage; jeder Unterschritt hat ein prüfbares
-Erfolgskriterium.
+Stand: 2026-06-25. **Status: Phase 1 + 2 + 3 vollständig abgeschlossen** (inkl. 3.1 Fixed-Timestep,
+umgesetzt in v0.12.0; Spielgefühl über Playtest abzunehmen). Dieses Dokument ist die
+Arbeitsgrundlage; jeder Unterschritt hat ein prüfbares Erfolgskriterium.
 
 **Umsetzungsnotiz Phase 2 (erledigt):** `Replay` (Codable, kompakte Binär-Plist) + `ReplayRecorder`
 + `ReplayPlayer`. Jeder Lauf wird aufgezeichnet (Seed + Eingaben + Float-`dt`-Folge), bei Game Over
@@ -18,9 +17,17 @@ ExploidsMac-Target): `SKRenderer` + Offscreen-Metal-Textur, `update(atTime:)` tr
 (`setHUDHiddenForRender`). CLI: `exploids --render-replay <file> --out <gif> [--scale S --fps N
 --stride N --show-hud]`, `--export-replay <i> --out <file>`, `--render-demo --out <gif>` (skriptet
 intern einen Lauf – Pipeline-Selbsttest). Verifiziert: erzeugt gültige GIFs mit echtem Spielinhalt
-(Schiff/Asteroiden/Laser/Effekte), cursorfrei. **3.1 NICHT umgesetzt** (siehe Phase-3-Block):
-höchstes Risiko (Spielgefühl), für das GIF nicht nötig, da das dt-basierte Replay bereits bit-exakt
-reproduziert – braucht Daniels Playtest.
+(Schiff/Asteroiden/Laser/Effekte), cursorfrei.
+
+**Umsetzungsnotiz 3.1 (erledigt, v0.12.0):** Fixed-Timestep. `update(_:)` summiert die reale
+Frame-Zeit in einem Akkumulator und treibt die Simulation in festen Schritten (`GameScene.simStep`
+= 1/120 s) über `advanceOneStep()` → `stepSimulation(deltaTime:)`. Damit hängt ein Lauf nur noch an
+(Seed + Eingaben): das `Replay` speichert statt der dt-Folge nur noch `frameCount` (Format v3, alte
+v2-Aufnahmen werden abgelehnt). Headless Renderer und Tests treiben die Sim direkt per
+`advanceOneStep()` (kein Echtzeit-Akkumulator, `externalStepDriving`). Den Catch-up nach einem
+Hänger deckeln die App-Hosts über `maxFrameDelta` (0.25 s); Tests lassen ihn aus (Default
+`.infinity`), um per großem `update(_:)`-Sprung deterministisch vorzuspulen. 93 Tests grün;
+**Spielgefühl über Playtest abzunehmen.**
 
 **Umsetzungsnotiz Phase 1 (erledigt):** PRNG `GameRandom` (SplitMix64) eingeführt; alle
 gameplay-relevanten `.random`-Aufrufe ziehen aus einem pro Lauf geseedeten `rng` (Entities über
@@ -186,12 +193,9 @@ Noch kein Replay.
 
 ## Phase 3 — Fixed-Timestep + headless GIF
 
-> **ZURÜCKGESTELLT (2026-06-24).** 3.1 wurde bewusst NICHT umgesetzt: Es ist das höchste Risiko im
-> Projekt (Spielgefühl muss identisch bleiben – nur per manuellem Playtest verifizierbar) und für
-> das eigentliche Ziel (Promo-GIF) nicht nötig, weil die dt-basierte Wiedergabe aus Phase 2 bereits
-> bit-exakt reproduziert. Die Aufnahmen tragen daher weiterhin die `dt`-Folge (als `Float`, kompakt).
-> Wenn gewünscht, kann 3.1 später separat angegangen und von Daniel im Spielgefühl abgenommen werden;
-> erst danach dürfte die `dt`-Folge aus dem Format entfallen.
+> **ERLEDIGT (2026-06-25, v0.12.0).** 3.1 ist umgesetzt: Fixed-Timestep über einen Akkumulator;
+> die Aufnahmen tragen keine `dt`-Folge mehr (nur `frameCount`, Format v3). Auf 120 Hz im Idealfall
+> ein Sim-Schritt pro Bild wie zuvor; das Spielgefühl ist final über einen Playtest abzunehmen.
 
 ### 3.1 — Update-Schleife auf Fixed-Timestep umstellen
 - **Datei:** `GameScene.swift`.
@@ -200,8 +204,8 @@ Noch kein Replay.
   Darstellung interpolieren. Danach braucht das Replay **keine `dt`-Folge** mehr (nur Seed + Inputs).
 - **Risiko (höchstes im Projekt):** Das **Spielgefühl muss identisch bleiben**. Sorgfältiges Tuning;
   die Determinismus-Probe als Wächter.
-- **Erfolgskriterium:** Spielgefühl unverändert (manuell); Determinismus-Probe besteht **nur** mit
-  Seed + Inputs (ohne dt); alle Tests grün.
+- **Erfolgskriterium:** Spielgefühl unverändert (manuell, Playtest ausstehend); Determinismus-Probe
+  besteht **nur** mit Seed + Inputs (ohne dt) — erfüllt; alle 93 Tests grün. **✓ (v0.12.0)**
 
 ### 3.2 — Simulation von der Darstellung entkoppeln (headless-fähig)
 - **Datei:** `GameScene.swift`.

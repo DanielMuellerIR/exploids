@@ -1,11 +1,12 @@
 import Foundation
 
 /// Zeichnet einen laufenden Spieldurchlauf auf: Anfangsbedingungen (Seed/Level/Modus), alle
-/// Tastenereignisse und das pro Frame angewandte `dt`. Aus dem Gesammelten entsteht am Ende ein
-/// `Replay` (siehe `Replay.swift`).
+/// Tastenereignisse und die Anzahl der Simulationsschritte. Aus dem Gesammelten entsteht am Ende ein
+/// `Replay` (siehe `Replay.swift`). Bei Fixed-Timestep ist jeder Schritt gleich lang
+/// (`GameScene.simStep`), darum genügt die Schrittzahl – kein `dt` mehr nötig.
 ///
 /// Der Recorder ist bewusst „dumm": Er weiß nichts über Spiel-Logik, er hängt nur Werte an. Die
-/// GameScene ruft `recordEvent` in den Tasten-Handlern und `recordFrame` einmal pro Simulationsframe.
+/// GameScene ruft `recordEvent` in den Tasten-Handlern und `recordStep` einmal pro Simulationsschritt.
 public final class ReplayRecorder {
 
     private let seed: UInt64
@@ -14,7 +15,7 @@ public final class ReplayRecorder {
     private let autoFire: Bool
 
     private var events: [InputEvent] = []
-    private var dts: [Float] = []
+    private var steps: UInt32 = 0
 
     public init(seed: UInt64, startLevel: Int, gameMode: GameMode, autoFire: Bool) {
         self.seed = seed
@@ -23,24 +24,24 @@ public final class ReplayRecorder {
         self.autoFire = autoFire
     }
 
-    /// Index des nächsten aufzuzeichnenden Frames (= Anzahl bereits aufgezeichneter Frames). Ein
-    /// Tastenereignis, das jetzt eintrifft, gehört zu genau diesem (noch kommenden) Frame.
-    public var nextFrameIndex: UInt32 { UInt32(dts.count) }
+    /// Index des nächsten aufzuzeichnenden Schritts (= Anzahl bereits aufgezeichneter Schritte). Ein
+    /// Tastenereignis, das jetzt eintrifft, gehört zu genau diesem (noch kommenden) Schritt.
+    public var nextFrameIndex: UInt32 { steps }
 
-    /// Hält ein Tastenereignis fest (mit dem aktuellen Frame-Index).
+    /// Hält ein Tastenereignis fest (mit dem aktuellen Schritt-Index).
     public func recordEvent(keyCode: UInt16, isDown: Bool) {
         events.append(InputEvent(frameIndex: nextFrameIndex, keyCode: keyCode, isDown: isDown))
     }
 
-    /// Hält das in diesem Frame angewandte `dt` fest.
-    public func recordFrame(dt: TimeInterval) {
-        dts.append(Float(dt))
+    /// Zählt einen ausgeführten Simulationsschritt mit.
+    public func recordStep() {
+        steps += 1
     }
 
     /// Baut aus dem bisher Gesammelten eine `Replay`-Aufnahme. Nicht-destruktiv: kann auch
     /// zwischendurch (z. B. in Tests) aufgerufen werden, ohne die Aufnahme zu beenden.
     public func makeReplay() -> Replay {
         Replay(seed: seed, startLevel: startLevel, gameMode: gameMode,
-               events: events, dtSequence: dts, autoFire: autoFire)
+               events: events, frameCount: Int(steps), autoFire: autoFire)
     }
 }

@@ -2,6 +2,18 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.12.0] — 2026-06-25
+- Fixed-timestep simulation: the game loop now advances in fixed steps (1/120 s) driven by a
+  time accumulator, decoupled from the display refresh rate, instead of integrating one variable
+  step per frame. On 120 Hz this is effectively one step per frame as before; on other refresh
+  rates the simulation stays consistent.
+- Because every step is the same length, a replay no longer needs the recorded per-frame `dt`
+  sequence — it depends only on (seed + inputs). Replay format bumped to v3; older replays
+  (v2, variable timestep) are rejected as incompatible.
+- The headless GIF renderer drives the simulation one fixed step at a time and picks a capture
+  stride automatically so the GIF plays in real time (`--stride` still overrides).
+- No gameplay-balance changes intended; this is an engine/feel change to be confirmed by playtest.
+
 ## [0.11.1] — 2026-06-24
 - Replay fix: the auto-fire setting is now recorded in a replay and restored on playback. Before
   this, a run played with auto-fire on would not reproduce (the replayed ship barely fired and died

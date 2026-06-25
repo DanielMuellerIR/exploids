@@ -63,6 +63,9 @@ final class GameViewController: UIViewController {
         s.isCompactLayout = true
         s.showsHighScoresOnStartScreen = false
         s.autoFire = true   // Auto-Feuer standardmäßig an (kein Dauertippen, ideal fürs iPhone)
+        // Fixed-Timestep: nach einem Hänger (App im Hintergrund, Anruf) höchstens 0.25 s Echtzeit
+        // als Sim-Schritte nachholen, statt die ganze Pause aufzuarbeiten.
+        s.maxFrameDelta = 0.25
 
         // onQuit absichtlich NICHT setzen: iOS-Apps dürfen sich nicht selbst beenden (Apple HIG).
 

@@ -36,6 +36,9 @@ public final class GameWindow: NSWindow {
         scene.scaleMode = .resizeFill
         scene.backgroundColor = .black
         scene.autoFire = true   // Auto-Feuer standardmäßig an (Spieler müssen nicht selbst schießen)
+        // Fixed-Timestep: nach einem Hänger (Fenster-Drag, App im Hintergrund) höchstens 0.25 s
+        // Echtzeit als Sim-Schritte nachholen, statt die ganze Pause aufzuarbeiten.
+        scene.maxFrameDelta = 0.25
         // Cmd+Q über die Scene an AppKit weiterreichen: GameCore ist plattformunabhängig und kennt
         // NSApplication nicht mehr; die macOS-Shell legt hier das Beenden-Verhalten fest.
         scene.onQuit = { NSApplication.shared.terminate(nil) }

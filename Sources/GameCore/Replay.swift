@@ -25,22 +25,28 @@ public struct InputEvent: Codable, Equatable, Sendable {
 /// - `seed`: Startwert des deterministischen PRNG (`GameRandom`).
 /// - `startLevel` / `gameMode`: Anfangsbedingungen des Laufs.
 /// - `events`: alle Tastenereignisse in zeitlicher Reihenfolge.
-/// - `dtSequence`: das pro Frame angewandte `dt` (Sekunden, als `Float`). Nötig, solange das Spiel
-///   einen variablen Zeitschritt hat (Phase 2); ab Fixed-Timestep (Phase 3) entfällt das.
+/// - `frameCount`: Anzahl der Simulationsschritte (fester Zeitschritt). Ersetzt die früher
+///   gespeicherte `dt`-Folge (Phase 3, Fixed-Timestep).
 public struct Replay: Codable, Equatable, Sendable {
 
     /// Aktuelles Logik-Versions-Tag. **Erhöhen, sobald eine Änderung die Simulation bei gleichem
     /// Seed/Input anders laufen lässt** (sonst werden alte Replays falsch wiedergegeben).
     /// v2: Auto-Feuer-Zustand wird in der Aufnahme gespeichert und beim Abspielen wiederhergestellt
     ///     (vorher fehlte er → mit Auto-Feuer gespielte Läufe ließen sich nicht reproduzieren).
-    public static let currentLogicVersion: Int = 2
+    /// v3: Fixed-Timestep. Die Simulation läuft in festen Schritten (`GameScene.simStep`), daher
+    ///     hängt ein Lauf nur noch an (Seed + Eingaben) – die `dt`-Folge entfällt; gespeichert wird
+    ///     nur die Anzahl der Simulationsschritte (`frameCount`). v2-Aufnahmen (variabler Zeitschritt)
+    ///     sind damit inkompatibel und werden beim Abspielen abgelehnt.
+    public static let currentLogicVersion: Int = 3
 
     public let version: Int
     public let seed: UInt64
     public let startLevel: Int
     public let gameMode: GameMode
     public let events: [InputEvent]
-    public let dtSequence: [Float]
+    /// Anzahl der Simulationsschritte des Laufs. Bei Fixed-Timestep reicht das (zusammen mit Seed +
+    /// Eingaben) zur bit-exakten Wiedergabe – der Player treibt genau so viele Schritte.
+    public let frameCount: Int
     /// War Auto-Feuer beim aufgezeichneten Lauf aktiv? Auto-Feuer lässt das Schiff in `update()`
     /// ohne Tastendruck schießen und beeinflusst damit den Spielverlauf (Sim-Zustand). Muss daher
     /// fürs Replay festgehalten und wiederhergestellt werden. Bei alten Aufnahmen ohne dieses Feld
@@ -52,21 +58,22 @@ public struct Replay: Codable, Equatable, Sendable {
                 startLevel: Int,
                 gameMode: GameMode,
                 events: [InputEvent],
-                dtSequence: [Float],
+                frameCount: Int,
                 autoFire: Bool = false) {
         self.version = version
         self.seed = seed
         self.startLevel = startLevel
         self.gameMode = gameMode
         self.events = events
-        self.dtSequence = dtSequence
+        self.frameCount = frameCount
         self.autoFire = autoFire
     }
 
-    // Rückwärtskompatible Dekodierung: Aufnahmen von vor dem autoFire-Fix haben das Feld nicht →
-    // dann `false`. Alle anderen Felder sind Pflicht.
+    // `dtSequence` bleibt nur als Legacy-Decodier-Schlüssel: alte v2-Aufnahmen tragen statt
+    // `frameCount` noch die dt-Folge. Daraus leiten wir die Schrittzahl ab, damit das Dekodieren
+    // nicht wirft – die Aufnahme wird dann ohnehin über `isCompatible` (v3) abgelehnt.
     private enum CodingKeys: String, CodingKey {
-        case version, seed, startLevel, gameMode, events, dtSequence, autoFire
+        case version, seed, startLevel, gameMode, events, frameCount, autoFire, dtSequence
     }
 
     public init(from decoder: Decoder) throws {
@@ -76,12 +83,26 @@ public struct Replay: Codable, Equatable, Sendable {
         self.startLevel = try c.decode(Int.self, forKey: .startLevel)
         self.gameMode = try c.decode(GameMode.self, forKey: .gameMode)
         self.events = try c.decode([InputEvent].self, forKey: .events)
-        self.dtSequence = try c.decode([Float].self, forKey: .dtSequence)
+        if let fc = try c.decodeIfPresent(Int.self, forKey: .frameCount) {
+            self.frameCount = fc
+        } else {
+            // Legacy v2: aus der dt-Folge ableiten (Aufnahme ist über `isCompatible` ohnehin raus).
+            self.frameCount = (try c.decodeIfPresent([Float].self, forKey: .dtSequence))?.count ?? 0
+        }
         self.autoFire = try c.decodeIfPresent(Bool.self, forKey: .autoFire) ?? false
     }
 
-    /// Anzahl der aufgezeichneten Simulationsframes.
-    public var frameCount: Int { dtSequence.count }
+    /// Schreibt die kompakte v3-Form (ohne dt-Folge).
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(version, forKey: .version)
+        try c.encode(seed, forKey: .seed)
+        try c.encode(startLevel, forKey: .startLevel)
+        try c.encode(gameMode, forKey: .gameMode)
+        try c.encode(events, forKey: .events)
+        try c.encode(frameCount, forKey: .frameCount)
+        try c.encode(autoFire, forKey: .autoFire)
+    }
 
     /// Stimmt die Aufnahme mit der aktuellen Spiel-Logik überein? Bei `false` darf sie nicht
     /// abgespielt werden (würde auseinanderdriften).
