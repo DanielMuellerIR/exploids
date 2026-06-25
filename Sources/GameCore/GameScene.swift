@@ -261,6 +261,15 @@ public final class GameScene: SKScene {
     /// an einen Highscore zu hängen (Phase 2.4).
     public private(set) var lastReplay: Replay?
 
+    /// Verzeichnis, in das bei Game Over die Aufnahme JEDES Laufs als Datei geschrieben wird –
+    /// unabhängig davon, ob der Lauf ein Highscore wird. Damit lässt sich nach einem guten Spiel ein
+    /// GIF aus dem letzten Lauf rendern, ohne dass er in die Highscore-Liste muss. `nil` = aus
+    /// (Default für Tests/Headless, damit kein Test echte Dateien schreibt); die App-Hosts (ExploidsMac)
+    /// setzen es auf das Replay-Archiv.
+    public var replaySaveDirectory: URL?
+    /// Wie viele Aufnahmedateien das Archiv behält (älteste werden beim Überlauf gelöscht).
+    public var replayArchiveLimit: Int = 40
+
     /// Headless-Render-Modus: HUD/Overlay (Score, Timer, Level, Leben, „REPLAY") dauerhaft
     /// ausgeblendet, damit ein gerendertes Promo-GIF sauber bleibt (Phase 3.5).
     private var renderHUDHidden = false
@@ -2306,6 +2315,7 @@ public final class GameScene: SKScene {
         if let recorder = recorder {
             lastReplay = recorder.makeReplay()
             self.recorder = nil
+            if let replay = lastReplay { archiveReplayIfEnabled(replay) }
         }
 
         ship.isHidden = true
@@ -3491,6 +3501,54 @@ public final class GameScene: SKScene {
             print("Failed to encode high scores: \(error)")
         }
     }
+
+    /// Leert die Highscore-Liste und persistiert die leere Liste. Einstiegspunkt für das CLI-Flag
+    /// `--reset-highscores`, wenn die gespeicherten Werte zu hoch geworden sind, um noch reinzukommen.
+    public func clearHighScores() {
+        highScores = []
+        saveHighScores()
+    }
+
+    // MARK: - Replay-Archiv (Aufnahmen als Dateien)
+
+    /// Schreibt die Aufnahme als Datei ins `replaySaveDirectory` (falls gesetzt) und hält das Archiv
+    /// auf `replayArchiveLimit` begrenzt. Best-effort: Fehler werden geloggt, nie geworfen. Wird bei
+    /// Game Over für JEDEN Lauf aufgerufen (nicht nur bei Highscore), damit sich nach einem guten Spiel
+    /// ein GIF aus dem letzten Lauf rendern lässt.
+    private func archiveReplayIfEnabled(_ replay: Replay) {
+        guard let dir = replaySaveDirectory else { return }
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            // Zeitstempel-Präfix (Date() NUR hier für den Dateinamen – nicht im Gameplay-Pfad) + Score
+            // + Level machen die Datei sortierbar und auswählbar („letztes/bestes Spiel").
+            let stamp = GameScene.replayTimestampFormatter.string(from: Date())
+            let url = dir.appendingPathComponent("\(stamp)_score-\(score)_lvl-\(currentLevel).replay")
+            try replay.encoded().write(to: url)
+            pruneReplayArchive(in: dir, keeping: replayArchiveLimit)
+        } catch {
+            print("Replay-Archiv: Schreiben fehlgeschlagen: \(error)")
+        }
+    }
+
+    /// Löscht die ältesten `.replay`-Dateien, bis höchstens `limit` übrig sind (nach Name = Zeit sortiert).
+    private func pruneReplayArchive(in dir: URL, keeping limit: Int) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+            .filter({ $0.pathExtension == "replay" }), files.count > limit else { return }
+        let oldestFirst = files.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        for url in oldestFirst.prefix(files.count - limit) {
+            try? fm.removeItem(at: url)
+        }
+    }
+
+    /// Stabiler, sortierbarer Zeitstempel für Archiv-Dateinamen (lokale Zeit, POSIX-Locale).
+    private static let replayTimestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd_HHmmss"
+        return f
+    }()
     
     public func isNewHighScore(score: Int) -> Bool {
         if highScores.count < 5 { return true }

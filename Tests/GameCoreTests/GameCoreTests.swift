@@ -2241,5 +2241,34 @@ final class GameCoreTests: XCTestCase {
         XCTAssertFalse(scene.watchHighScoreReplay(at: -1), "Negativer Index startet nichts")
         XCTAssertFalse(scene.isReplaying)
     }
+
+    /// Replay-Archiv: Bei Game Over wird die Aufnahme als Datei ins gesetzte Verzeichnis geschrieben –
+    /// auch wenn der Lauf KEIN Highscore ist (Voraussetzung, um nach einem guten Spiel ein GIF zu rendern).
+    func testReplayArchivedToDiskOnGameOver() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exploids-replay-archive-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.replaySaveDirectory = tmp
+        scene.startNewGameForTesting(seed: 0xAABB, startLevel: 1)
+        driveNoThrustScript(scene, frames: 40, base: 1000.0)
+
+        // Game Over erzwingen (kein Schild/Extra-Leben → Game Over).
+        var guardCount = 0
+        while scene.gameState == .playing && guardCount < 5 {
+            scene.damageShipForTesting(); guardCount += 1
+        }
+
+        let files = ((try? FileManager.default.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "replay" }
+        XCTAssertEqual(files.count, 1, "Bei Game Over muss genau eine Aufnahme im Archiv liegen")
+        // Die Datei muss eine dekodierbare, kompatible Aufnahme mit dem Seed des Laufs sein.
+        let replay = try Replay(data: try Data(contentsOf: files[0]))
+        XCTAssertTrue(replay.isCompatible)
+        XCTAssertEqual(replay.seed, 0xAABB)
+    }
 }
 

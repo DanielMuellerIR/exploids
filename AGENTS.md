@@ -288,6 +288,13 @@ ExploidsMac-Target treibt die Sim direkt per `advanceOneStep()` (`externalStepDr
 automatisch auf Echtzeit. **Replay-Format v3** (Fixed-Timestep, ohne dt-Folge); v2-Aufnahmen (variabler
 Zeitschritt, mit Auto-Feuer) werden als inkompatibel abgelehnt.
 
+**Replay-Archiv (seit v0.12.0):** Bei Game Over wird die Aufnahme JEDES Laufs als Datei nach
+`~/Library/Application Support/Exploids/replays` geschrieben (host-gesetzt über `replaySaveDirectory`;
+Default aus, damit Tests/Headless nichts schreiben) — unabhängig vom Highscore, damit sich nach einem
+guten Spiel ein GIF rendern lässt, ohne dass der Lauf in die Liste muss. CLI:
+`exploids --render-last-replay --out <gif>` (rendert die neueste Aufnahme), `--reset-highscores`
+(leert die Highscore-Liste; über die App-Binary bei beendetem Spiel ausführen).
+
 **Voller Plan + Erfolgskriterien:** [`docs/replay-system-plan.md`](docs/replay-system-plan.md)
 (Phase 1 + 2 + 3 vollständig, inkl. 3.1 Fixed-Timestep). **Spielgefühl** des Fixed-Timestep ist final
 über einen Playtest abzunehmen (auf 120 Hz im Idealfall ein Sim-Schritt pro Bild wie zuvor). **Bekannte

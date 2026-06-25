@@ -245,6 +245,11 @@ struct Main {
                             Headlessly render a replay file to an animated GIF (no window). Default
                             scale 480x360, fps 30, stride auto (real-time), HUD hidden. --from picks a start frame
                             (segment of a long run); --auto-fire forces auto-fire on for old replays.
+              --render-last-replay --out <gif> [same options as --render-replay]
+                            Render the newest archived replay (the last game played) to a GIF. Replays
+                            are auto-saved to ~/Library/Application Support/Exploids/replays on game over.
+              --reset-highscores
+                            Clear the saved high-score list. Run via the app binary with the game closed.
               --replay-verify <file> [--auto-fire]
                             Replay a file headlessly (no render) and print the final state — diagnostic.
               --version, -v Show application version.
@@ -266,6 +271,16 @@ struct Main {
         // 2c. Headless: Replay-Datei zu animiertem GIF rendern (cursorfrei, reproduzierbar).
         if let i = arguments.firstIndex(of: "--render-replay") {
             runRenderReplay(arguments: arguments, flagIndex: i)
+        }
+
+        // 2c1. Headless: die NEUESTE Archiv-Aufnahme (letztes gespieltes Spiel) zu GIF rendern.
+        if arguments.contains("--render-last-replay") {
+            runRenderLastReplay(arguments: arguments)
+        }
+
+        // 2c1b. Highscore-Liste leeren (über die App-Binary ausführen; Spiel vorher beenden).
+        if arguments.contains("--reset-highscores") {
+            runResetHighScores()
         }
 
         // 2c2. Diagnose: Replay über den getesteten scene.update()-Pfad fahren (ohne Rendering) und
@@ -438,12 +453,53 @@ struct Main {
         }
     }
 
+    /// Verzeichnis fürs Replay-Archiv: `~/Library/Application Support/Exploids/replays`. Gemeinsam
+    /// genutzt vom Spiel (Auto-Speichern bei Game Over, siehe GameWindow) und den Render-CLI-Flags.
+    static func replayArchiveDirectory() -> URL {
+        let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                 appropriateFor: nil, create: false))
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent("Exploids/replays", isDirectory: true)
+    }
+
+    /// `--reset-highscores`: leert die gespeicherte Highscore-Liste und beendet. Danach landen die
+    /// nächsten Läufe wieder in der Liste. Über die App-Binary ausführen (trifft die Bundle-Defaults-
+    /// Domain) und nur bei beendetem Spiel (ein laufendes überschreibt die Liste beim nächsten Game Over).
+    private static func runResetHighScores() {
+        let scene = GameScene(size: CGSize(width: 800, height: 600))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
+        view.presentScene(scene)
+        scene.clearHighScores()
+        print("Highscores gelöscht (leere Liste gespeichert).")
+        exit(0)
+    }
+
+    /// `--render-last-replay --out <gif> [...]`: rendert die NEUESTE Aufnahme aus dem Replay-Archiv
+    /// (das zuletzt gespielte Spiel) zu einem GIF – unabhängig davon, ob der Lauf ein Highscore war.
+    private static func runRenderLastReplay(arguments: [String]) {
+        let dir = replayArchiveDirectory()
+        let newest = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension == "replay" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .last
+        guard let url = newest else {
+            FileHandle.standardError.write(Data("Fehler: keine Aufnahme im Archiv \(dir.path).\n".utf8)); exit(3)
+        }
+        print("Letzte Aufnahme: \(url.lastPathComponent)")
+        renderReplayFile(inPath: url.path, arguments: arguments)
+    }
+
     /// `--render-replay <file> --out <gif> [...]`: rendert eine Replay-Datei headless zu einem GIF.
     private static func runRenderReplay(arguments: [String], flagIndex: Int) {
         guard flagIndex + 1 < arguments.count else {
             FileHandle.standardError.write(Data("Fehler: --render-replay braucht eine Datei.\n".utf8)); exit(2)
         }
-        let inPath = arguments[flagIndex + 1]
+        renderReplayFile(inPath: arguments[flagIndex + 1], arguments: arguments)
+    }
+
+    /// Gemeinsamer Render-Kern für `--render-replay` und `--render-last-replay`: liest die Datei,
+    /// baut die Render-Optionen aus den Argumenten und schreibt das GIF. Beendet den Prozess.
+    private static func renderReplayFile(inPath: String, arguments: [String]) {
         guard let outPath = argValue(arguments, "--out") else {
             FileHandle.standardError.write(Data("Fehler: --out <gif> fehlt.\n".utf8)); exit(2)
         }

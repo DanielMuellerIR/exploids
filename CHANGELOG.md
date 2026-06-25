@@ -12,6 +12,11 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
   (v2, variable timestep) are rejected as incompatible.
 - The headless GIF renderer drives the simulation one fixed step at a time and picks a capture
   stride automatically so the GIF plays in real time (`--stride` still overrides).
+- Replays are now auto-saved to disk on every game over (not only high-score runs), under
+  `~/Library/Application Support/Exploids/replays`, so a good run can be turned into a GIF even if
+  it didn't make the board. New CLI `--render-last-replay --out <gif>` renders the most recent one.
+- New CLI `--reset-highscores` clears the saved high-score list (when the board fills with
+  unbeatable scores).
 - No gameplay-balance changes intended; this is an engine/feel change to be confirmed by playtest.
 
 ## [0.11.1] — 2026-06-24
