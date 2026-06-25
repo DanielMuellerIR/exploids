@@ -30,7 +30,7 @@ No Xcode project — a Swift Package Manager executable compiled into a `.app` b
 ./build-app.sh                                   # build -> Exploids.app (double-clickable)
 open Exploids.app                                # launch
 .build/release/exploids                          # launch the bare binary (logs in the terminal)
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run the 90 unit tests
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run the 93 unit tests
 ```
 
 ### Signed + notarized DMG
