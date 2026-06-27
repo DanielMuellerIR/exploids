@@ -333,7 +333,9 @@ public final class GameScene: SKScene {
     /// Aktiver Kopf-Boss („Der Götze"), falls gerade einer im Bild ist (max. einer gleichzeitig).
     public private(set) var activeHead: FloatingHead?
     /// In welchem Level der Kopf-Boss zum ersten Mal auftaucht – pro Spiel zufällig 5–7.
-    private var bossFirstTargetLevel: Int = Int.random(in: 5...7)
+    /// Wird in `transitionTo(.playing)` mit geseedetem `rng` neu gesetzt; der Default hier
+    /// hat keine Wirkung, soll aber einen gültigen Startwert ergeben (nicht 0 oder falsch).
+    private var bossFirstTargetLevel: Int = 5
     /// Ob der erste Auftritt (Level 5–7) bereits erfolgt ist.
     private var bossFirstDone: Bool = false
     /// Ob der Auftritt in Level 10 bereits erfolgt ist.

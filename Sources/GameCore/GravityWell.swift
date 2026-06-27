@@ -127,8 +127,9 @@ public final class GravityWell: SKShapeNode {
         guard distance > eventHorizonRadius, distance < influenceRadius else { return .zero }
         
         // Inverse-squared-distance gravity calculation: a = G / r^2
-        let minDistance = max(eventHorizonRadius, distance)
-        let accelerationMagnitude = gravityStrength / (minDistance * minDistance)
+        // Hinweis: der guard oben stellt sicher, dass distance > eventHorizonRadius gilt,
+        // daher ist min(eventHorizonRadius, distance) immer gleich distance — kein max nötig.
+        let accelerationMagnitude = gravityStrength / (distance * distance)
         
         return CGPoint(
             x: accelerationMagnitude * (dx / distance),

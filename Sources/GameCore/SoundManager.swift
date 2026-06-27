@@ -541,8 +541,12 @@ public final class SoundManager: @unchecked Sendable {
     }
 
     /// Stoppt die gesampelte Kopf-Boss-Stimme sofort (z.B. wenn der Boss zerstört wird).
+    /// Der Lock schützt den Zugriff auf `bossHeadPlayer` konsistent mit `playBossHead()`.
     public func stopBossHead() {
-        bossHeadPlayer?.stop()
+        sampleLock.lock()
+        let player = bossHeadPlayer
+        sampleLock.unlock()
+        player?.stop()
     }
 
     /// Stoppt beide Kopf-Stimm-Varianten (prozedural + Sample) – für sichere Übergänge.
