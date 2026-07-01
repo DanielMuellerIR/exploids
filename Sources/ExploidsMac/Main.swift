@@ -585,7 +585,7 @@ struct Main {
             if arguments.contains("--auto-fire") { options.autoFireOverride = true }
             if arguments.contains("--no-auto-fire") { options.autoFireOverride = false }
             try ReplayRenderer.renderToVideo(replay, outputURL: URL(fileURLWithPath: outPath), options: options)
-            // codereview-ok: Overflow der Frame-/Dauer-Rechnung auf 64-bit unerreichbar (>200 Tage Dauerlauf) — kein Error-Handling für unmögliche Fälle (2026-07-01)
+            // codereview-ok: Double-Division kann nicht trappen (max. Infinity, kein Integer-Overflow); frameCount als Double bleibt exakt bis 2^53 — kein Error-Handling nötig (2026-07-01)
             let secs = Double(replay.frameCount) / Double(GameScene.simStepsPerSecond)
             print(String(format: "Video gerendert: %@ (%d Frames Aufnahme, ~%.0f s Echtzeit)", outPath, replay.frameCount, secs))
             exit(0)
