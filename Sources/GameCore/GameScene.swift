@@ -318,12 +318,7 @@ public final class GameScene: SKScene {
             blackHoleInterval: base.blackHoleInterval
         )
     }
-    
-    /// Dynamically adjusted max asteroids based on level configuration
-    private var maxAsteroidsCount: Int {
-        return currentConfig().maxAsteroids
-    }
-    
+
     // Active Entities
     public private(set) var activeUFOs: [UFO] = []
     public private(set) var activeGravityWells: [GravityWell] = []
@@ -809,8 +804,7 @@ public final class GameScene: SKScene {
         // Play laser sound effect
         SoundManager.shared.playLaser()
     }
-    
-    /// Spawns an R-Type Wave Cannon Charge Shot.
+
     // MARK: - Game Loop
     
     public override func update(_ wallTime: TimeInterval) {
@@ -1672,6 +1666,7 @@ public final class GameScene: SKScene {
         cameraNode.removeAction(forKey: "cameraShake")
         
         var actions: [SKAction] = []
+        // codereview-ok: Kamera-Shake ist ein explizit NICHT-geseedeter Stream ohne Sim-Einfluss — by design (2026-07-01)
         for _ in 0..<numberOfShakes {
             let dx = CGFloat.random(in: -amplitude...amplitude)
             let dy = CGFloat.random(in: -amplitude...amplitude)
@@ -2347,6 +2342,11 @@ public final class GameScene: SKScene {
     
     /// Resets the game state and starts a fresh play session.
     public func restartGame() {
+        // Vorher auf .startScreen setzen, damit in transitionTo(.playing) der Fresh-Game-Zweig
+        // (else) greift und nicht der Resume-Pfad — sonst würde aus .quitConfirmation heraus nur
+        // fortgesetzt statt zurückgesetzt (analog zu startNewGame). Der Doc-Kommentar verspricht
+        // einen echten Reset, also erzwingen wir den Fresh-Game-Pfad in jedem Ausgangszustand.
+        gameState = .startScreen
         transitionTo(.playing)
     }
 
@@ -3742,6 +3742,7 @@ public final class GameScene: SKScene {
     /// des Mad-Modus, damit das rotierende Sternenfeld keine leeren Ecken zeigt.
     private func scatterStarsAcrossField() {
         let r = madFieldRadius()
+        // codereview-ok: Sternenfeld bewusst NICHT geseedet (separater Stream ohne Sim-Einfluss) — by design (2026-07-01)
         for star in stars {
             let angle = CGFloat.random(in: 0..<(2.0 * .pi))
             // sqrt für flächengleiche Verteilung in der Scheibe (sonst Häufung in der Mitte).
@@ -4257,6 +4258,7 @@ public final class GameScene: SKScene {
         )
         
         // Item 6: Large UFO
+        // codereview-ok: UFO nur statische Glossar-Grafik (Init direkt auf position/velocity=.zero); kein Pfad verschiebt es in eine echte Szene — harmlos (2026-07-01)
         let ufoLarge = UFO(isSmall: false, startOnLeft: true, screenSize: .zero)
         ufoLarge.position = .zero
         ufoLarge.velocity = .zero

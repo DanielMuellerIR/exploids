@@ -71,6 +71,7 @@ public final class Ship: SKShapeNode {
                 
                 if chargeLevel >= 1.0 {
                     // Fully charged pulsating indicator
+                    // codereview-ok: Ship-Flacker bewusst NICHT geseedet (separater Stream ohne Sim-Einfluss), rein visuell, kein Gameplay-Bug (2026-07-01)
                     chargeIndicatorNode.strokeColor = Bool.random() ? .white : .orange
                     chargeIndicatorNode.fillColor = SKColor(red: 1.0, green: 0.6, blue: 0.1, alpha: 0.5)
                 } else {
@@ -231,6 +232,7 @@ public final class Ship: SKShapeNode {
             velocity.y += accelY * dt
             
             // Retro flickering flame effect (randomized size/scaling and color)
+            // codereview-ok: Ship-Flacker (flameNode, rein optisch, keine Position/Velocity) per Plan-Doku bewusst vom Determinismus ausgenommen — by design (2026-07-01)
             flameNode.isHidden = false
             let randomScaleX = CGFloat.random(in: 0.7...1.3)
             let randomScaleY = CGFloat.random(in: 0.8...1.2)

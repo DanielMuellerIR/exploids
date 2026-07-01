@@ -363,6 +363,7 @@ public final class SoundManager: @unchecked Sendable {
                 let triangle = 4.0 * abs(norm - 0.5) - 1.0
                 let square = (self.enginePhase.truncatingRemainder(dividingBy: 2.0 * .pi) < .pi) ? 1.0 : -1.0
                 let mixedWave = 0.7 * triangle + 0.3 * square
+                // codereview-ok: SoundManager-Jitter ausdrücklich vom Determinismus/Replay ausgenommen (Plan-Doku, AGENTS.md); Fix optional/niedrige Priorität (2026-07-01)
                 let noise = Double.random(in: -0.05...0.05)
                 
                 var sampleValue = (mixedWave + noise) * finalVolume
