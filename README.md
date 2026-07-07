@@ -76,7 +76,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 
 ## Controls
 
-- **Start screen:** ▲/▼ switch game mode · ◀/▶ (or A/D) choose starting level · Space/Enter start · I glossary · 1–5 watch a high‑score replay
+- **Start screen:** ▲/▼ switch game mode · ◀/▶ choose starting level · Space/Enter start · D (or 30 s idle) watch an autopilot demo · I glossary · 1–5 watch a high‑score replay
 - **In game:** Arrow keys / WASD to fly · Space to fire (hold to charge / sweep the beam) · M toggle music · Esc pause / quit
 - **Replay view:** Esc exits the replay back to the title screen.
 - High scores are saved locally; enter your name on the board when you make the cut.

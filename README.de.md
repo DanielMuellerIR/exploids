@@ -78,7 +78,7 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 
 ## Steuerung
 
-- **Startbildschirm:** ▲/▼ Spielmodus wechseln · ◀/▶ (oder A/D) Startlevel wählen · Leertaste/Enter starten · I Glossar · 1–5 ein Highscore-Replay ansehen
+- **Startbildschirm:** ▲/▼ Spielmodus wechseln · ◀/▶ Startlevel wählen · Leertaste/Enter starten · D (oder 30 s Leerlauf) eine Autopilot-Demo ansehen · I Glossar · 1–5 ein Highscore-Replay ansehen
 - **Im Spiel:** Pfeiltasten / WASD zum Fliegen · Leertaste zum Schießen (halten zum Aufladen / Strahl sweepen) · M Musik an/aus · Esc Pause / Beenden
 - **Replay-Ansicht:** Esc verlässt das Replay zurück zum Startbildschirm.
 - Highscores werden lokal gespeichert; bei einer Platzierung den Namen auf der Liste eintragen.
