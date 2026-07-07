@@ -36,6 +36,10 @@ public final class GameWindow: NSWindow {
         scene.scaleMode = .resizeFill
         scene.backgroundColor = .black
         scene.autoFire = true   // Auto-Feuer standardmäßig an (Spieler müssen nicht selbst schießen)
+        // Attract-/Demo-Modus in der echten App aktivieren: nach 30 s Leerlauf am Startbildschirm
+        // (oder auf Taste „D") spielt ein Autopilot eine Demo; danach 10 s Highscore-Liste + 15 s
+        // Startbildschirm, dann die nächste Persona – immer weiter.
+        scene.attractModeEnabled = true
         // Fixed-Timestep: nach einem Hänger (Fenster-Drag, App im Hintergrund) höchstens 0.25 s
         // Echtzeit als Sim-Schritte nachholen, statt die ganze Pause aufzuarbeiten.
         scene.maxFrameDelta = 0.25

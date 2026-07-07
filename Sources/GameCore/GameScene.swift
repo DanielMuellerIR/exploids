@@ -386,6 +386,42 @@ public final class GameScene: SKScene {
     /// – entspanntes Spielgefühl, ideal fürs iPhone. Umschaltbar (Einstellungen).
     public var autoFire: Bool = false
 
+    // MARK: - Autopilot / Demo-Attract-Modus
+
+    /// Wenn `true`, betreibt die Szene den Attract-/Demo-Kreislauf: nach 30 s Leerlauf am
+    /// Startbildschirm (oder auf Tastendruck „D") spielt ein computergesteuerter Pilot eine Demo,
+    /// danach 10 s Highscore-Liste + 15 s Startbildschirm, dann die nächste Persona – immer weiter.
+    /// Engine-Default aus (Tests/Headless-Render bleiben ruhig); die App-Hosts schalten es an.
+    public var attractModeEnabled: Bool = false
+
+    /// Die aktuell aktive Autopilot-Persona. `nil` = ein Mensch spielt (kein Autopilot). Wird beim
+    /// Start einer Demo gesetzt und beim Verlassen des Demo-Spiels wieder auf `nil` gelegt.
+    private var autopilotPersona: AutopilotPersona?
+
+    /// Läuft gerade ein Demo-Lauf (Autopilot steuert das `.playing`)? Steuert zwei Sonderfälle:
+    /// KEIN Highscore-Namenseintrag bei Game Over und KEINE Aufnahme/Archivierung des Laufs.
+    private var isDemoActive: Bool { autopilotPersona != nil }
+
+    /// Eigener geseedeter Zufallsgenerator NUR für den Autopiloten (Skill-„Zittern"/Jitter). Bewusst
+    /// getrennt vom Gameplay-RNG (`rng`), damit die KI-Entscheidungen den Spielverlauf-Zufall
+    /// (Spawns etc.) nicht verschieben – derselbe Seed erzeugt so mit und ohne Autopilot dieselbe Welt.
+    private var autopilotRng = GameRandom(seed: 0xA0710_5EED)
+
+    /// Index der nächsten Demo-Persona im Roster (reihum).
+    private var nextPersonaIndex: Int = 0
+
+    /// Phasen des Attract-Kreislaufs. Menü-Phasen laufen über eine Echtzeit-Uhr (`attractTimer`),
+    /// die Demo selbst läuft bis zum Game Over.
+    private enum AttractPhase {
+        case idle          // Startbildschirm, wartet auf Mensch ODER 30 s → Demo
+        case demoPlaying   // Autopilot spielt gerade
+        case demoScores    // Nach Demo-Game-Over: Highscore-Liste, 10 s
+        case demoRestScreen // Startbildschirm zwischen zwei Demos, 15 s → nächste Demo
+    }
+    private var attractPhase: AttractPhase = .idle
+    /// In der aktuellen Menü-Attract-Phase verstrichene ECHTZEIT (Sekunden). Nur für idle/scores/rest.
+    private var attractTimer: TimeInterval = 0.0
+
     // Enemy Spawning times
     private var lastUFOSpawnTime: TimeInterval = 0.0
     private var lastGravityWellSpawnTime: TimeInterval = 0.0
@@ -434,6 +470,12 @@ public final class GameScene: SKScene {
     private let glossaryContainer = SKNode()
     private let glossaryStaticContainer = SKNode()
     private let glossaryPromptLabel = SKLabelNode(fontNamed: "Courier")
+
+    /// Startbildschirm-Hinweis „PRESS D FOR DEMO" (nur sichtbar, wenn der Attract-Modus aktiv ist).
+    private let demoPromptLabel = SKLabelNode(fontNamed: "Courier")
+    /// Overlay während eines laufenden Demo-Laufs: zeigt „DEMO — <PERSONA>", damit klar ist, dass
+    /// gerade der Autopilot spielt (und kein Mensch).
+    private let demoOverlayLabel = SKLabelNode(fontNamed: "Courier-Bold")
     /// Y-Position des untersten Glossar-Eintrags (für die Scroll-Schleifengrenzen).
     private var glossaryContentBottom: CGFloat = -750
     /// Untere Scroll-Grenze (Startposition): der oberste Eintrag erscheint von unten.
@@ -571,15 +613,30 @@ public final class GameScene: SKScene {
             if keyCode == 53 { exitReplay() } // Escape
             return
         }
-        // Aufnahme: jedes Tastenereignis im laufenden Spiel festhalten. (Injizierte Replay-Eingaben
-        // tragen keine `characters`/Modifier, lösen also weder den M- noch den Cmd-Q-Zweig aus.)
-        if gameState == .playing {
-            recorder?.recordEvent(keyCode: keyCode, isDown: true)
-        }
-
+        // Cmd+Q beendet immer die App – auch während einer Demo (VOR dem Attract-Abbruch prüfen,
+        // sonst würde Cmd+Q während einer Demo nur die Demo stoppen statt zu beenden).
         if isCommandDown, charactersIgnoringModifiers?.lowercased() == "q" {
             onQuit?()
             return
+        }
+        // Attract-/Demo-Modus: eine echte menschliche Eingabe unterbricht die Automatik. Der
+        // Autopilot steuert NICHT über diesen Handler (er setzt `activeKeys` direkt), darum ist ein
+        // Aufruf hier während einer Demo garantiert der Mensch.
+        if attractModeEnabled && !isInjectingReplay {
+            if isDemoActive || attractPhase == .demoScores || attractPhase == .demoRestScreen {
+                // Läuft eine Demo oder eine Zwischen-Menü-Phase → zurück zum ruhigen Startbildschirm,
+                // Mensch übernimmt. Die auslösende Taste wird bewusst nicht weiter ausgewertet.
+                abortAttractToIdle()
+                return
+            }
+            // Startbildschirm im Leerlauf: jede Eingabe setzt den 30-s-Auto-Demo-Timer zurück.
+            attractTimer = 0
+        }
+        // Aufnahme: jedes Tastenereignis im laufenden Spiel festhalten. (Injizierte Replay-Eingaben
+        // tragen keine `characters`/Modifier, lösen also weder den M- noch den Cmd-Q-Zweig aus.)
+        // Cmd+Q wird bereits oben behandelt (vor dem Attract-Abbruch).
+        if gameState == .playing {
+            recorder?.recordEvent(keyCode: keyCode, isDown: true)
         }
 
         // „M" schaltet die Hintergrundmusik global ein/aus – in jedem Zustand außer der
@@ -609,6 +666,13 @@ public final class GameScene: SKScene {
 
         switch gameState {
         case .startScreen:
+            // Attract-Modus: „D" startet sofort eine Demo. Nur wenn der Attract-Modus aktiv ist –
+            // sonst bleibt „D" der klassische Level-+1-Alias (siehe Rechts-Pfeil-Zweig unten), damit
+            // Tests/Headless-Pfade unverändert bleiben.
+            if attractModeEnabled, keyCode == 2, characters?.lowercased() == "d" {
+                startDemo()
+                return
+            }
             if keyCode == 49 || keyCode == 36 { // Space or Enter
                 currentLevel = selectedStartLevel
                 transitionTo(.playing)
@@ -805,6 +869,254 @@ public final class GameScene: SKScene {
         SoundManager.shared.playLaser()
     }
 
+    // MARK: - Autopilot (Demo/Attract-Modus)
+
+    /// Kürzeste Verbindung (dx,dy) von `from` nach `to` unter Berücksichtigung des Kanten-Wraps
+    /// (Ancient-Modus: Objekte wrappen bei ±size/2). Entscheidend für den Autopiloten – sonst
+    /// erscheint ein über die Naht heranfliegender Asteroid fälschlich „am anderen Ende" und weit weg.
+    private func wrappedDelta(from: CGPoint, to: CGPoint) -> CGPoint {
+        var dx = to.x - from.x
+        var dy = to.y - from.y
+        let w = size.width, h = size.height
+        if dx > w/2 { dx -= w } else if dx < -w/2 { dx += w }
+        if dy > h/2 { dy -= h } else if dy < -h/2 { dy += h }
+        return CGPoint(x: dx, y: dy)
+    }
+
+    /// Berechnet die Bewegungseingaben des Demo-Autopiloten für DIESEN Simulationsschritt und setzt
+    /// sie als „gedrückte Tasten" (`activeKeys`): Schub (Keycode 126) und Drehen links/rechts
+    /// (123/124). Gefeuert wird separat über `autoFire` (beim Demo-Start aktiviert).
+    ///
+    /// Modell: **Potenzialfeld-Navigation.** Jede Bedrohung stößt das Schiff ab (Stärke ∝ Nähe²),
+    /// Schützen (UFO/Katze/Boss) und wertvolle Power-ups ziehen es schwach an. Die Summe ergibt eine
+    /// Wunsch-Flugrichtung „durch die Lücke ins Freie". Das Schiff dreht dorthin und hält per Schub
+    /// sein Reisetempo (`cruiseSpeed`) – es bleibt also ständig in Bewegung (feindliche Snipes auf die
+    /// aktuelle Position verfehlen) und feuert nach vorn (räumt den Weg). Weil die Level zeitbasiert
+    /// sind (60 s überleben), ist Ausweichen wichtiger als Abräumen.
+    ///
+    /// Wichtige Feinheit: einen NAHEN großen Asteroiden zerschießt man NICHT gern (die zwei Splitter
+    /// fliegen schneller weiter Richtung Schiff) – das Feld lenkt lieber drumherum.
+    private func applyAutopilotInput(persona: AutopilotPersona) {
+        let shipPos = ship.position
+        let shipVel = ship.velocity
+        let shipR: CGFloat = 12.0   // grober Schiffsradius für die Rand-zu-Rand-Distanz
+
+        // Abstoßungs-Vektor (weg von Gefahren) und der bedrohlichste einzelne Beitrag.
+        var fleeX: CGFloat = 0, fleeY: CGFloat = 0
+        var maxThreat: CGFloat = 0
+        // Vorausschau: gegen die ZUKÜNFTIGE Position bewegter Gefahren ausweichen, nicht die aktuelle.
+        let lookahead: CGFloat = 0.50
+
+        // Ziel-Kandidaten: bedrohlichster Asteroid (zum präventiven Wegschießen) und nächster Schütze.
+        var aimAngle: CGFloat? = nil; var aimEdge = CGFloat.greatestFiniteMagnitude
+        var shooterRel: CGPoint? = nil; var shooterDist = CGFloat.greatestFiniteMagnitude
+
+        // Eine Gefahr einrechnen: abstoßen (Stärke ∝ Nähe² zur vorausgeschauten Position) und – falls
+        // beschießbar – als möglichen Zielkandidaten (nach Rand-Abstand JETZT) merken.
+        func repel(pos: CGPoint, vel: CGPoint, radius: CGFloat, weight: CGFloat, aimable: Bool) {
+            // Abstoßung gegen die vorausgeschaute Position (fängt schnelle Objekte rechtzeitig ab).
+            let futurePos = CGPoint(x: pos.x + vel.x * lookahead, y: pos.y + vel.y * lookahead)
+            let fRel = wrappedDelta(from: shipPos, to: futurePos)
+            let fCenter = sqrt(fRel.x*fRel.x + fRel.y*fRel.y)
+            if fCenter > 0.0001 {
+                let fEdge = fCenter - radius - shipR
+                let range = persona.influence
+                if fEdge < range {
+                    let proximity = max(0, (range - fEdge) / range)   // 0 (fern) .. 1 (berührt sich)
+                    let strength = proximity * proximity * weight
+                    fleeX -= fRel.x / fCenter * strength
+                    fleeY -= fRel.y / fCenter * strength
+                    if strength > maxThreat { maxThreat = strength }
+                }
+            }
+            // Zielauswahl nach aktuellem Rand-Abstand (das Nächste zuerst wegschießen), mit Vorhalt.
+            guard aimable else { return }
+            let rel = wrappedDelta(from: shipPos, to: pos)
+            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
+            let edge = d - radius - shipR
+            if edge < aimEdge {
+                aimEdge = edge
+                let t = d / 600.0
+                aimAngle = atan2(rel.y + vel.y * t, rel.x + vel.x * t)
+            }
+        }
+
+        for a in activeAsteroids where a.hasEnteredScreen {
+            repel(pos: a.position, vel: a.velocity, radius: a.sizeClass.rawValue, weight: 1.0, aimable: true)
+        }
+        for u in activeUFOs {
+            repel(pos: u.position, vel: u.velocity, radius: 16, weight: 1.1, aimable: true)
+            let rel = wrappedDelta(from: shipPos, to: u.position)
+            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
+            if d < shooterDist { shooterDist = d; shooterRel = rel }
+        }
+        for c in activeCats {
+            repel(pos: c.position, vel: .zero, radius: c.collisionRadius, weight: 1.2, aimable: true)
+            let rel = wrappedDelta(from: shipPos, to: c.position)
+            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
+            if d < shooterDist { shooterDist = d; shooterRel = rel }
+        }
+        if let head = activeHead {
+            repel(pos: head.position, vel: .zero, radius: head.collisionRadius, weight: 1.5, aimable: true)
+        }
+        // Feindliche Schüsse (UFO- und Katzenlaser) sind schnell und tödlich – stark abstoßen, nicht anpeilen.
+        for l in activeLasers where l.type == .enemy || l.type == .catEye {
+            repel(pos: l.position, vel: l.velocity, radius: 4, weight: 1.7, aimable: false)
+        }
+        // Schwarze Löcher: distanzbasiert aus dem Sog-Einflussradius abstoßen (nähern sich nicht selbst).
+        for well in activeGravityWells {
+            let rel = wrappedDelta(from: shipPos, to: well.position)
+            let center = sqrt(rel.x*rel.x + rel.y*rel.y)
+            let range = well.influenceRadius
+            guard center > 0.0001, center < range else { continue }
+            let nx = rel.x / center, ny = rel.y / center
+            let proximity = (range - center) / range
+            let strength = proximity * proximity * 3.5 * persona.wellFearMult
+            fleeX -= nx * strength; fleeY -= ny * strength
+            if strength > maxThreat { maxThreat = strength }
+        }
+
+        // Power-up-Ziel (Schild/Extra-Leben zuerst) für die sichere Phase merken.
+        var seekRel: CGPoint? = nil; var seekScore = CGFloat.greatestFiniteMagnitude
+        for p in activePowerUps {
+            let rel = wrappedDelta(from: shipPos, to: p.position)
+            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
+            guard d < 340 else { continue }
+            let value: CGFloat
+            switch p.type {
+            case .extraLife: value = 0.30
+            case .shield:    value = 0.40
+            case .bomb:      value = 0.55
+            case .compress:  value = 0.65   // schrumpft das Schiff → kleineres Ziel (defensiv gut)
+            default:         value = 0.85
+            }
+            let score = d * value
+            if score < seekScore { seekScore = score; seekRel = rel }
+        }
+
+        // --- Kurs + Schubwunsch: Ausweichen hat Vorrang, sonst zielen/sammeln, dabei mobil bleiben ---
+        let fleeMag = sqrt(fleeX*fleeX + fleeY*fleeY)
+        let dodging = fleeMag > 0.20                       // spürbare Bedrohung → aktiv ausweichen
+        let speed = sqrt(shipVel.x*shipVel.x + shipVel.y*shipVel.y)
+
+        let desiredAngle: CGFloat
+        var wantThrust = false
+        var cruise = persona.cruiseSpeed
+        if dodging {
+            desiredAngle = atan2(fleeY, fleeX)             // weg von der (vorausgeschauten) Gefahr
+            wantThrust = true
+        } else if let rel = seekRel {
+            desiredAngle = atan2(rel.y, rel.x)             // Power-up anfliegen (mobil, sammelt Schilde)
+            wantThrust = true
+            cruise = min(cruise, 150)
+        } else if let rel = shooterRel {
+            desiredAngle = atan2(rel.y, rel.x)             // Schütze: draufhalten und langsam anfliegen
+            wantThrust = speed < 70                        // (leichte Drift → Snipes verfehlen)
+            cruise = 90
+        } else if let aim = aimAngle {
+            desiredAngle = aim                             // ruhig den nächsten Asteroiden anpeilen
+            wantThrust = false
+        } else {
+            desiredAngle = ship.zRotation
+            wantThrust = false
+        }
+
+        // --- In Tasten übersetzen ---
+        // Persona-Zittern (Skill-Fehler) auf den Kursfehler addieren; Fehler auf [-π, π] normieren.
+        let jitter = persona.aimJitter > 0
+            ? CGFloat.random(in: -persona.aimJitter...persona.aimJitter, using: &autopilotRng)
+            : 0
+        var err = desiredAngle - ship.zRotation + jitter
+        while err > .pi { err -= 2 * .pi }
+        while err < -.pi { err += 2 * .pi }
+
+        // Bewegungstasten dieses Schritts frisch setzen (nur die vom Autopiloten genutzten Codes).
+        activeKeys.remove(126); activeKeys.remove(13)
+        activeKeys.remove(123); activeKeys.remove(0)
+        activeKeys.remove(124); activeKeys.remove(2)
+
+        // Drehen: positiver Winkel (gegen Uhrzeiger) ⇒ Linkstaste (123 setzt rotationInput +1).
+        if err > persona.deadzone {
+            activeKeys.insert(123)
+        } else if err < -persona.deadzone {
+            activeKeys.insert(124)
+        }
+
+        // Schub: solange der Kurs grob passt und das Wunschtempo nicht erreicht ist. Beim Ausweichen
+        // großzügiger (auch bei schrägem Kurs schon beschleunigen → schneller aus der Gefahr).
+        let alignTol: CGFloat = dodging ? 1.8 : 1.0
+        if wantThrust && abs(err) < alignTol && speed < cruise {
+            activeKeys.insert(126)
+        }
+    }
+
+    /// Startet die nächste Demo: nächste Persona aus dem Roster (reihum), deren passendes Startlevel,
+    /// klassischer Modus, frisches Spiel mit aktivem Autopilot. Demo-Läufe werden nicht aufgezeichnet.
+    private func startDemo() {
+        let persona = AutopilotPersona.roster[nextPersonaIndex % AutopilotPersona.roster.count]
+        nextPersonaIndex = (nextPersonaIndex + 1) % AutopilotPersona.roster.count
+        autopilotPersona = persona
+        // Autopilot-Jitter reproduzierbar seeden (Persona-Index + Startlevel), getrennt vom Gameplay-RNG.
+        autopilotRng = GameRandom(seed: 0xA0710_5EED
+                                  &+ UInt64(nextPersonaIndex) &* 0x9E37_79B9
+                                  &+ UInt64(persona.startLevel))
+        selectedMode = .ancientAsteroids     // klassischer Modus: berechenbares, langes Überleben
+        selectedStartLevel = persona.startLevel
+        autoFire = true                       // Demo feuert durchgehend
+        attractPhase = .demoPlaying
+        attractTimer = 0
+        startNewGame()                        // Fresh-Game-Pfad (kein Recorder, da isDemoActive)
+        updateDemoOverlay()
+    }
+
+    /// Bricht die laufende Automatik (Demo oder Zwischen-Menü-Phase) ab und kehrt in den ruhigen
+    /// Leerlauf am Startbildschirm zurück – der Mensch übernimmt.
+    private func abortAttractToIdle() {
+        autopilotPersona = nil
+        attractPhase = .idle
+        attractTimer = 0
+        transitionTo(.startScreen)
+    }
+
+    /// Treibt die Menü-Phasen des Attract-Kreislaufs über die Echtzeit-Uhr. Die Demo selbst
+    /// (`.demoPlaying`) läuft bis zum Game Over; dort wird auf `.demoScores` weitergeschaltet.
+    private func updateAttract(realDelta: TimeInterval) {
+        switch attractPhase {
+        case .idle:
+            // Nur am Startbildschirm hochzählen; in anderen Menüs (Glossar/Einstellungen/…) ruht der
+            // Leerlauf-Timer, damit nicht mitten im Blättern eine Demo losläuft.
+            if gameState == .startScreen {
+                attractTimer += realDelta
+                if attractTimer >= 30.0 { startDemo() }
+            } else {
+                attractTimer = 0
+            }
+        case .demoScores:
+            attractTimer += realDelta
+            if attractTimer >= 10.0 {          // Highscore-Liste 10 s zeigen …
+                attractPhase = .demoRestScreen
+                attractTimer = 0
+                transitionTo(.startScreen)
+            }
+        case .demoRestScreen:
+            attractTimer += realDelta
+            if attractTimer >= 15.0 { startDemo() }   // … dann 15 s Startbildschirm, dann nächste Demo.
+        case .demoPlaying:
+            break   // läuft bis Game Over (weitergeschaltet in triggerGameOver)
+        }
+    }
+
+    /// Blendet das Demo-Overlay („DEMO — <PERSONA>") ein, solange der Autopilot im laufenden Spiel
+    /// steuert, sonst aus.
+    private func updateDemoOverlay() {
+        if let persona = autopilotPersona, gameState == .playing {
+            demoOverlayLabel.text = "▷ DEMO — \(persona.name)"
+            demoOverlayLabel.isHidden = false
+        } else {
+            demoOverlayLabel.isHidden = true
+        }
+    }
+
     // MARK: - Game Loop
     
     public override func update(_ wallTime: TimeInterval) {
@@ -818,6 +1130,11 @@ public final class GameScene: SKScene {
         var frameDelta = wallTime - lastUpdateTime
         lastUpdateTime = wallTime
         if frameDelta > maxFrameDelta { frameDelta = maxFrameDelta }   // Hänger nicht nachholen
+
+        // Attract-/Demo-Kreislauf über die Echtzeit-Uhr treiben (30 s Leerlauf → Demo, danach
+        // 10 s Highscore-Liste + 15 s Startbildschirm, dann nächste Demo). Läuft unabhängig von der
+        // fixed-timestep-Spielzeit (die bei jedem frischen Lauf auf 0 zurückgesetzt wird).
+        if attractModeEnabled { updateAttract(realDelta: frameDelta) }
 
         // Fixed-Timestep: die reale Frame-Zeit aufsummieren und die Simulation in festen Schritten
         // (`simStep`) voranbringen – unabhängig von der Bildwiederholrate. Dadurch hängt ein Lauf nur
@@ -1043,6 +1360,13 @@ public final class GameScene: SKScene {
             if !isLevelClearing {
                 updateFloatingHead(currentTime: currentTime, deltaTime: deltaTime)
                 updateSpaceCats(currentTime: currentTime, deltaTime: deltaTime)
+            }
+
+            // Demo-Modus: der Autopilot bestimmt die Bewegungstasten dieses Schritts (Feuern läuft
+            // über `autoFire`, das beim Demo-Start gesetzt wird). Bei verstecktem Schiff (nach Tod,
+            // vor Revive) nichts tun – die Tasten bleiben leer.
+            if let persona = autopilotPersona, !ship.isHidden {
+                applyAutopilotInput(persona: persona)
             }
 
             // Determine input states
@@ -2331,6 +2655,17 @@ public final class GameScene: SKScene {
         // Trigger large camera shake
         shakeCamera(amplitude: 8.0, numberOfShakes: 8, durationPerShake: 0.04)
         
+        // Demo-Lauf (Autopilot): KEIN Highscore-Eintrag – der Pilot darf sich nicht verewigen. Die
+        // Highscore-Liste wird trotzdem 10 s gezeigt (der Game-Over-Screen enthält sie ohnehin),
+        // danach schaltet der Attract-Kreislauf weiter (siehe updateAttract). Zuerst `isDemoActive`
+        // auswerten, DANN die Persona lösen (sonst würde die Bedingung falsch greifen).
+        if isDemoActive {
+            autopilotPersona = nil
+            attractPhase = .demoScores
+            attractTimer = 0
+            transitionTo(.gameOver)
+            return
+        }
         // Check for high score. Während einer Wiedergabe NICHT in die Initialen-Eingabe springen –
         // wir schauen den Lauf nur an, der Score steht bereits in der Bestenliste.
         if replayPlayer == nil && isNewHighScore(score: score) {
@@ -2495,6 +2830,9 @@ public final class GameScene: SKScene {
         quitSubPromptLabel.isHidden = true
         // Replay-Overlay nur während einer laufenden Wiedergabe im Spielzustand sichtbar (unten gesetzt).
         replayOverlayLabel.isHidden = true
+        // Demo-Labels: standardmäßig aus; unten je Zustand wieder eingeblendet.
+        demoPromptLabel.isHidden = true
+        demoOverlayLabel.isHidden = true
 
         // Stop sound engine hum
         SoundManager.shared.setThrustActive(false)
@@ -2545,6 +2883,11 @@ public final class GameScene: SKScene {
             let glossaryBlink = SKAction.sequence([glossaryFadeOut, glossaryFadeIn])
             glossaryPromptLabel.run(SKAction.repeatForever(glossaryBlink), withKey: "blink")
             
+            // Demo-Hinweis nur bei aktivem Attract-Modus (echte App), nicht auf iOS-Kompaktlayout.
+            if attractModeEnabled && !isCompactLayout {
+                demoPromptLabel.isHidden = false
+            }
+
             // iOS-Breitformat: kompaktes Startlayout (Titel sichtbar, Tastatur-Hinweise aus).
             if isCompactLayout { applyCompactStartScreenLayout() }
 
@@ -2584,7 +2927,14 @@ public final class GameScene: SKScene {
                 // Aufnahme dieses Laufs starten – aber NICHT während einer Replay-Wiedergabe (sonst
                 // zeichneten wir die Wiedergabe selbst wieder auf). Modus/Level werden gleich gesetzt;
                 // der Recorder hält Seed + diese Startwerte fest (gameMode wird unten zugewiesen).
-                if replayPlayer == nil {
+                if isDemoActive {
+                    // Demo-Läufe (Autopilot) NICHT aufzeichnen/archivieren – sie sind flüchtig und sollen
+                    // weder in der Bestenliste noch im Replay-Archiv landen. Einen evtl. noch liegenden
+                    // Recorder eines zuvor ABGEBROCHENEN Menschenspiels (ESC → Startbildschirm, ohne
+                    // Game Over) hier verwerfen, sonst schriebe die Demo in dessen Aufnahme.
+                    recorder = nil
+                    lastReplay = nil
+                } else if replayPlayer == nil {
                     // Szenengröße mit aufnehmen: die Wiedergabe muss in derselben Größe laufen, sonst
                     // driftet der Lauf (size beeinflusst Spawns/Wrap/Bounds).
                     recorder = ReplayRecorder(seed: currentSeed, startLevel: selectedStartLevel,
@@ -2684,6 +3034,8 @@ public final class GameScene: SKScene {
             updateLivesLabel()
             // Während einer Replay-Wiedergabe das „▶ REPLAY"-Overlay einblenden.
             replayOverlayLabel.isHidden = !isReplaying
+            // Während eines Demo-Laufs das Autopilot-Overlay einblenden.
+            updateDemoOverlay()
 
         case .nameEntry:
             ship.isHidden = true
@@ -3426,6 +3778,25 @@ public final class GameScene: SKScene {
         glossaryPromptLabel.zPosition = 100
         glossaryPromptLabel.isHidden = true
         self.addChild(glossaryPromptLabel)
+
+        // Demo-Hinweis auf dem Startbildschirm (nur bei aktivem Attract-Modus eingeblendet).
+        demoPromptLabel.text = "PRESS D FOR DEMO"
+        demoPromptLabel.fontName = RetroFont.pixel
+        demoPromptLabel.fontSize = 16
+        demoPromptLabel.fontColor = SKColor(red: 0.6, green: 1.0, blue: 0.6, alpha: 1.0)
+        demoPromptLabel.position = CGPoint(x: 0, y: -370)
+        demoPromptLabel.zPosition = 100
+        demoPromptLabel.isHidden = true
+        self.addChild(demoPromptLabel)
+
+        // Overlay während eines Demo-Laufs (Autopilot spielt).
+        demoOverlayLabel.fontName = RetroFont.pixel
+        demoOverlayLabel.fontSize = 16
+        demoOverlayLabel.fontColor = SKColor(red: 0.6, green: 1.0, blue: 0.6, alpha: 1.0)
+        demoOverlayLabel.position = CGPoint(x: 0, y: 250)
+        demoOverlayLabel.zPosition = 200
+        demoOverlayLabel.isHidden = true
+        self.addChild(demoOverlayLabel)
     }
     
     private func updateHighScoreLabels() {
@@ -3976,6 +4347,21 @@ public final class GameScene: SKScene {
         self.selectedMode = mode
         startNewGame(seed: seed)
     }
+
+    /// Für Tests/Balancing: startet einen Demo-Lauf mit fester Persona + Seed unter Autopilot-
+    /// Steuerung (klassischer Modus, Startlevel der Persona). Danach die Simulation über
+    /// `advanceOneStep()` treiben und beobachten, wie lange `gameState == .playing` bleibt.
+    public func startAutopilotDemoForTesting(persona: AutopilotPersona, seed: UInt64) {
+        autopilotPersona = persona
+        autopilotRng = GameRandom(seed: seed ^ 0xA0710_5EED)
+        selectedMode = .ancientAsteroids
+        selectedStartLevel = persona.startLevel
+        autoFire = true
+        startNewGame(seed: seed)
+    }
+
+    /// Für Tests: die aktuell aktive Autopilot-Persona (nil = kein Autopilot).
+    public var autopilotPersonaNameForTesting: String? { autopilotPersona?.name }
 
     /// For testing: the effective spawn config for the current mode and level.
     public func currentConfigForTesting() -> LevelSpawnConfig {

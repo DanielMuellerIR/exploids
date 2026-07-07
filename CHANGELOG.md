@@ -2,6 +2,18 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.13.0] — 2026-07-07
+- Demo / attract mode on the title screen: after 30 s of no input (or on pressing **D**), an
+  autopilot plays a full game on its own. When it dies it does **not** enter the high-score list,
+  but the high-score screen is shown for 10 s, then the title screen for 15 s, then the next demo —
+  looping. Any key hands control back to a human.
+- Four autopilot personas that play with distinct styles (cautious ↔ reckless, skilled ↔ sloppy)
+  and each start at a fitting level: **Ace** (L4, the expert — reaches level 10 and can survive the
+  full ~10 minutes), **Cowboy** (L6, offensive but clean), **Rookie** (L5, cautious but sloppy) and
+  **Kamikaze** (L7, reckless — dies youngest but spectacularly). The autopilot uses a potential-field
+  navigator (threats repel, shooters/power-ups weakly attract, look-ahead dodging) that keeps the
+  ship weaving through the gaps and firing along its path; it also collects shields/extra-lives.
+
 ## [0.12.1] — 2026-06-25
 - Replay fix: a recording now stores the scene size it was played at. The simulation depends on the
   scene size (spawn positions, wrap bounds, enemy entry), so replaying or rendering at a different

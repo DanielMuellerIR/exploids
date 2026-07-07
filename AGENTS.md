@@ -126,15 +126,42 @@ push (notarization takes minutes and the VERSION-derived tag would collide).
 
 ---
 
-## Current Status: v0.12.0
+## Current Status: v0.13.0
 
 Shipped feature set (signed + notarized macOS release; the iOS target is an early WIP):
 two game modes, nine power-ups, gravity wells, enemy UFO saucers, two bosses (the
 "Der Götze" head boss and the space-cat minibosses), a charge shot and a sweeping laser
 beam, imploding/wobbling special asteroids, a pixel-font HUD with an in-game glossary,
-local high-score entry, a recorded-sample SFX mode (alongside the procedural synth), and a
+local high-score entry, a recorded-sample SFX mode (alongside the procedural synth), a
 **deterministic replay system** (re-watch high-score runs in-app, render promo GIFs
-headlessly — see its section below). 93 unit tests, all green.
+headlessly — see its section below), and a **demo/attract mode** (autopilot plays on the
+title screen — see its section below). 97 unit tests, all green.
+
+### Demo/Attract-Modus — IMPLEMENTIERT (v0.13.0)
+
+Auf dem Startbildschirm spielt nach **30 s Leerlauf** (oder auf Taste **D**) ein computergesteuerter
+Autopilot eine Demo. Bei Game Over trägt der Pilot **keinen** Highscore ein (kein `.nameEntry`); die
+Highscore-Liste (Game-Over-Screen) wird **10 s** gezeigt, dann **15 s** Startbildschirm, dann die
+nächste Demo — Endlos-Kreislauf. **Jede** menschliche Eingabe bricht die Automatik ab und gibt die
+Kontrolle zurück. Demo-Läufe werden nicht aufgezeichnet/archiviert.
+
+- Host aktiviert das über `GameScene.attractModeEnabled` (nur `ExploidsMac`; Tests/Headless-Render
+  bleiben ruhig). Zustandsmaschine + Echtzeit-Timer in `GameScene.updateAttract`; der Autopilot
+  steuert per `applyAutopilotInput` (setzt `activeKeys` direkt, wie der ReplayPlayer den Input-Pfad
+  nutzt). Auf dem Startbildschirm kollidiert „D" mit dem Level-+1-Alias — im Attract-Modus gewinnt
+  Demo, sonst bleibt „D" = Level +1 (Tests/Headless unverändert). Level-Auswahl über ◀/▶ und „A".
+- **KI-Modell:** Potenzialfeld-Navigation (`Sources/GameCore/Autopilot.swift` = reine Persona-Daten;
+  Logik in `applyAutopilotInput`). Gefahren stoßen ab (∝ Nähe², gegen die VORAUSGESCHAUTE Position,
+  `lookahead`), Schützen/Power-ups ziehen schwach an; das Schiff fliegt durch die Lücken (mobil →
+  feindliche Snipes verfehlen) und feuert nach vorn. Wrap-bewusste Distanzen (Ancient-Modus wrappt).
+  Wichtig: Level sind zeitbasiert (60 s überleben, nicht abräumen) und einen NAHEN großen Asteroiden
+  zerschießt man ungern (die zwei Splitter fliegen schneller Richtung Schiff) — das Feld lenkt drum.
+- **4 Personas** (Roster, reihum), je passendes Startlevel: **Ace** (L4, Experte — erreicht Level 10,
+  Ø ~3 min, im Extremfall die vollen ~10 min), **Cowboy** (L6, offensiv-schnell aber sauber),
+  **Rookie** (L5, vorsichtig aber schludrig), **Kamikaze** (L7, riskant — stirbt am ehesten früh,
+  dafür spektakulär). Tuning-Werte je Persona in `AutopilotPersona` (influence/cruiseSpeed/aimJitter/
+  deadzone/wellFearMult/startLevel). Balancing mit dem headless Mess-Ansatz aus den Autopilot-Tests
+  (Überlebenszeit über mehrere Seeds) justierbar.
 
 Two selectable game modes (start screen: ▲/▼ to switch, ◀/▶ for level, Space to start):
 - **Ancient Asteroids**: the classic mode — fixed playfield, objects wrap around the screen edges. Unchanged.
