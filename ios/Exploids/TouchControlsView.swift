@@ -12,6 +12,8 @@ enum ButtonKind {
     case tap(keyCode: UInt16)
     /// Zeichen-Eingabe: simulateTypeCharacter(_:) – für Initialen, Glossar- und Highscore-Taste.
     case typeChar(String)
+    /// Startet sofort eine Demo (DEMO-Button am Startbildschirm) – ruft scene.startDemoFromMenu().
+    case startDemo
 }
 
 /// Ein einzelner rechteckiger Button.
@@ -82,13 +84,20 @@ final class TouchControlsView: UIView {
 
     // MARK: - Zustandswechsel
 
-    /// Vom GameViewController bei jedem GameState-Wechsel aufgerufen.
-    func update(for state: GameState) {
+    /// Vom GameViewController bei jedem GameState- oder Demo-Wechsel aufgerufen.
+    /// - Parameter demoActive: Läuft gerade eine Autopilot-Demo? Dann werden im Spiel KEINE
+    ///   Steuer-Buttons gezeichnet – der Zuschauer braucht sie nicht und es sieht ruhiger aus.
+    func update(for state: GameState, demoActive: Bool = false) {
         // Beim Verlassen eines Zustands alle gehaltenen Tasten lösen, sonst bliebe z.B. „Schub"
         // hängen, wenn man während des Drückens stirbt.
         releaseAllHolds()
         currentState = state
-        buttons = makeButtons(for: state)
+        // Im laufenden Demo-Spiel nur den ESC-Button zeigen (Rest ausblenden): der Zuschauer braucht
+        // die Steuerung nicht, soll die Demo aber abbrechen können. Ohne einen Button käme gar keine
+        // Berührung mehr in der Scene an (kein simulateKeyDown → kein Attract-Abbruch).
+        buttons = (state == .playing && demoActive)
+            ? makeButtons(for: state).filter { $0.label == "ESC" }
+            : makeButtons(for: state)
         buttonFrames = [:]          // wird in layoutSubviews neu berechnet
         setNeedsLayout()
         setNeedsDisplay()
@@ -136,9 +145,16 @@ final class TouchControlsView: UIView {
     /// eines Schriftzeichens einen großen Kontur-Pfeil (nur Umriss, innen leer).
     private func drawButton(ctx: CGContext, frame: CGRect, label: String) {
         let inGame = (currentState == .playing)
-        let borderAlpha: CGFloat = inGame ? 0.16 : 0.5
-        let fillAlpha:   CGFloat = inGame ? 0.02 : 0.05
-        let textAlpha:   CGFloat = inGame ? 0.42 : 0.95
+        // Im Spiel bewusst sehr dezent: die Steuerung muss man nur EINMAL finden, danach soll sie
+        // möglichst wenig vom Spielfeld ablenken – aber zur Orientierung dauerhaft schwach sichtbar
+        // bleiben. Darum in-game deutlich dunklere/transparentere Alphas und dünnere Striche als in
+        // den Menüs (dort bleiben die Buttons kräftig und gut lesbar).
+        let borderAlpha: CGFloat = inGame ? 0.09 : 0.5
+        let fillAlpha:   CGFloat = inGame ? 0.015 : 0.05
+        let textAlpha:   CGFloat = inGame ? 0.24 : 0.95
+        // Rand-/Symbol-Strichstärke: im Spiel dünner, in den Menüs wie gehabt.
+        let borderLineWidth: CGFloat = inGame ? 0.75 : 1.0
+        let symbolLineWidth: CGFloat = inGame ? 1.8 : 2.5
 
         let inset = frame.insetBy(dx: 3, dy: 3)
         let radius = min(inset.height, inset.width) * 0.22
@@ -146,18 +162,20 @@ final class TouchControlsView: UIView {
         ctx.setFillColor(UIColor(white: 1.0, alpha: fillAlpha).cgColor)
         ctx.addPath(path.cgPath); ctx.fillPath()
         ctx.setStrokeColor(UIColor(white: 0.6, alpha: borderAlpha).cgColor)
-        ctx.setLineWidth(1.0)
+        ctx.setLineWidth(borderLineWidth)
         ctx.addPath(path.cgPath); ctx.strokePath()
 
         // Symbol-Buttons als Vektor-Form zeichnen (kein Font): Dreh-Pfeile, Schließen-X,
         // Scroll-Dreiecke. So hängt keiner dieser Buttons an einer Fremdschrift.
-        let symbolAlpha = textAlpha + 0.15
+        // In-game etwas weniger Aufschlag auf die Symbol-Sichtbarkeit als in den Menüs, damit auch
+        // die Pfeile/Icons dezent bleiben.
+        let symbolAlpha = textAlpha + (inGame ? 0.10 : 0.15)
         switch label {
-        case "◄": drawArrowOutline(ctx: ctx, frame: frame, pointingLeft: true,  alpha: symbolAlpha); return
-        case "►": drawArrowOutline(ctx: ctx, frame: frame, pointingLeft: false, alpha: symbolAlpha); return
-        case "✕": drawCloseX(ctx: ctx, frame: frame, alpha: symbolAlpha); return
-        case "▲": drawTriangle(ctx: ctx, frame: frame, up: true,  alpha: symbolAlpha); return
-        case "▼": drawTriangle(ctx: ctx, frame: frame, up: false, alpha: symbolAlpha); return
+        case "◄": drawArrowOutline(ctx: ctx, frame: frame, pointingLeft: true,  alpha: symbolAlpha, lineWidth: symbolLineWidth); return
+        case "►": drawArrowOutline(ctx: ctx, frame: frame, pointingLeft: false, alpha: symbolAlpha, lineWidth: symbolLineWidth); return
+        case "✕": drawCloseX(ctx: ctx, frame: frame, alpha: symbolAlpha, lineWidth: symbolLineWidth); return
+        case "▲": drawTriangle(ctx: ctx, frame: frame, up: true,  alpha: symbolAlpha, lineWidth: symbolLineWidth); return
+        case "▼": drawTriangle(ctx: ctx, frame: frame, up: false, alpha: symbolAlpha, lineWidth: symbolLineWidth); return
         default: break
         }
 
@@ -191,11 +209,11 @@ final class TouchControlsView: UIView {
     }
 
     /// Zeichnet ein Schließen-„X" als zwei gekreuzte Linien (für die Zurück-/Schließen-Buttons).
-    private func drawCloseX(ctx: CGContext, frame: CGRect, alpha: CGFloat) {
+    private func drawCloseX(ctx: CGContext, frame: CGRect, alpha: CGFloat, lineWidth: CGFloat = 2.5) {
         let s = min(frame.width, frame.height) * 0.22
         let cx = frame.midX, cy = frame.midY
         ctx.setStrokeColor(UIColor(white: 0.82, alpha: alpha).cgColor)
-        ctx.setLineWidth(2.5)
+        ctx.setLineWidth(lineWidth)
         ctx.setLineCap(.round)
         ctx.move(to: CGPoint(x: cx - s, y: cy - s)); ctx.addLine(to: CGPoint(x: cx + s, y: cy + s))
         ctx.move(to: CGPoint(x: cx + s, y: cy - s)); ctx.addLine(to: CGPoint(x: cx - s, y: cy + s))
@@ -203,11 +221,11 @@ final class TouchControlsView: UIView {
     }
 
     /// Zeichnet ein Kontur-Dreieck nach oben (▲) bzw. unten (▼) – für die Scroll-Buttons.
-    private func drawTriangle(ctx: CGContext, frame: CGRect, up: Bool, alpha: CGFloat) {
+    private func drawTriangle(ctx: CGContext, frame: CGRect, up: Bool, alpha: CGFloat, lineWidth: CGFloat = 2.5) {
         let s = min(frame.width, frame.height) * 0.26
         let cx = frame.midX, cy = frame.midY
         ctx.setStrokeColor(UIColor(white: 0.82, alpha: alpha).cgColor)
-        ctx.setLineWidth(2.5)
+        ctx.setLineWidth(lineWidth)
         ctx.setLineJoin(.round)
         if up {
             ctx.move(to: CGPoint(x: cx, y: cy - s))
@@ -223,11 +241,11 @@ final class TouchControlsView: UIView {
     }
 
     /// Zeichnet einen großen, innen leeren Kontur-Pfeil (Dreieck) nach links bzw. rechts.
-    private func drawArrowOutline(ctx: CGContext, frame: CGRect, pointingLeft: Bool, alpha: CGFloat) {
+    private func drawArrowOutline(ctx: CGContext, frame: CGRect, pointingLeft: Bool, alpha: CGFloat, lineWidth: CGFloat = 2.5) {
         let s = min(frame.width, frame.height) * 0.30   // halbe Pfeilgröße
         let cx = frame.midX, cy = frame.midY
         ctx.setStrokeColor(UIColor(white: 0.82, alpha: alpha).cgColor)
-        ctx.setLineWidth(2.5)
+        ctx.setLineWidth(lineWidth)
         ctx.setLineJoin(.round)
         if pointingLeft {
             ctx.move(to: CGPoint(x: cx - s, y: cy))
@@ -287,6 +305,8 @@ final class TouchControlsView: UIView {
             scene?.simulateKeyUp(keyCode: kc)
         case .typeChar(let ch):
             scene?.simulateTypeCharacter(ch)
+        case .startDemo:
+            scene?.startDemoFromMenu()
         }
     }
 
@@ -375,6 +395,10 @@ final class TouchControlsView: UIView {
                             label: "MODUS", kind: .tap(keyCode: 126)),
                 TouchButton(id: 13, relativeRect: CGRect(x: 0.40, y: 0.76, width: 0.20, height: 0.19),
                             label: "START", kind: .tap(keyCode: 36)),
+                // DEMO: löst sofort eine Autopilot-Demo aus (Pendant zur macOS-Taste „D"); zwischen
+                // START und INFO in der unteren Reihe.
+                TouchButton(id: 17, relativeRect: CGRect(x: 0.63, y: 0.78, width: 0.15, height: 0.17),
+                            label: "DEMO", kind: .startDemo),
                 TouchButton(id: 14, relativeRect: CGRect(x: 0.85, y: 0.78, width: 0.13, height: 0.17),
                             label: "INFO", kind: .typeChar("i")),
             ]

@@ -1075,7 +1075,22 @@ public final class GameScene: SKScene {
         autopilotPersona = nil
         attractPhase = .idle
         attractTimer = 0
+        // Vom Autopiloten zuletzt gesetzte Bewegungstasten (Drehen/Schub) verwerfen – sonst „erbt"
+        // ein danach vom Menschen gestartetes Spiel diese Tasten und das Schiff dreht/schiebt von
+        // selbst weiter, bis der Spieler die Richtung einmal selbst drückt und wieder loslässt.
+        activeKeys.removeAll()
         transitionTo(.startScreen)
+    }
+
+    /// Ob gerade ein Autopilot-Demolauf aktiv ist (für die iOS-Schicht, um im Demo-Modus die
+    /// Touch-Controls auszublenden – ein Zuschauer braucht sie nicht).
+    public var isDemoRunning: Bool { isDemoActive }
+
+    /// Startet sofort eine Demo aus dem Menü heraus (iOS-DEMO-Button; auf macOS macht das die Taste
+    /// „D"). Nur vom Startbildschirm und nur bei aktivem Attract-Modus – sonst passiert nichts.
+    public func startDemoFromMenu() {
+        guard attractModeEnabled, gameState == .startScreen else { return }
+        startDemo()
     }
 
     /// Treibt die Menü-Phasen des Attract-Kreislaufs über die Echtzeit-Uhr. Die Demo selbst
@@ -1110,7 +1125,13 @@ public final class GameScene: SKScene {
     /// steuert, sonst aus.
     private func updateDemoOverlay() {
         if let persona = autopilotPersona, gameState == .playing {
-            demoOverlayLabel.text = "▷ DEMO — \(persona.name)"
+            // Text nur bei Änderung neu setzen (spart die String-Allokation im Pro-Frame-Aufruf
+            // aus dem Game-Loop, siehe update()).
+            // NUR ASCII verwenden: Der Pixel-Font (PressStart2P) enthält keine Sonderzeichen wie
+            // „▷" oder Em-Dash „—" – fehlt schon das erste Glyph, rendert SpriteKit das GANZE Label
+            // leer (auf iOS so beobachtet). „>" und „-" sind im Font vorhanden.
+            let text = "> DEMO - \(persona.name)"
+            if demoOverlayLabel.text != text { demoOverlayLabel.text = text }
             demoOverlayLabel.isHidden = false
         } else {
             demoOverlayLabel.isHidden = true
@@ -1135,6 +1156,16 @@ public final class GameScene: SKScene {
         // 10 s Highscore-Liste + 15 s Startbildschirm, dann nächste Demo). Läuft unabhängig von der
         // fixed-timestep-Spielzeit (die bei jedem frischen Lauf auf 0 zurückgesetzt wird).
         if attractModeEnabled { updateAttract(realDelta: frameDelta) }
+
+        // Demo-Overlay („▷ DEMO — <PERSONA>") pro Frame auffrischen, solange der Autopilot spielt.
+        // Das einmalige Setzen in startDemo() genügt nicht zuverlässig: jeder spätere HUD-Reset über
+        // transitionTo() blendet das Label wieder aus. Der Aufruf ist billig (Text wird nur bei
+        // Änderung neu gesetzt), hält das Overlay aber über den ganzen Demo-Lauf sichtbar.
+        if isDemoActive { updateDemoOverlay() }
+
+        // iOS-Spiel-HUD jede Frame neu zentrieren (Zeit-Text ändert sich sekündlich, Demo-Zeile
+        // kommt/geht). Nur im Kompaktlayout und nur im laufenden Spiel – auf macOS unberührt.
+        if isCompactLayout && gameState == .playing { applyCompactPlayingLayout() }
 
         // Fixed-Timestep: die reale Frame-Zeit aufsummieren und die Simulation in festen Schritten
         // (`simStep`) voranbringen – unabhängig von der Bildwiederholrate. Dadurch hängt ein Lauf nur
@@ -2917,6 +2948,11 @@ public final class GameScene: SKScene {
             } else {
                 // Fresh game session
 
+                // Jedes frische Spiel ohne „geerbte" gedrückte Tasten starten. Wichtig nach einer
+                // per Touch abgebrochenen Demo: der Autopilot lässt sonst Dreh-/Schub-Codes in
+                // `activeKeys` zurück, die sonst ins Menschenspiel durchschlagen (Schiff dreht selbst).
+                activeKeys.removeAll()
+
                 // Seed für diesen Lauf festlegen: injizierten Seed übernehmen (Replay/Test) oder
                 // einmalig einen neuen aus dem System-RNG würfeln. Danach speist sich ALLE
                 // Spiel-Logik aus `rng` (deterministisch reproduzierbar bei gleichem Seed).
@@ -3086,7 +3122,14 @@ public final class GameScene: SKScene {
             
             clearGameEntities()
             buildGlossary()
-            glossaryContainer.position.y = glossaryScrollBottom
+            // Auf iOS so eingescrollt starten, dass sofort Inhalt sichtbar ist, dessen Anfang (das
+            // erste Item „PLAYER SHIP" bei lokal y≈150) aber noch nicht ganz oben klebt: wir schieben
+            // den Container etwas nach unten, sodass das erste Item im oberen Drittel steht und die
+            // folgenden Einträge den Rest füllen. Von dort scrollt es normal weiter nach oben.
+            // macOS behält den bisherigen Startpunkt (unterer Rand, dann Auto-Scroll).
+            glossaryContainer.position.y = isCompactLayout
+                ? -size.height * 0.22
+                : glossaryScrollBottom
             glossaryContainer.isHidden = false
             glossaryStaticContainer.isHidden = false
 
@@ -3116,8 +3159,13 @@ public final class GameScene: SKScene {
             settingsMusicLabel.isHidden = false
             settingsSfxLabel.isHidden = false
             settingsAutoFireLabel.isHidden = false
-            settingsHintLabel.isHidden = false
+            // Auf iOS keinen Bedien-Hinweis zeigen (Tap-to-toggle/X-Back versteht sich von selbst und
+            // überlappte den SFX-Button). macOS behält den Tastatur-Hinweis (M/N/F, ESC).
+            settingsHintLabel.isHidden = isCompactLayout
         }
+
+        // iOS-Kompaktlayout für den neuen Zustand sofort anwenden (sonst 1 Frame Default-Layout).
+        refreshCompactLayoutForCurrentState()
 
         // Headless-Render: HUD/Overlay durchgängig ausgeblendet halten (für ein sauberes Promo-GIF),
         // egal in welchen Zustand wir gerade gewechselt sind.
@@ -3191,8 +3239,54 @@ public final class GameScene: SKScene {
         case .startScreen: applyCompactStartScreenLayout()
         case .highScores: applyCompactHighScoresLayout()
         case .gameOver: applyCompactGameOverLayout()
+        case .playing: applyCompactPlayingLayout()
         default: break
         }
+    }
+
+    /// iOS-Spiel-HUD (nur Kompaktlayout): platzsparend, damit möglichst viel Bildfläche fürs
+    /// Spielfeld bleibt. Score klein oben links, Hi-Score im Spiel ausgeblendet, und Level/Zeit/Demo
+    /// als eine mittig zentrierte Zeile knapp unter dem ESC-Knopf – gleiche Schriftgröße wie der
+    /// Score, aber jeweils eigene Farbe (Level cyan, Zeit weiß, Demo grün). Nutzt die TATSÄCHLICHE
+    /// Szenengröße (nach resizeFill ~874×402), nicht die fest verdrahteten Setup-Werte.
+    private func applyCompactPlayingLayout() {
+        let halfWidth = size.width / 2
+        let halfHeight = size.height / 2
+        // Score ~30 % kleiner als der macOS-Default (20 → 14) und kompakt oben links.
+        let hudFontSize: CGFloat = 14
+        scoreLabel.fontSize = hudFontSize
+        scoreLabel.position = CGPoint(x: -halfWidth + 16, y: halfHeight - 26)
+        // Hi-Score im Spiel komplett weg (spart oben rechts Platz).
+        hiScoreLabel.isHidden = true
+        // Leben direkt unter den Score (kompakt oben links, gleiche Größe).
+        livesLabel.fontSize = hudFontSize
+        livesLabel.position = CGPoint(x: -halfWidth + 16, y: halfHeight - 26 - hudFontSize - 6)
+
+        // Level / Zeit / Demo: eine Schriftgröße (= Score), drei Farben, als Gruppe horizontal
+        // zentriert. Y liegt knapp unter dem ESC-Knopf (dieser belegt die obersten ~10 % der Höhe).
+        levelLabel.fontSize = hudFontSize
+        timerLabel.fontSize = hudFontSize
+        // Demo-Zeile exakt wie Level rendern: GLEICHE Schrift und Größe – nur andere Farbe (grün).
+        // Sonst fällt der abweichende Pixel-Font (Press Start 2P, aus dem macOS-Overlay) durch eine
+        // größere/fettere Optik auf. Auf macOS bleibt das Overlay unberührt (Compact-Layout nur iOS).
+        demoOverlayLabel.fontName = levelLabel.fontName
+        demoOverlayLabel.fontSize = hudFontSize
+        for label in [levelLabel, timerLabel, demoOverlayLabel] {
+            label.horizontalAlignmentMode = .left
+            label.verticalAlignmentMode = .center
+        }
+        let rowY = halfHeight - size.height * 0.15   // etwas unter ESC
+        let gap = size.width * 0.025                 // Abstand zwischen den drei Einträgen
+        let showDemo = isDemoActive
+        // Textbreiten messen (die Zeit ändert sich sekündlich → jede Frame neu zentrieren).
+        let wLevel = levelLabel.frame.width
+        let wTime  = timerLabel.frame.width
+        let wDemo  = showDemo ? demoOverlayLabel.frame.width : 0
+        let total  = wLevel + gap + wTime + (showDemo ? gap + wDemo : 0)
+        var x = -total / 2
+        levelLabel.position = CGPoint(x: x, y: rowY); x += wLevel + gap
+        timerLabel.position = CGPoint(x: x, y: rowY); x += wTime + gap
+        if showDemo { demoOverlayLabel.position = CGPoint(x: x, y: rowY) }
     }
     
     private func updateLevelSelectionLabel() {

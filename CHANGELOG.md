@@ -2,6 +2,19 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.0] — 2026-07-08
+- iOS: the demo / attract mode now runs on the mobile build too — after 30 s idle (or via a new
+  **DEMO** button on the title screen) an autopilot plays a full game; a touch, or the on-screen
+  **ESC**, hands control back. A "> DEMO — <persona>" marker shows while it plays.
+- iOS: redesigned in-game HUD to free up the playfield — smaller score, high score hidden during
+  play, and level / time / demo shown as one centered line just below ESC (same size, three colors).
+- iOS: the on-screen touch controls are dimmer and thinner in-game (visible for orientation, but out
+  of the way), and are hidden entirely during a demo — only **ESC** stays so a viewer can stop it.
+- iOS: the glossary now opens already scrolled in so its content is visible immediately, and the
+  settings screen no longer shows the redundant control hint.
+- Fix: after watching a demo, starting a game no longer leaves an autopilot movement key "stuck"
+  (the ship kept rotating on its own) — held keys are now cleared on every fresh game and demo abort.
+
 ## [0.13.0] — 2026-07-07
 - Demo / attract mode on the title screen: after 30 s of no input (or on pressing **D**), an
   autopilot plays a full game on its own. When it dies it does **not** enter the high-score list,

@@ -26,6 +26,10 @@ final class GameViewController: UIViewController {
     /// Zuletzt gesehener GameState – zum Erkennen von Zustandswechseln ohne ständiges Neuzeichnen.
     private var lastKnownState: GameState?
 
+    /// Zuletzt gesehener Demo-Status – ein Wechsel (Demo startet/endet) muss das Overlay ebenfalls
+    /// neu aufbauen, damit die Controls im Demo-Modus aus- und danach wieder eingeblendet werden.
+    private var lastKnownDemo: Bool = false
+
     // MARK: - Lifecycle
 
     override func loadView() {
@@ -63,6 +67,13 @@ final class GameViewController: UIViewController {
         s.isCompactLayout = true
         s.showsHighScoresOnStartScreen = false
         s.autoFire = true   // Auto-Feuer standardmäßig an (kein Dauertippen, ideal fürs iPhone)
+        // Attract-/Demo-Modus aktivieren (identisch zu macOS, GameWindow.swift:42): nach 30 s Leerlauf
+        // am Startbildschirm spielt ein Autopilot eine Demo, danach 10 s Highscore-Liste + 15 s
+        // Startbildschirm, dann die nächste Persona – immer weiter. Auf iOS gibt es keine „D"-Taste
+        // zum manuellen Start, aber der 30-s-Autostart greift trotzdem; eine echte Berührung bricht
+        // die Demo ab (Touch → simulateKeyDown → handleKeyDown übernimmt „Mensch spielt"). Der
+        // „PRESS D FOR DEMO"-Hinweis erscheint dank isCompactLayout hier bewusst nicht.
+        s.attractModeEnabled = true
         // Fixed-Timestep: nach einem Hänger (App im Hintergrund, Anruf) höchstens 0.25 s Echtzeit
         // als Sim-Schritte nachholen, statt die ganze Pause aufzuarbeiten.
         s.maxFrameDelta = 0.25
@@ -98,10 +109,12 @@ final class GameViewController: UIViewController {
     /// Wird jeden Frame auf dem Main-Thread aufgerufen (CADisplayLink-Callback).
     @objc private func onDisplayLink() {
         let current = scene.gameState
-        // Overlay nur aktualisieren, wenn sich der State tatsächlich geändert hat.
-        if case .some(let last) = lastKnownState, statesEqual(last, current) { return }
+        let demo = scene.isDemoRunning
+        // Overlay nur aktualisieren, wenn sich State ODER Demo-Status geändert hat.
+        if case .some(let last) = lastKnownState, statesEqual(last, current), demo == lastKnownDemo { return }
         lastKnownState = current
-        overlay.update(for: current)
+        lastKnownDemo = demo
+        overlay.update(for: current, demoActive: demo)
         updateKeyboard(for: current)
     }
 

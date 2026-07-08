@@ -29,11 +29,15 @@ targets:
       - package: GameCore
         product: GameCore
 
+    # Gemeinsames Scheme erzeugen, damit `xcodebuild -scheme Exploids` headless/CI baut
+    # (ohne Scheme resolvt der reine `-target`-Build das lokale SwiftPM-Package nicht sauber).
+    scheme: {}
+
     # Build-Einstellungen
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.danielmuellerir.exploids
-        MARKETING_VERSION: "0.8.2"
+        MARKETING_VERSION: "0.9.0"
         CURRENT_PROJECT_VERSION: 1
 
         # Info.plist wird von Xcode/XcodeGen automatisch generiert (kein manuelles Info.plist nötig)
