@@ -2,6 +2,11 @@
 
 Exploids is a native macOS Asteroids clone with a C-64 inspired vector aesthetic executed at modern high resolution and butter-smooth frame rates (supporting Apple Silicon and ProMotion 120Hz). Almost all graphics are procedural vector rendering — only the two bosses use traced vector-contour textures — and all sound effects are synthesized in real time (with an optional recorded-sample SFX mode); the bundled media assets are two chiptune background-music tracks, the two boss textures, and the optional recorded sound effects (see Asset Licensing).
 
+## Typ & Zweck
+- **Typ:** Spiel (Shooter/Arcade)
+- **Zweck:** Nativer Asteroids-Klon mit C64-inspirierter Vektorgrafik und Echtzeit-Sound-Synthese.
+- **Plattform:** macOS-GUI, iOS
+
 ## Tech Stack & Architecture
 
 - **Language**: Swift 6 (strict concurrency compliant).
