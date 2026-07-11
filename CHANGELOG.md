@@ -2,6 +2,17 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.1] — 2026-07-12
+- Build: the macOS app-bundle version now comes from the central `VERSION` file instead of being
+  hard-coded in `build-app.sh`; the bundle build number is derived from the git commit count
+  (monotonic, no more manual bumping).
+- iOS: new `ios/generate.sh` syncs `MARKETING_VERSION` from `VERSION` before generating the Xcode
+  project — the iOS version had silently drifted to 0.9.0 while macOS was at 0.14.0.
+- CI: added a GitHub Actions workflow that runs the full test suite (`swift test`) on every push
+  and pull request (tests are headless and deterministic, so no extra setup is needed).
+- Internal: extracted high-score persistence (`HighScoreStore`) and the on-disk replay archive
+  (`ReplayArchive`) out of `GameScene` into their own types — no behavior change, all 97 tests pass.
+
 ## [0.14.0] — 2026-07-08
 - iOS: the demo / attract mode now runs on the mobile build too — after 30 s idle (or via a new
   **DEMO** button on the title screen) an autopilot plays a full game; a touch, or the on-screen

@@ -159,6 +159,8 @@ public final class GameScene: SKScene {
     
     /// Persistent high scores.
     public private(set) var highScores: [HighScore] = []
+    /// Persistenz für Highscores + maximal erreichtes Level (UserDefaults-Details ausgelagert).
+    private let highScoreStore = HighScoreStore()
 
     // MARK: - Plattform-Layout-Konfiguration (vom Host gesetzt)
     // Defaults erhalten das bisherige macOS-Verhalten 1:1. Der iOS-Host schaltet sie um.
@@ -543,12 +545,8 @@ public final class GameScene: SKScene {
         self.ship.position = .zero
         self.addChild(self.ship)
         
-        // Load high scores from storage
+        // Load high scores from storage (lädt auch maxLevelReached mit)
         loadHighScores()
-        maxLevelReached = UserDefaults.standard.integer(forKey: "exploids_max_level_reached")
-        if maxLevelReached < 1 {
-            maxLevelReached = 1
-        }
         selectedStartLevel = 1
         
         // Setup UI Labels
@@ -1257,7 +1255,7 @@ public final class GameScene: SKScene {
                     currentLevel += 1
                     if currentLevel > maxLevelReached {
                         maxLevelReached = currentLevel
-                        UserDefaults.standard.set(maxLevelReached, forKey: "exploids_max_level_reached")
+                        highScoreStore.saveMaxLevelReached(maxLevelReached)
                     }
                     // Drehzahl/Wechsel-Frequenz fürs neue Level neu planen (Mad-Modus).
                     fieldRotationPending = true
@@ -3936,40 +3934,14 @@ public final class GameScene: SKScene {
     // MARK: - High Score Storage
     
     /// Loads high scores from local storage. Made public for test framework reloading.
+    /// Persistenz-Details (UserDefaults-Keys, Default-Liste) liegen im `HighScoreStore`.
     public func loadHighScores() {
-        maxLevelReached = UserDefaults.standard.integer(forKey: "exploids_max_level_reached")
-        if maxLevelReached < 1 {
-            maxLevelReached = 1
-        }
-        
-        guard let data = UserDefaults.standard.data(forKey: "exploids_high_scores") else {
-            // Default high scores. Mit Todesmeldung, damit sie genauso formatiert sind wie eigene
-            // Einträge (Format-Stil siehe recordHighScore).
-            self.highScores = [
-                HighScore(initials: "DM ", score: 10000, date: Date(), deathMessage: "Crushed in a black hole on Level 9"),
-                HighScore(initials: "JAB", score: 7500, date: Date(), deathMessage: "Vaporized by UFO laser on Level 7"),
-                HighScore(initials: "HAL", score: 5000, date: Date(), deathMessage: "Blown to bits by wobbling bomb on Level 6"),
-                HighScore(initials: "MAC", score: 2500, date: Date(), deathMessage: "Rammed by an alien UFO on Level 4"),
-                HighScore(initials: "C64", score: 1000, date: Date(), deathMessage: "Hull breach (large asteroid) on Level 2")
-            ]
-            return
-        }
-        
-        do {
-            self.highScores = try JSONDecoder().decode([HighScore].self, from: data)
-        } catch {
-            print("Failed to decode high scores: \(error)")
-            self.highScores = []
-        }
+        maxLevelReached = highScoreStore.loadMaxLevelReached()
+        highScores = highScoreStore.loadHighScores()
     }
-    
+
     private func saveHighScores() {
-        do {
-            let data = try JSONEncoder().encode(self.highScores)
-            UserDefaults.standard.set(data, forKey: "exploids_high_scores")
-        } catch {
-            print("Failed to encode high scores: \(error)")
-        }
+        highScoreStore.save(highScores)
     }
 
     /// Leert die Highscore-Liste und persistiert die leere Liste. Einstiegspunkt für das CLI-Flag
@@ -3982,44 +3954,15 @@ public final class GameScene: SKScene {
     // MARK: - Replay-Archiv (Aufnahmen als Dateien)
 
     /// Schreibt die Aufnahme als Datei ins `replaySaveDirectory` (falls gesetzt) und hält das Archiv
-    /// auf `replayArchiveLimit` begrenzt. Best-effort: Fehler werden geloggt, nie geworfen. Wird bei
-    /// Game Over für JEDEN Lauf aufgerufen (nicht nur bei Highscore), damit sich nach einem guten Spiel
-    /// ein GIF aus dem letzten Lauf rendern lässt.
+    /// auf `replayArchiveLimit` begrenzt. Wird bei Game Over für JEDEN Lauf aufgerufen (nicht nur bei
+    /// Highscore), damit sich nach einem guten Spiel ein GIF aus dem letzten Lauf rendern lässt.
+    /// Datei-I/O (Zeitstempel-Namen, Aufräumen der ältesten Dateien) liegt im `ReplayArchive`.
     private func archiveReplayIfEnabled(_ replay: Replay) {
         guard let dir = replaySaveDirectory else { return }
-        let fm = FileManager.default
-        do {
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-            // Zeitstempel-Präfix (Date() NUR hier für den Dateinamen – nicht im Gameplay-Pfad) + Score
-            // + Level machen die Datei sortierbar und auswählbar („letztes/bestes Spiel").
-            let stamp = GameScene.replayTimestampFormatter.string(from: Date())
-            let url = dir.appendingPathComponent("\(stamp)_score-\(score)_lvl-\(currentLevel).replay")
-            try replay.encoded().write(to: url)
-            pruneReplayArchive(in: dir, keeping: replayArchiveLimit)
-        } catch {
-            print("Replay-Archiv: Schreiben fehlgeschlagen: \(error)")
-        }
+        ReplayArchive(directory: dir, limit: replayArchiveLimit)
+            .archive(replay, score: score, level: currentLevel)
     }
 
-    /// Löscht die ältesten `.replay`-Dateien, bis höchstens `limit` übrig sind (nach Name = Zeit sortiert).
-    private func pruneReplayArchive(in dir: URL, keeping limit: Int) {
-        let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-            .filter({ $0.pathExtension == "replay" }), files.count > limit else { return }
-        let oldestFirst = files.sorted { $0.lastPathComponent < $1.lastPathComponent }
-        for url in oldestFirst.prefix(files.count - limit) {
-            try? fm.removeItem(at: url)
-        }
-    }
-
-    /// Stabiler, sortierbarer Zeitstempel für Archiv-Dateinamen (lokale Zeit, POSIX-Locale).
-    private static let replayTimestampFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd_HHmmss"
-        return f
-    }()
-    
     public func isNewHighScore(score: Int) -> Bool {
         if highScores.count < 5 { return true }
         return score > (highScores.last?.score ?? 0)

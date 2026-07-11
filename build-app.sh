@@ -38,7 +38,13 @@ fi
 cp AppIcon.icns Exploids.app/Contents/Resources/AppIcon.icns
 
 echo "=== Writing Info.plist ==="
-cat > Exploids.app/Contents/Info.plist << 'EOF'
+# Version aus der VERSION-Datei ziehen (Single Source of Truth) statt sie hier hart zu
+# codieren — vorher driftete die Info.plist-Version bei jedem Release, wenn man das
+# Skript vergaß. Die Build-Nummer (CFBundleVersion) muss nur monoton wachsen; die
+# Commit-Anzahl des Repos leistet das automatisch (ersetzt das manuelle Hochzählen).
+VERSION="$(cat VERSION)"
+BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+cat > Exploids.app/Contents/Info.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -54,9 +60,9 @@ cat > Exploids.app/Contents/Info.plist << 'EOF'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.14.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>5</string>
+    <string>${BUILD_NUMBER}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSPrincipalClass</key>

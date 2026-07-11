@@ -1,0 +1,22 @@
+# CI: baut das SwiftPM-Paket und führt die GameCore-Testsuite aus.
+# Die Tests sind vollständig headless (SoundManager wird im setUp gemutet, kein GUI,
+# kein Code-Signing nötig) und deterministisch (feste Seeds, kein Wall-Clock-Timing) —
+# sie laufen deshalb ohne Zusatz-Setup auf einem GitHub-macOS-Runner.
+# Releases bleiben bewusst manuell (wrappers/sign-and-release.sh) — dieser Workflow
+# testet nur, er veröffentlicht nichts.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift-Version anzeigen
+        run: swift --version
+      - name: Bauen und testen
+        run: swift test
