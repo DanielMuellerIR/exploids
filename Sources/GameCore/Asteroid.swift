@@ -314,15 +314,14 @@ public final class Asteroid: SKShapeNode {
         updateWireframePath()
     }
     
-    /// Wraps the asteroid around screen boundaries.
+    /// Wraps the asteroid around screen boundaries. (Gemeinsame Wrap-Logik: VectorMath.swift)
     public func wrapAround(screenSize: CGSize) {
-        let halfWidth = screenSize.width / 2
-        let halfHeight = screenSize.height / 2
-
         // Solange der Asteroid noch von außen hereinfliegt (Mittelpunkt außerhalb des
         // sichtbaren Rechtecks), NICHT umklappen. Erst wenn sein Mittelpunkt einmal im Bild
         // war, gilt er als "eingetreten" und nimmt danach normal am Kanten-Umlauf teil.
         if !hasEnteredScreen {
+            let halfWidth = screenSize.width / 2
+            let halfHeight = screenSize.height / 2
             let centerInside = position.x >= -halfWidth && position.x <= halfWidth
                 && position.y >= -halfHeight && position.y <= halfHeight
             if centerInside {
@@ -331,17 +330,7 @@ public final class Asteroid: SKShapeNode {
             return
         }
 
-        if position.x < -halfWidth {
-            position.x += screenSize.width
-        } else if position.x > halfWidth {
-            position.x -= screenSize.width
-        }
-        
-        if position.y < -halfHeight {
-            position.y += screenSize.height
-        } else if position.y > halfHeight {
-            position.y -= screenSize.height
-        }
+        wrapPositionAround(screenSize: screenSize)
     }
     
     /// Returns world-space coordinates of the 2D silhouette vertices (correctly transformed by scale).

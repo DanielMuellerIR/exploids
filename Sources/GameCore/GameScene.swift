@@ -50,6 +50,29 @@ public enum GameMode: UInt8, Sendable, Codable {
     case madMeteoroids = 1
 }
 
+/// Zentrale Gameplay-Tuning-Konstanten (Waffen, Einsammeln, Splits) — nach dem Muster von
+/// `MadRotation`/`LevelSpawnConfig`. Vorher lagen diese Werte inline im Code verstreut;
+/// hier justieren, statt im 4000-Zeilen-Ablauf zu suchen. Werte unverändert übernommen
+/// (Replay-Determinismus: gleiche Zahlen, gleiche Läufe).
+enum GameplayTuning {
+    /// Schuss-Abklingzeit in Sekunden mit aktivem Rapid-Fire-Power-up.
+    static let laserCooldownRapid: TimeInterval = 0.06
+    /// Schuss-Abklingzeit in Sekunden ohne Rapid Fire.
+    static let laserCooldownNormal: TimeInterval = 0.15
+    /// Seitlicher Streuwinkel (Radiant) der äußeren Schüsse beim Triple-Shot.
+    static let tripleShotSpreadAngle: CGFloat = 0.25
+    /// Einsammel-Radius für Power-ups (Abstand Schiff↔Power-up in Punkten).
+    static let powerUpCollectRadius: CGFloat = 40.0
+    /// Wachstum der Skalierung eines absorbierenden Asteroiden pro geschlucktem Asteroiden.
+    static let asteroidAbsorbGrowthStep: CGFloat = 0.35
+    /// Geschwindigkeits-Faktor der Splitter beim Asteroiden-Split (schneller als der Elter).
+    static let asteroidSplitSpeedFactor: CGFloat = 1.35
+    /// Implosions-Kollaps: Sog-Stärke des kurzlebigen Schwerkraft-Lochs …
+    static let implosionCollapseStrength: CGFloat = 1280000.0
+    /// … und seine Lebensdauer in Sekunden (bewusst kurz, nur der „Nachschlag").
+    static let implosionCollapseLifetime: TimeInterval = 4.0
+}
+
 /// Zentrale Tuning-Konstanten für die Feld-Rotation im Mad-Meteoroids-Modus.
 /// Hier justieren, um Drehzahl, Wechsel-Frequenz und „Plattenscratch" anzupassen.
 private enum MadRotation {
@@ -809,7 +832,8 @@ public final class GameScene: SKScene {
     private func fireLaser() {
         let now = gameTime
         let isRapidActive = now < rapidFireEndTime
-        let cooldown: TimeInterval = isRapidActive ? 0.06 : 0.15
+        let cooldown: TimeInterval = isRapidActive ? GameplayTuning.laserCooldownRapid
+                                                   : GameplayTuning.laserCooldownNormal
         
         guard now - lastLaserTime >= cooldown else { return }
         lastLaserTime = now
@@ -826,8 +850,8 @@ public final class GameScene: SKScene {
         if isTripleActive {
             // Spawn 3 lasers in a spread pattern
             let centerLaser = Laser(position: spawnPos, angle: angle, type: .normal)
-            let leftLaser = Laser(position: spawnPos, angle: angle + 0.25, type: .normal)
-            let rightLaser = Laser(position: spawnPos, angle: angle - 0.25, type: .normal)
+            let leftLaser = Laser(position: spawnPos, angle: angle + GameplayTuning.tripleShotSpreadAngle, type: .normal)
+            let rightLaser = Laser(position: spawnPos, angle: angle - GameplayTuning.tripleShotSpreadAngle, type: .normal)
             
             self.addChild(centerLaser)
             self.addChild(leftLaser)
@@ -1564,7 +1588,7 @@ public final class GameScene: SKScene {
             if !ship.isHidden {
                 // Großzügiger Sammelradius: Power-ups driften + pulsen; bei 30 ging man leicht über
                 // den Rand, ohne einzusammeln. 40 = visuelles Überfliegen sammelt zuverlässig ein.
-                let collectRadius: CGFloat = 40.0
+                let collectRadius = GameplayTuning.powerUpCollectRadius
                 // WICHTIG: erst die einzusammelnden bestimmen, DANN einsammeln und gezielt aus dem
                 // Array entfernen. Nicht „remainingPowerUps neu bauen und activePowerUps überschreiben":
                 // collectPowerUp kann (Bombe -> detonateBomb -> spawnPowerUp) WÄHRENDDESSEN neue
@@ -1669,7 +1693,7 @@ public final class GameScene: SKScene {
                             asteroidsToRemoval.insert(absorbed)
                             
                             let currentScale = absorber.xScale
-                            let newScale = currentScale + 0.35
+                            let newScale = currentScale + GameplayTuning.asteroidAbsorbGrowthStep
                             absorber.xScale = newScale
                             absorber.yScale = newScale
                             
@@ -2210,11 +2234,12 @@ public final class GameScene: SKScene {
             // Splitter erben den Eintritts-Status des Eltern-Asteroiden (siehe wrapAround).
             child.hasEnteredScreen = parent.hasEnteredScreen
 
-            // Angle parent velocity +/- 30 degrees, speed up by 1.35x
+            // Angle parent velocity +/- 30 degrees, speed up by asteroidSplitSpeedFactor
             let baseAngle = atan2(parent.velocity.y, parent.velocity.x)
             let deviation = (i == 0 ? 0.52 : -0.52) + CGFloat.random(in: -0.08...0.08, using: &rng)
             let newAngle = baseAngle + deviation
-            let newSpeed = sqrt(parent.velocity.x * parent.velocity.x + parent.velocity.y * parent.velocity.y) * 1.35
+            let newSpeed = sqrt(parent.velocity.x * parent.velocity.x + parent.velocity.y * parent.velocity.y)
+                * GameplayTuning.asteroidSplitSpeedFactor
             
             child.velocity = CGPoint(
                 x: newSpeed * cos(newAngle),
@@ -3343,7 +3368,8 @@ public final class GameScene: SKScene {
     private func triggerImplosionCollapse(asteroid: Asteroid) {
         SoundManager.shared.playImplosion()
         
-        let collapseWell = GravityWell(strength: 1280000.0, lifetime: 4.0)
+        let collapseWell = GravityWell(strength: GameplayTuning.implosionCollapseStrength,
+                                       lifetime: GameplayTuning.implosionCollapseLifetime)
         collapseWell.position = asteroid.position
         self.addChild(collapseWell)
         self.activeGravityWells.append(collapseWell)

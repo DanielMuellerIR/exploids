@@ -178,7 +178,7 @@ public final class SpaceCat: SKNode {
         switch phase {
         case .entering:
             moveToward(entryTarget, speed: enterSpeed, dt: deltaTime)
-            if distance(position, entryTarget) < 6.0 {
+            if position.distance(to: entryTarget) < 6.0 {
                 position = entryTarget
                 enterStalking()
             }
@@ -268,10 +268,10 @@ public final class SpaceCat: SKNode {
         // gedeckelt: Ist das Schiff schneller als der Laser (Ship.maxVelocity 350 > laserSpeed 300),
         // gibt es keinen exakten Abfangpunkt – ohne Deckel würde `t` davonlaufen und der Schuss
         // sinnlos weit ins Leere zielen. Der Deckel hält die Vorhaltung in plausiblem Rahmen.
-        var t = min(maxLeadTime, distance(position, shipPos) / SpaceCat.laserSpeed)
+        var t = min(maxLeadTime, position.distance(to: shipPos) / SpaceCat.laserSpeed)
         for _ in 0..<2 {
             let pred = CGPoint(x: shipPos.x + shipVel.x * t, y: shipPos.y + shipVel.y * t)
-            t = min(maxLeadTime, distance(position, pred) / SpaceCat.laserSpeed)
+            t = min(maxLeadTime, position.distance(to: pred) / SpaceCat.laserSpeed)
         }
         let predicted = CGPoint(x: shipPos.x + shipVel.x * t, y: shipPos.y + shipVel.y * t)
         // Aus dem Auge zielen (nicht aus der Körpermitte) – die Laser kommen sichtbar aus dem Auge.
@@ -294,20 +294,8 @@ public final class SpaceCat: SKNode {
     }
 
     // MARK: - Bewegung / Steering
-
-    private func moveToward(_ target: CGPoint, speed: CGFloat, dt: TimeInterval) {
-        let dx = target.x - position.x, dy = target.y - position.y
-        let d = hypot(dx, dy)
-        let step = speed * CGFloat(dt)
-        if d <= step || d == 0 {
-            position = target
-        } else {
-            position.x += dx / d * step
-            position.y += dy / d * step
-        }
-    }
-
-    private func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat { hypot(a.x - b.x, a.y - b.y) }
+    // (`moveToward`/`distance` liegen zentral in VectorMath.swift — waren hier und in
+    // FloatingHead identisch dupliziert.)
 
     /// Steering aus mehreren Kräften: Abstand zum Schiff halten, Deckung suchen, Schüssen ausweichen,
     /// Objekten ausweichen, im Bild bleiben. Bewusst gedeckelt – fordernd, aber nicht unfair.
@@ -404,7 +392,7 @@ public final class SpaceCat: SKNode {
         var best: (position: CGPoint, radius: CGFloat)? = nil
         var bestD = coverSearchRange
         for obj in cover {
-            let dd = distance(position, obj.position)
+            let dd = position.distance(to: obj.position)
             if dd < bestD {
                 bestD = dd
                 best = obj

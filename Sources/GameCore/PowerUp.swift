@@ -264,22 +264,9 @@ public final class PowerUp: SKShapeNode {
         return elapsedTime >= lifetime
     }
     
-    /// Wraps the power-up around screen boundaries.
+    /// Wraps the power-up around screen boundaries. (Gemeinsame Logik: VectorMath.swift)
     public func wrapAround(screenSize: CGSize) {
-        let halfWidth = screenSize.width / 2
-        let halfHeight = screenSize.height / 2
-        
-        if position.x < -halfWidth {
-            position.x += screenSize.width
-        } else if position.x > halfWidth {
-            position.x -= screenSize.width
-        }
-        
-        if position.y < -halfHeight {
-            position.y += screenSize.height
-        } else if position.y > halfHeight {
-            position.y -= screenSize.height
-        }
+        wrapPositionAround(screenSize: screenSize)
     }
     
     /// Returns world-space coordinates of the vertices for collision check.

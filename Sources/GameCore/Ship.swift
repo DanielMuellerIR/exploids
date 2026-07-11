@@ -278,22 +278,9 @@ public final class Ship: SKShapeNode {
         position.y += velocity.y * dt
     }
     
-    /// Wraps the spaceship around screen boundaries.
+    /// Wraps the spaceship around screen boundaries. (Gemeinsame Logik: VectorMath.swift)
     public func wrapAround(screenSize: CGSize) {
-        let halfWidth = screenSize.width / 2
-        let halfHeight = screenSize.height / 2
-        
-        if position.x < -halfWidth {
-            position.x += screenSize.width
-        } else if position.x > halfWidth {
-            position.x -= screenSize.width
-        }
-        
-        if position.y < -halfHeight {
-            position.y += screenSize.height
-        } else if position.y > halfHeight {
-            position.y -= screenSize.height
-        }
+        wrapPositionAround(screenSize: screenSize)
     }
     
     /// Returns world-space coordinates of the ship's vertices.

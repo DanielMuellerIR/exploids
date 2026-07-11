@@ -160,7 +160,7 @@ public final class FloatingHead: SKNode {
         switch phase {
         case .entering:
             moveToward(hoverTarget, speed: enterSpeed, dt: deltaTime)
-            if distance(position, hoverTarget) < 6.0 {
+            if position.distance(to: hoverTarget) < 6.0 {
                 position = hoverTarget
                 phase = .lurking
                 stateTime = 0.0
@@ -239,23 +239,8 @@ public final class FloatingHead: SKNode {
     }
 
     // MARK: - Bewegung / Helfer
-
-    private func moveToward(_ target: CGPoint, speed: CGFloat, dt: TimeInterval) {
-        let dx = target.x - position.x
-        let dy = target.y - position.y
-        let d = hypot(dx, dy)
-        let step = speed * CGFloat(dt)
-        if d <= step || d == 0 {
-            position = target
-        } else {
-            position.x += dx / d * step
-            position.y += dy / d * step
-        }
-    }
-
-    private func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
-        return hypot(a.x - b.x, a.y - b.y)
-    }
+    // (`moveToward`/`distance` liegen zentral in VectorMath.swift — waren hier und in
+    // SpaceCat identisch dupliziert.)
 
     /// Aktive Ausweich-Bewegung: flieht vor dem Schiff, weicht Spieler-Schüssen aus und bleibt im
     /// sichtbaren Bereich. Bewusst gedeckelt („zügig, nicht Wahnsinn"). Funktioniert in beiden Modi
