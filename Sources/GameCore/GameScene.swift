@@ -73,26 +73,6 @@ enum GameplayTuning {
     static let implosionCollapseLifetime: TimeInterval = 4.0
 }
 
-/// Zentrale Tuning-Konstanten für die Feld-Rotation im Mad-Meteoroids-Modus.
-/// Hier justieren, um Drehzahl, Wechsel-Frequenz und „Plattenscratch" anzupassen.
-private enum MadRotation {
-    /// Drehgeschwindigkeit in Grad/Sekunde auf Level 1.
-    static let minSpeedDegPerSec: CGFloat = 6.0
-    /// Drehgeschwindigkeit in Grad/Sekunde ab Level 10 (Deckel).
-    static let maxSpeedDegPerSec: CGFloat = 30.0
-    /// Anzahl Richtungswechsel pro Level für Level 1..9 (Index 0 == Level 1).
-    /// Level 1–3: konstante Richtung; danach 2-2-2-3-3-4.
-    static let changesPerLevel: [Int] = [0, 0, 0, 2, 2, 2, 3, 3, 4]
-    /// Ab Level 10: Abstand zwischen Richtungswechseln in Sekunden.
-    static let highLevelChangeInterval: TimeInterval = 10.0
-    /// Ab Level 10: Wahrscheinlichkeit, dass ein Wechsel stattdessen ein „Plattenscratch" wird.
-    static let scratchChance: Double = 0.15
-    /// Dauer eines Plattenscratch (kurzes hartes Vor-Zurück) in Sekunden.
-    static let scratchDuration: TimeInterval = 0.4
-    /// Geschwindigkeits-Faktor während des Scratch (relativ zur normalen Level-Drehzahl).
-    static let scratchSpeedMultiplier: CGFloat = 3.0
-}
-
 /// Level-based difficulty and entity spawn weight configuration.
 public struct LevelSpawnConfig: Sendable {
     public let level: Int
@@ -125,7 +105,7 @@ public final class GameScene: SKScene {
     }
     
     public var lastDeathCause: DeathCause = .largeAsteroid
-    private let powerUpNotificationLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let powerUpNotificationLabel = SKLabelNode(fontNamed: "Courier-Bold")
     
     // Level configurations registry
     public static let levelConfigs: [LevelSpawnConfig] = [
@@ -164,10 +144,10 @@ public final class GameScene: SKScene {
     public private(set) var ship: Ship!
     
     /// Active lasers currently in the scene.
-    public private(set) var activeLasers: [Laser] = []
+    public internal(set) var activeLasers: [Laser] = []
     
     /// Active asteroids currently in the scene.
-    public private(set) var activeAsteroids: [Asteroid] = []
+    public internal(set) var activeAsteroids: [Asteroid] = []
     
     /// The current state of the game.
     public private(set) var gameState: GameState = .startScreen
@@ -178,7 +158,7 @@ public final class GameScene: SKScene {
     }
     
     /// The player's current score.
-    public private(set) var score: Int = 0
+    public internal(set) var score: Int = 0
     
     /// Persistent high scores.
     public private(set) var highScores: [HighScore] = []
@@ -198,7 +178,7 @@ public final class GameScene: SKScene {
     public var showsHighScoresOnStartScreen: Bool = true
 
     /// Temporary storage for initials entry.
-    private var typedInitials: String = ""
+    var typedInitials: String = ""
 
     /// Anzahl der bereits eingegebenen Initialen (0…3). Nur lesend – wird von der iOS-Tastatur
     /// (UIKeyInput.hasText) gebraucht, damit die Löschtaste korrekt arbeitet. macOS nutzt das nicht.
@@ -208,25 +188,25 @@ public final class GameScene: SKScene {
     /// Der aktuell laufende Spielmodus.
     public private(set) var gameMode: GameMode = .ancientAsteroids
     /// Der auf dem Startscreen vorgewählte Modus.
-    private var selectedMode: GameMode = .ancientAsteroids
+    var selectedMode: GameMode = .ancientAsteroids
 
     // Mad-Meteoroids: Rotations-Zustand des Spielfelds (nur im madMeteoroids-Modus aktiv)
     /// Aktuelle Winkelgeschwindigkeit des Feldes in Radiant/Sekunde (Vorzeichen = Drehrichtung).
-    private var fieldAngularVelocity: CGFloat = 0.0
+    var fieldAngularVelocity: CGFloat = 0.0
     /// In diesem Frame angewandte Drehung in Radiant (von Objekten + Sternen genutzt).
-    private var fieldDeltaThisFrame: CGFloat = 0.0
+    var fieldDeltaThisFrame: CGFloat = 0.0
     /// Vorzeichen der aktuellen Drehrichtung (+1 oder -1).
-    private var fieldRotationDirection: CGFloat = 1.0
+    var fieldRotationDirection: CGFloat = 1.0
     /// Zeitpunkt des nächsten geplanten Richtungswechsels.
-    private var nextDirectionChangeTime: TimeInterval = .greatestFiniteMagnitude
+    var nextDirectionChangeTime: TimeInterval = .greatestFiniteMagnitude
     /// Abstand zwischen Richtungswechseln im aktuellen Level (Sekunden).
-    private var directionChangeInterval: TimeInterval = 0.0
+    var directionChangeInterval: TimeInterval = 0.0
     /// Verbleibende Richtungswechsel im aktuellen Level (Int.max ab Level 10).
-    private var directionChangesRemaining: Int = 0
+    var directionChangesRemaining: Int = 0
     /// Ob gerade ein Plattenscratch (Vor-Zurück-Ruck) läuft.
-    private var scratchActive: Bool = false
+    var scratchActive: Bool = false
     /// Bereits verstrichene Zeit im aktuellen Scratch.
-    private var scratchElapsed: TimeInterval = 0.0
+    var scratchElapsed: TimeInterval = 0.0
     /// Flag: Beim nächsten Frame den Rotations-Scheduler fürs aktuelle Level neu aufsetzen
     /// (gesetzt aus `transitionTo`/Level-Aufstieg, da dort die absolute Spielzeit fehlt).
     private var fieldRotationPending: Bool = false
@@ -234,8 +214,8 @@ public final class GameScene: SKScene {
     // Level and countdown progression state
     public private(set) var currentLevel: Int = 1
     public private(set) var maxLevelReached: Int = 1
-    public private(set) var selectedStartLevel: Int = 1
-    public private(set) var levelTimeRemaining: TimeInterval = 120.0
+    public internal(set) var selectedStartLevel: Int = 1
+    public internal(set) var levelTimeRemaining: TimeInterval = 120.0
     public private(set) var isLevelClearing: Bool = false
     private var levelClearEndTime: TimeInterval = 0.0
     
@@ -300,7 +280,7 @@ public final class GameScene: SKScene {
     private var renderHUDHidden = false
 
     // Difficulty and Time state
-    public private(set) var playTime: TimeInterval = 0.0
+    public internal(set) var playTime: TimeInterval = 0.0
     
     /// Dynamic difficulty factor from 1.0 up to 2.5 scaling over 10 minutes.
     public var difficultyFactor: CGFloat {
@@ -313,7 +293,7 @@ public final class GameScene: SKScene {
     public var isSpawningEnabled: Bool = true
     private var lastSpawnTime: TimeInterval = 0.0
     
-    private func currentConfig() -> LevelSpawnConfig {
+    func currentConfig() -> LevelSpawnConfig {
         let base: LevelSpawnConfig
         if currentLevel >= 10 {
             let effectiveLevel = 10 + Int(playTime / 60.0)
@@ -345,13 +325,13 @@ public final class GameScene: SKScene {
     }
 
     // Active Entities
-    public private(set) var activeUFOs: [UFO] = []
-    public private(set) var activeGravityWells: [GravityWell] = []
-    public private(set) var activePowerUps: [PowerUp] = []
+    public internal(set) var activeUFOs: [UFO] = []
+    public internal(set) var activeGravityWells: [GravityWell] = []
+    public internal(set) var activePowerUps: [PowerUp] = []
     private var options: [OptionDrone] = []
 
     /// Aktiver Kopf-Boss („Der Götze"), falls gerade einer im Bild ist (max. einer gleichzeitig).
-    public private(set) var activeHead: FloatingHead?
+    public internal(set) var activeHead: FloatingHead?
     /// In welchem Level der Kopf-Boss zum ersten Mal auftaucht – pro Spiel zufällig 5–7.
     /// Wird in `transitionTo(.playing)` mit geseedetem `rng` neu gesetzt; der Default hier
     /// hat keine Wirkung, soll aber einen gültigen Startwert ergeben (nicht 0 oder falsch).
@@ -366,7 +346,7 @@ public final class GameScene: SKScene {
     private var headWasSpawning: Bool = false
 
     /// Aktive Weltraumkatzen (Minibosse), die gerade im Bild sind.
-    public private(set) var activeCats: [SpaceCat] = []
+    public internal(set) var activeCats: [SpaceCat] = []
     /// Ab diesem Level können Katzen auftauchen (vor dem Kopf-Boss in 5–7).
     private let catFirstLevel: Int = 3
     /// Wie viele Katzen gleichzeitig erlaubt sind (bewusst klein – sie sollen besonders bleiben).
@@ -377,14 +357,14 @@ public final class GameScene: SKScene {
     private var nextCatTime: TimeInterval = 0.0
 
     // Power-up durations
-    private var tripleShotEndTime: TimeInterval = 0.0
-    private var rapidFireEndTime: TimeInterval = 0.0
+    var tripleShotEndTime: TimeInterval = 0.0
+    var rapidFireEndTime: TimeInterval = 0.0
     private var beamEndTime: TimeInterval = 0.0       // Laserbeam (Space halten)
     private var rearLaserEndTime: TimeInterval = 0.0  // Zusätzlicher Schuss nach hinten
     private var compressEndTime: TimeInterval = 0.0   // Schiff auf ~30% verkleinert
 
     /// Gespeicherte Extra-Leben (Revive in der Mitte statt Game Over).
-    private var extraLives: Int = 0
+    var extraLives: Int = 0
 
     // Power-up-Tuning (Dauer in Sekunden) – hier zentral justierbar.
     private let beamDuration: TimeInterval = 10.0
@@ -399,7 +379,7 @@ public final class GameScene: SKScene {
     private let extraLifeInvincibility: TimeInterval = 5.0
 
     /// Visueller Knoten für den Laserbeam (wird pro Frame neu aufgebaut).
-    private let beamNode = SKShapeNode()
+    let beamNode = SKShapeNode()
 
     // Invincibility state (blinking on shield burst)
     private var invincibilityEndTime: TimeInterval = 0.0
@@ -421,95 +401,91 @@ public final class GameScene: SKScene {
 
     /// Die aktuell aktive Autopilot-Persona. `nil` = ein Mensch spielt (kein Autopilot). Wird beim
     /// Start einer Demo gesetzt und beim Verlassen des Demo-Spiels wieder auf `nil` gelegt.
-    private var autopilotPersona: AutopilotPersona?
+    var autopilotPersona: AutopilotPersona?
 
     /// Läuft gerade ein Demo-Lauf (Autopilot steuert das `.playing`)? Steuert zwei Sonderfälle:
     /// KEIN Highscore-Namenseintrag bei Game Over und KEINE Aufnahme/Archivierung des Laufs.
-    private var isDemoActive: Bool { autopilotPersona != nil }
+    var isDemoActive: Bool { autopilotPersona != nil }
 
     /// Eigener geseedeter Zufallsgenerator NUR für den Autopiloten (Skill-„Zittern"/Jitter). Bewusst
     /// getrennt vom Gameplay-RNG (`rng`), damit die KI-Entscheidungen den Spielverlauf-Zufall
     /// (Spawns etc.) nicht verschieben – derselbe Seed erzeugt so mit und ohne Autopilot dieselbe Welt.
-    private var autopilotRng = GameRandom(seed: 0xA0710_5EED)
+    var autopilotRng = GameRandom(seed: 0xA0710_5EED)
 
     /// Index der nächsten Demo-Persona im Roster (reihum).
-    private var nextPersonaIndex: Int = 0
+    var nextPersonaIndex: Int = 0
 
     /// Phasen des Attract-Kreislaufs. Menü-Phasen laufen über eine Echtzeit-Uhr (`attractTimer`),
     /// die Demo selbst läuft bis zum Game Over.
-    private enum AttractPhase {
+    enum AttractPhase {
         case idle          // Startbildschirm, wartet auf Mensch ODER 30 s → Demo
         case demoPlaying   // Autopilot spielt gerade
         case demoScores    // Nach Demo-Game-Over: Highscore-Liste, 10 s
         case demoRestScreen // Startbildschirm zwischen zwei Demos, 15 s → nächste Demo
     }
-    private var attractPhase: AttractPhase = .idle
+    var attractPhase: AttractPhase = .idle
     /// In der aktuellen Menü-Attract-Phase verstrichene ECHTZEIT (Sekunden). Nur für idle/scores/rest.
-    private var attractTimer: TimeInterval = 0.0
+    var attractTimer: TimeInterval = 0.0
 
     // Enemy Spawning times
     private var lastUFOSpawnTime: TimeInterval = 0.0
     private var lastGravityWellSpawnTime: TimeInterval = 0.0
     
     // UI Label Nodes
-    private let titleLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let startPromptLabel = SKLabelNode(fontNamed: "Courier")
-    private let instructionsLabel = SKLabelNode(fontNamed: "Courier")
+    let titleLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let startPromptLabel = SKLabelNode(fontNamed: "Courier")
+    let instructionsLabel = SKLabelNode(fontNamed: "Courier")
     
-    private let scoreLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let hiScoreLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let scoreLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let hiScoreLabel = SKLabelNode(fontNamed: "Courier-Bold")
     
-    private let nameEntryPromptLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let nameEntryInputLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let nameEntryPromptLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let nameEntryInputLabel = SKLabelNode(fontNamed: "Courier-Bold")
     
-    private let gameOverLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let finalScoreLabel = SKLabelNode(fontNamed: "Courier")
-    private let restartLabel = SKLabelNode(fontNamed: "Courier")
+    let gameOverLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let finalScoreLabel = SKLabelNode(fontNamed: "Courier")
+    let restartLabel = SKLabelNode(fontNamed: "Courier")
 
     /// Overlay-Hinweis „▶ REPLAY", oben sichtbar, solange eine Aufnahme abgespielt wird.
-    private let replayOverlayLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let replayOverlayLabel = SKLabelNode(fontNamed: "Courier-Bold")
     
-    private let highScoresTitleLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private var highScoreLineLabels: [SKLabelNode] = []
+    let highScoresTitleLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    var highScoreLineLabels: [SKLabelNode] = []
     
     // Level and HUD labels
-    private let timerLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let levelLabel = SKLabelNode(fontNamed: "Courier")
-    private let livesLabel = SKLabelNode(fontNamed: "Courier")
-    private let levelSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let modeSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let timerLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let levelLabel = SKLabelNode(fontNamed: "Courier")
+    let livesLabel = SKLabelNode(fontNamed: "Courier")
+    let levelSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let modeSelectionLabel = SKLabelNode(fontNamed: "Courier-Bold")
     // Einstellungen-Ansicht: Titel + drei Umschalt-Zeilen + Bedien-Hinweis.
-    private let settingsTitleLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let settingsMusicLabel = SKLabelNode(fontNamed: "Courier")
-    private let settingsSfxLabel = SKLabelNode(fontNamed: "Courier")
-    private let settingsAutoFireLabel = SKLabelNode(fontNamed: "Courier")
-    private let settingsHintLabel = SKLabelNode(fontNamed: "Courier")
-    private let levelClearedLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let prepareNextLevelLabel = SKLabelNode(fontNamed: "Courier")
+    let settingsTitleLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let settingsMusicLabel = SKLabelNode(fontNamed: "Courier")
+    let settingsSfxLabel = SKLabelNode(fontNamed: "Courier")
+    let settingsAutoFireLabel = SKLabelNode(fontNamed: "Courier")
+    let settingsHintLabel = SKLabelNode(fontNamed: "Courier")
+    let levelClearedLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let prepareNextLevelLabel = SKLabelNode(fontNamed: "Courier")
     
     // Quit Confirmation Overlay
-    private let quitPromptLabel = SKLabelNode(fontNamed: "Courier-Bold")
-    private let quitSubPromptLabel = SKLabelNode(fontNamed: "Courier")
+    let quitPromptLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let quitSubPromptLabel = SKLabelNode(fontNamed: "Courier")
     
     // Glossary Elements
-    private let glossaryContainer = SKNode()
-    private let glossaryStaticContainer = SKNode()
-    private let glossaryPromptLabel = SKLabelNode(fontNamed: "Courier")
+    let glossaryContainer = SKNode()
+    let glossaryStaticContainer = SKNode()
+    let glossaryPromptLabel = SKLabelNode(fontNamed: "Courier")
 
     /// Startbildschirm-Hinweis „PRESS D FOR DEMO" (nur sichtbar, wenn der Attract-Modus aktiv ist).
-    private let demoPromptLabel = SKLabelNode(fontNamed: "Courier")
+    let demoPromptLabel = SKLabelNode(fontNamed: "Courier")
     /// Overlay während eines laufenden Demo-Laufs: zeigt „DEMO — <PERSONA>", damit klar ist, dass
     /// gerade der Autopilot spielt (und kein Mensch).
-    private let demoOverlayLabel = SKLabelNode(fontNamed: "Courier-Bold")
+    let demoOverlayLabel = SKLabelNode(fontNamed: "Courier-Bold")
     /// Y-Position des untersten Glossar-Eintrags (für die Scroll-Schleifengrenzen).
-    private var glossaryContentBottom: CGFloat = -750
-    /// Untere Scroll-Grenze (Startposition): der oberste Eintrag erscheint von unten.
-    private var glossaryScrollBottom: CGFloat { -600 }
-    /// Obere Scroll-Grenze: weit genug, dass der unterste Eintrag oben hinausläuft, bevor umgebrochen wird.
-    private var glossaryScrollTop: CGFloat { -glossaryContentBottom + 450 }
+    var glossaryContentBottom: CGFloat = -750
     
     /// Currently pressed keys.
-    private var activeKeys = Set<UInt16>()
+    var activeKeys = Set<UInt16>()
     
     /// The timestamp of the last update.
     private var lastUpdateTime: TimeInterval = 0.0
@@ -626,7 +602,7 @@ public final class GameScene: SKScene {
     ///   - characters: getippte Zeichen (für den „#"-Cheat und die Initialen-Eingabe), ggf. nil
     ///   - charactersIgnoringModifiers: Zeichen ohne Modifier (Cmd+Q, „M"-Musik-Toggle), ggf. nil
     ///   - isCommandDown: ob die Command-Taste gehalten wird (für Cmd+Q)
-    private func handleKeyDown(keyCode: UInt16, characters: String?, charactersIgnoringModifiers: String?, isCommandDown: Bool) {
+    func handleKeyDown(keyCode: UInt16, characters: String?, charactersIgnoringModifiers: String?, isCommandDown: Bool) {
         // Während einer Replay-Wiedergabe sind LIVE-Eingaben gesperrt (nur der Player selbst speist
         // über `injectReplayInput` ein, das setzt `isInjectingReplay`). So kann der Zuschauer das
         // laufende Replay nicht verfälschen. Einzige Ausnahme: ESC bricht die Wiedergabe ab.
@@ -812,7 +788,7 @@ public final class GameScene: SKScene {
     }
 
     /// Plattformunabhängige Verarbeitung des Loslassens einer Taste.
-    private func handleKeyUp(keyCode: UInt16) {
+    func handleKeyUp(keyCode: UInt16) {
         // Live-Eingaben während eines Replays sperren (siehe handleKeyDown).
         if replayPlayer != nil && !isInjectingReplay {
             return
@@ -829,7 +805,7 @@ public final class GameScene: SKScene {
     // MARK: - Laser Firing
     
     /// Spawns a laser from the ship's tip with a cooldown limit.
-    private func fireLaser() {
+    func fireLaser() {
         let now = gameTime
         let isRapidActive = now < rapidFireEndTime
         let cooldown: TimeInterval = isRapidActive ? GameplayTuning.laserCooldownRapid
@@ -889,275 +865,6 @@ public final class GameScene: SKScene {
 
         // Play laser sound effect
         SoundManager.shared.playLaser()
-    }
-
-    // MARK: - Autopilot (Demo/Attract-Modus)
-
-    /// Kürzeste Verbindung (dx,dy) von `from` nach `to` unter Berücksichtigung des Kanten-Wraps
-    /// (Ancient-Modus: Objekte wrappen bei ±size/2). Entscheidend für den Autopiloten – sonst
-    /// erscheint ein über die Naht heranfliegender Asteroid fälschlich „am anderen Ende" und weit weg.
-    private func wrappedDelta(from: CGPoint, to: CGPoint) -> CGPoint {
-        var dx = to.x - from.x
-        var dy = to.y - from.y
-        let w = size.width, h = size.height
-        if dx > w/2 { dx -= w } else if dx < -w/2 { dx += w }
-        if dy > h/2 { dy -= h } else if dy < -h/2 { dy += h }
-        return CGPoint(x: dx, y: dy)
-    }
-
-    /// Berechnet die Bewegungseingaben des Demo-Autopiloten für DIESEN Simulationsschritt und setzt
-    /// sie als „gedrückte Tasten" (`activeKeys`): Schub (Keycode 126) und Drehen links/rechts
-    /// (123/124). Gefeuert wird separat über `autoFire` (beim Demo-Start aktiviert).
-    ///
-    /// Modell: **Potenzialfeld-Navigation.** Jede Bedrohung stößt das Schiff ab (Stärke ∝ Nähe²),
-    /// Schützen (UFO/Katze/Boss) und wertvolle Power-ups ziehen es schwach an. Die Summe ergibt eine
-    /// Wunsch-Flugrichtung „durch die Lücke ins Freie". Das Schiff dreht dorthin und hält per Schub
-    /// sein Reisetempo (`cruiseSpeed`) – es bleibt also ständig in Bewegung (feindliche Snipes auf die
-    /// aktuelle Position verfehlen) und feuert nach vorn (räumt den Weg). Weil die Level zeitbasiert
-    /// sind (60 s überleben), ist Ausweichen wichtiger als Abräumen.
-    ///
-    /// Wichtige Feinheit: einen NAHEN großen Asteroiden zerschießt man NICHT gern (die zwei Splitter
-    /// fliegen schneller weiter Richtung Schiff) – das Feld lenkt lieber drumherum.
-    private func applyAutopilotInput(persona: AutopilotPersona) {
-        let shipPos = ship.position
-        let shipVel = ship.velocity
-        let shipR: CGFloat = 12.0   // grober Schiffsradius für die Rand-zu-Rand-Distanz
-
-        // Abstoßungs-Vektor (weg von Gefahren) und der bedrohlichste einzelne Beitrag.
-        var fleeX: CGFloat = 0, fleeY: CGFloat = 0
-        var maxThreat: CGFloat = 0
-        // Vorausschau: gegen die ZUKÜNFTIGE Position bewegter Gefahren ausweichen, nicht die aktuelle.
-        let lookahead: CGFloat = 0.50
-
-        // Ziel-Kandidaten: bedrohlichster Asteroid (zum präventiven Wegschießen) und nächster Schütze.
-        var aimAngle: CGFloat? = nil; var aimEdge = CGFloat.greatestFiniteMagnitude
-        var shooterRel: CGPoint? = nil; var shooterDist = CGFloat.greatestFiniteMagnitude
-
-        // Eine Gefahr einrechnen: abstoßen (Stärke ∝ Nähe² zur vorausgeschauten Position) und – falls
-        // beschießbar – als möglichen Zielkandidaten (nach Rand-Abstand JETZT) merken.
-        func repel(pos: CGPoint, vel: CGPoint, radius: CGFloat, weight: CGFloat, aimable: Bool) {
-            // Abstoßung gegen die vorausgeschaute Position (fängt schnelle Objekte rechtzeitig ab).
-            let futurePos = CGPoint(x: pos.x + vel.x * lookahead, y: pos.y + vel.y * lookahead)
-            let fRel = wrappedDelta(from: shipPos, to: futurePos)
-            let fCenter = sqrt(fRel.x*fRel.x + fRel.y*fRel.y)
-            if fCenter > 0.0001 {
-                let fEdge = fCenter - radius - shipR
-                let range = persona.influence
-                if fEdge < range {
-                    let proximity = max(0, (range - fEdge) / range)   // 0 (fern) .. 1 (berührt sich)
-                    let strength = proximity * proximity * weight
-                    fleeX -= fRel.x / fCenter * strength
-                    fleeY -= fRel.y / fCenter * strength
-                    if strength > maxThreat { maxThreat = strength }
-                }
-            }
-            // Zielauswahl nach aktuellem Rand-Abstand (das Nächste zuerst wegschießen), mit Vorhalt.
-            guard aimable else { return }
-            let rel = wrappedDelta(from: shipPos, to: pos)
-            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
-            let edge = d - radius - shipR
-            if edge < aimEdge {
-                aimEdge = edge
-                let t = d / 600.0
-                aimAngle = atan2(rel.y + vel.y * t, rel.x + vel.x * t)
-            }
-        }
-
-        for a in activeAsteroids where a.hasEnteredScreen {
-            repel(pos: a.position, vel: a.velocity, radius: a.sizeClass.rawValue, weight: 1.0, aimable: true)
-        }
-        for u in activeUFOs {
-            repel(pos: u.position, vel: u.velocity, radius: 16, weight: 1.1, aimable: true)
-            let rel = wrappedDelta(from: shipPos, to: u.position)
-            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
-            if d < shooterDist { shooterDist = d; shooterRel = rel }
-        }
-        for c in activeCats {
-            repel(pos: c.position, vel: .zero, radius: c.collisionRadius, weight: 1.2, aimable: true)
-            let rel = wrappedDelta(from: shipPos, to: c.position)
-            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
-            if d < shooterDist { shooterDist = d; shooterRel = rel }
-        }
-        if let head = activeHead {
-            repel(pos: head.position, vel: .zero, radius: head.collisionRadius, weight: 1.5, aimable: true)
-        }
-        // Feindliche Schüsse (UFO- und Katzenlaser) sind schnell und tödlich – stark abstoßen, nicht anpeilen.
-        for l in activeLasers where l.type == .enemy || l.type == .catEye {
-            repel(pos: l.position, vel: l.velocity, radius: 4, weight: 1.7, aimable: false)
-        }
-        // Schwarze Löcher: distanzbasiert aus dem Sog-Einflussradius abstoßen (nähern sich nicht selbst).
-        for well in activeGravityWells {
-            let rel = wrappedDelta(from: shipPos, to: well.position)
-            let center = sqrt(rel.x*rel.x + rel.y*rel.y)
-            let range = well.influenceRadius
-            guard center > 0.0001, center < range else { continue }
-            let nx = rel.x / center, ny = rel.y / center
-            let proximity = (range - center) / range
-            let strength = proximity * proximity * 3.5 * persona.wellFearMult
-            fleeX -= nx * strength; fleeY -= ny * strength
-            if strength > maxThreat { maxThreat = strength }
-        }
-
-        // Power-up-Ziel (Schild/Extra-Leben zuerst) für die sichere Phase merken.
-        var seekRel: CGPoint? = nil; var seekScore = CGFloat.greatestFiniteMagnitude
-        for p in activePowerUps {
-            let rel = wrappedDelta(from: shipPos, to: p.position)
-            let d = sqrt(rel.x*rel.x + rel.y*rel.y)
-            guard d < 340 else { continue }
-            let value: CGFloat
-            switch p.type {
-            case .extraLife: value = 0.30
-            case .shield:    value = 0.40
-            case .bomb:      value = 0.55
-            case .compress:  value = 0.65   // schrumpft das Schiff → kleineres Ziel (defensiv gut)
-            default:         value = 0.85
-            }
-            let score = d * value
-            if score < seekScore { seekScore = score; seekRel = rel }
-        }
-
-        // --- Kurs + Schubwunsch: Ausweichen hat Vorrang, sonst zielen/sammeln, dabei mobil bleiben ---
-        let fleeMag = sqrt(fleeX*fleeX + fleeY*fleeY)
-        let dodging = fleeMag > 0.20                       // spürbare Bedrohung → aktiv ausweichen
-        let speed = sqrt(shipVel.x*shipVel.x + shipVel.y*shipVel.y)
-
-        let desiredAngle: CGFloat
-        var wantThrust = false
-        var cruise = persona.cruiseSpeed
-        if dodging {
-            desiredAngle = atan2(fleeY, fleeX)             // weg von der (vorausgeschauten) Gefahr
-            wantThrust = true
-        } else if let rel = seekRel {
-            desiredAngle = atan2(rel.y, rel.x)             // Power-up anfliegen (mobil, sammelt Schilde)
-            wantThrust = true
-            cruise = min(cruise, 150)
-        } else if let rel = shooterRel {
-            desiredAngle = atan2(rel.y, rel.x)             // Schütze: draufhalten und langsam anfliegen
-            wantThrust = speed < 70                        // (leichte Drift → Snipes verfehlen)
-            cruise = 90
-        } else if let aim = aimAngle {
-            desiredAngle = aim                             // ruhig den nächsten Asteroiden anpeilen
-            wantThrust = false
-        } else {
-            desiredAngle = ship.zRotation
-            wantThrust = false
-        }
-
-        // --- In Tasten übersetzen ---
-        // Persona-Zittern (Skill-Fehler) auf den Kursfehler addieren; Fehler auf [-π, π] normieren.
-        let jitter = persona.aimJitter > 0
-            ? CGFloat.random(in: -persona.aimJitter...persona.aimJitter, using: &autopilotRng)
-            : 0
-        var err = desiredAngle - ship.zRotation + jitter
-        while err > .pi { err -= 2 * .pi }
-        while err < -.pi { err += 2 * .pi }
-
-        // Bewegungstasten dieses Schritts frisch setzen (nur die vom Autopiloten genutzten Codes).
-        activeKeys.remove(126); activeKeys.remove(13)
-        activeKeys.remove(123); activeKeys.remove(0)
-        activeKeys.remove(124); activeKeys.remove(2)
-
-        // Drehen: positiver Winkel (gegen Uhrzeiger) ⇒ Linkstaste (123 setzt rotationInput +1).
-        if err > persona.deadzone {
-            activeKeys.insert(123)
-        } else if err < -persona.deadzone {
-            activeKeys.insert(124)
-        }
-
-        // Schub: solange der Kurs grob passt und das Wunschtempo nicht erreicht ist. Beim Ausweichen
-        // großzügiger (auch bei schrägem Kurs schon beschleunigen → schneller aus der Gefahr).
-        let alignTol: CGFloat = dodging ? 1.8 : 1.0
-        if wantThrust && abs(err) < alignTol && speed < cruise {
-            activeKeys.insert(126)
-        }
-    }
-
-    /// Startet die nächste Demo: nächste Persona aus dem Roster (reihum), deren passendes Startlevel,
-    /// klassischer Modus, frisches Spiel mit aktivem Autopilot. Demo-Läufe werden nicht aufgezeichnet.
-    private func startDemo() {
-        let persona = AutopilotPersona.roster[nextPersonaIndex % AutopilotPersona.roster.count]
-        nextPersonaIndex = (nextPersonaIndex + 1) % AutopilotPersona.roster.count
-        autopilotPersona = persona
-        // Autopilot-Jitter reproduzierbar seeden (Persona-Index + Startlevel), getrennt vom Gameplay-RNG.
-        autopilotRng = GameRandom(seed: 0xA0710_5EED
-                                  &+ UInt64(nextPersonaIndex) &* 0x9E37_79B9
-                                  &+ UInt64(persona.startLevel))
-        selectedMode = .ancientAsteroids     // klassischer Modus: berechenbares, langes Überleben
-        selectedStartLevel = persona.startLevel
-        autoFire = true                       // Demo feuert durchgehend
-        attractPhase = .demoPlaying
-        attractTimer = 0
-        startNewGame()                        // Fresh-Game-Pfad (kein Recorder, da isDemoActive)
-        updateDemoOverlay()
-    }
-
-    /// Bricht die laufende Automatik (Demo oder Zwischen-Menü-Phase) ab und kehrt in den ruhigen
-    /// Leerlauf am Startbildschirm zurück – der Mensch übernimmt.
-    private func abortAttractToIdle() {
-        autopilotPersona = nil
-        attractPhase = .idle
-        attractTimer = 0
-        // Vom Autopiloten zuletzt gesetzte Bewegungstasten (Drehen/Schub) verwerfen – sonst „erbt"
-        // ein danach vom Menschen gestartetes Spiel diese Tasten und das Schiff dreht/schiebt von
-        // selbst weiter, bis der Spieler die Richtung einmal selbst drückt und wieder loslässt.
-        activeKeys.removeAll()
-        transitionTo(.startScreen)
-    }
-
-    /// Ob gerade ein Autopilot-Demolauf aktiv ist (für die iOS-Schicht, um im Demo-Modus die
-    /// Touch-Controls auszublenden – ein Zuschauer braucht sie nicht).
-    public var isDemoRunning: Bool { isDemoActive }
-
-    /// Startet sofort eine Demo aus dem Menü heraus (iOS-DEMO-Button; auf macOS macht das die Taste
-    /// „D"). Nur vom Startbildschirm und nur bei aktivem Attract-Modus – sonst passiert nichts.
-    public func startDemoFromMenu() {
-        guard attractModeEnabled, gameState == .startScreen else { return }
-        startDemo()
-    }
-
-    /// Treibt die Menü-Phasen des Attract-Kreislaufs über die Echtzeit-Uhr. Die Demo selbst
-    /// (`.demoPlaying`) läuft bis zum Game Over; dort wird auf `.demoScores` weitergeschaltet.
-    private func updateAttract(realDelta: TimeInterval) {
-        switch attractPhase {
-        case .idle:
-            // Nur am Startbildschirm hochzählen; in anderen Menüs (Glossar/Einstellungen/…) ruht der
-            // Leerlauf-Timer, damit nicht mitten im Blättern eine Demo losläuft.
-            if gameState == .startScreen {
-                attractTimer += realDelta
-                if attractTimer >= 30.0 { startDemo() }
-            } else {
-                attractTimer = 0
-            }
-        case .demoScores:
-            attractTimer += realDelta
-            if attractTimer >= 10.0 {          // Highscore-Liste 10 s zeigen …
-                attractPhase = .demoRestScreen
-                attractTimer = 0
-                transitionTo(.startScreen)
-            }
-        case .demoRestScreen:
-            attractTimer += realDelta
-            if attractTimer >= 15.0 { startDemo() }   // … dann 15 s Startbildschirm, dann nächste Demo.
-        case .demoPlaying:
-            break   // läuft bis Game Over (weitergeschaltet in triggerGameOver)
-        }
-    }
-
-    /// Blendet das Demo-Overlay („DEMO — <PERSONA>") ein, solange der Autopilot im laufenden Spiel
-    /// steuert, sonst aus.
-    private func updateDemoOverlay() {
-        if let persona = autopilotPersona, gameState == .playing {
-            // Text nur bei Änderung neu setzen (spart die String-Allokation im Pro-Frame-Aufruf
-            // aus dem Game-Loop, siehe update()).
-            // NUR ASCII verwenden: Der Pixel-Font (PressStart2P) enthält keine Sonderzeichen wie
-            // „▷" oder Em-Dash „—" – fehlt schon das erste Glyph, rendert SpriteKit das GANZE Label
-            // leer (auf iOS so beobachtet). „>" und „-" sind im Font vorhanden.
-            let text = "> DEMO - \(persona.name)"
-            if demoOverlayLabel.text != text { demoOverlayLabel.text = text }
-            demoOverlayLabel.isHidden = false
-        } else {
-            demoOverlayLabel.isHidden = true
-        }
     }
 
     // MARK: - Game Loop
@@ -2001,7 +1708,7 @@ public final class GameScene: SKScene {
     
     // MARK: - Damage / Shield logic
     
-    private func damageShip() {
+    func damageShip() {
         if ship.isShieldActive {
             ship.shieldLevel -= 1   // eine Schild-Stufe absorbiert den Treffer
             SoundManager.shared.playExplosion()
@@ -2026,16 +1733,6 @@ public final class GameScene: SKScene {
         }
     }
 
-    /// Aktualisiert die Extra-Leben-Anzeige (nur sichtbar, wenn welche vorhanden).
-    private func updateLivesLabel() {
-        if extraLives > 0 {
-            livesLabel.text = "LIVES: \(extraLives)"
-            livesLabel.isHidden = (gameState != .playing)
-        } else {
-            livesLabel.isHidden = true
-        }
-    }
-    
     // MARK: - Camera Shake
     
     /// Triggers a subtle procedural screen shake on the camera.
@@ -2282,7 +1979,7 @@ public final class GameScene: SKScene {
     }
     
     /// Handles collection updates for powerups.
-    private func collectPowerUp(_ powerUp: PowerUp) {
+    func collectPowerUp(_ powerUp: PowerUp) {
         let now = gameTime
         let text: String
         let color: SKColor
@@ -2539,7 +2236,7 @@ public final class GameScene: SKScene {
     /// Baut den Laserbeam dieses Frames auf: eine Polylinie ab der Schiffsnase in Blickrichtung,
     /// halbe Bildschirmbreite lang, an den Bildschirmkanten toroidal umgebrochen (ragt also auf der
     /// gegenüberliegenden Seite wieder herein). Zerstört Asteroiden entlang des Strahls.
-    private func fireBeam(currentTime: TimeInterval) {
+    func fireBeam(currentTime: TimeInterval) {
         let halfW = (size.width > 100 ? size.width : 1024.0) / 2
         let halfH = (size.height > 100 ? size.height : 768.0) / 2
         let angle = ship.zRotation
@@ -3195,146 +2892,6 @@ public final class GameScene: SKScene {
         if renderHUDHidden { hideRenderHUD() }
     }
 
-    /// iOS-Breitformat: positioniert die Startbildschirm-Labels passend zur aktuellen Bildhöhe
-    /// und blendet die tastatur-zentrierten Hinweise aus (die Touch-Buttons übernehmen das).
-    /// Idempotent – wird auch bei Größenänderung (didChangeSize) erneut aufgerufen.
-    private func applyCompactStartScreenLayout() {
-        let topY = size.height / 2
-        titleLabel.fontSize = 40
-        titleLabel.position = CGPoint(x: 0, y: topY - 44)
-        modeSelectionLabel.position = CGPoint(x: 0, y: 24)
-        levelSelectionLabel.position = CGPoint(x: 0, y: -24)
-        startPromptLabel.isHidden = true
-        instructionsLabel.isHidden = true
-        glossaryPromptLabel.isHidden = true
-    }
-
-    /// iOS-Breitformat: Highscore-Liste kompakt unter einem Titel oben anordnen (eigene
-    /// `.highScores`-Ansicht). Setzt die Schriftgrößen explizit zurück, falls zuvor das
-    /// kompaktere Game-Over-Layout (kleinere Titel-Schrift) aktiv war – dieselben Label-Objekte.
-    private func applyCompactHighScoresLayout() {
-        let topY = size.height / 2
-        highScoresTitleLabel.verticalAlignmentMode = .baseline
-        highScoresTitleLabel.fontSize = 24
-        highScoresTitleLabel.position = CGPoint(x: 0, y: topY - 50)
-        let firstLineY = topY - 95
-        for (i, label) in highScoreLineLabels.enumerated() {
-            label.verticalAlignmentMode = .baseline
-            label.fontSize = 16
-            label.position = CGPoint(x: 0, y: firstLineY - CGFloat(i) * 28)
-        }
-    }
-
-    /// iOS-Breitformat: kompakte Game-Over-Anordnung. Stapelt GAME OVER, Punktzahl, Highscore-Titel
-    /// und -Liste platzsparend von oben nach unten – damit nichts überlappt (im Querformat ist
-    /// wenig Höhe da). Blendet den Tastatur-Hinweis aus; die Touch-Buttons REPLAY/ZURÜCK am unteren
-    /// Rand übernehmen diese Funktion. macOS nutzt unverändert das feste 4:3-Layout.
-    private func applyCompactGameOverLayout() {
-        let topY = size.height / 2
-        // Alle Labels mittig ausrichten (verticalAlignmentMode .center): Bei der Default-Baseline
-        // wächst der Text über die Position hinaus nach oben – dadurch ragte „GAME OVER" oben raus.
-        // Mit .center ist die y-Position der Mittelpunkt, das Stapeln wird vorhersagbar.
-        gameOverLabel.verticalAlignmentMode = .center
-        gameOverLabel.fontSize = 32
-        gameOverLabel.position = CGPoint(x: 0, y: topY - 30)
-        finalScoreLabel.verticalAlignmentMode = .center
-        finalScoreLabel.fontSize = 16
-        finalScoreLabel.position = CGPoint(x: 0, y: topY - 62)
-        highScoresTitleLabel.verticalAlignmentMode = .center
-        highScoresTitleLabel.fontSize = 18
-        highScoresTitleLabel.position = CGPoint(x: 0, y: topY - 92)
-        let firstLineY = topY - 120
-        for (i, label) in highScoreLineLabels.enumerated() {
-            label.verticalAlignmentMode = .center
-            label.fontSize = 15
-            label.position = CGPoint(x: 0, y: firstLineY - CGFloat(i) * 24)
-        }
-        // Tastatur-Hinweis ("PRESS R …") ausblenden – auf iOS gibt es nur die Touch-Buttons.
-        restartLabel.isHidden = true
-    }
-
-    /// iOS-Breitformat: aktualisiert das kompakte Menü-Layout nach einer Größenänderung.
-    /// Wird aus der bestehenden didChangeSize-Override aufgerufen. Auf macOS (isCompactLayout
-    /// = false) ein No-op – das 4:3-Layout bleibt unverändert.
-    private func refreshCompactLayoutForCurrentState() {
-        guard isCompactLayout else { return }
-        switch gameState {
-        case .startScreen: applyCompactStartScreenLayout()
-        case .highScores: applyCompactHighScoresLayout()
-        case .gameOver: applyCompactGameOverLayout()
-        case .playing: applyCompactPlayingLayout()
-        default: break
-        }
-    }
-
-    /// iOS-Spiel-HUD (nur Kompaktlayout): platzsparend, damit möglichst viel Bildfläche fürs
-    /// Spielfeld bleibt. Score klein oben links, Hi-Score im Spiel ausgeblendet, und Level/Zeit/Demo
-    /// als eine mittig zentrierte Zeile knapp unter dem ESC-Knopf – gleiche Schriftgröße wie der
-    /// Score, aber jeweils eigene Farbe (Level cyan, Zeit weiß, Demo grün). Nutzt die TATSÄCHLICHE
-    /// Szenengröße (nach resizeFill ~874×402), nicht die fest verdrahteten Setup-Werte.
-    private func applyCompactPlayingLayout() {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        // Score ~30 % kleiner als der macOS-Default (20 → 14) und kompakt oben links.
-        let hudFontSize: CGFloat = 14
-        scoreLabel.fontSize = hudFontSize
-        scoreLabel.position = CGPoint(x: -halfWidth + 16, y: halfHeight - 26)
-        // Hi-Score im Spiel komplett weg (spart oben rechts Platz).
-        hiScoreLabel.isHidden = true
-        // Leben direkt unter den Score (kompakt oben links, gleiche Größe).
-        livesLabel.fontSize = hudFontSize
-        livesLabel.position = CGPoint(x: -halfWidth + 16, y: halfHeight - 26 - hudFontSize - 6)
-
-        // Level / Zeit / Demo: eine Schriftgröße (= Score), drei Farben, als Gruppe horizontal
-        // zentriert. Y liegt knapp unter dem ESC-Knopf (dieser belegt die obersten ~10 % der Höhe).
-        levelLabel.fontSize = hudFontSize
-        timerLabel.fontSize = hudFontSize
-        // Demo-Zeile exakt wie Level rendern: GLEICHE Schrift und Größe – nur andere Farbe (grün).
-        // Sonst fällt der abweichende Pixel-Font (Press Start 2P, aus dem macOS-Overlay) durch eine
-        // größere/fettere Optik auf. Auf macOS bleibt das Overlay unberührt (Compact-Layout nur iOS).
-        demoOverlayLabel.fontName = levelLabel.fontName
-        demoOverlayLabel.fontSize = hudFontSize
-        for label in [levelLabel, timerLabel, demoOverlayLabel] {
-            label.horizontalAlignmentMode = .left
-            label.verticalAlignmentMode = .center
-        }
-        let rowY = halfHeight - size.height * 0.15   // etwas unter ESC
-        let gap = size.width * 0.025                 // Abstand zwischen den drei Einträgen
-        let showDemo = isDemoActive
-        // Textbreiten messen (die Zeit ändert sich sekündlich → jede Frame neu zentrieren).
-        let wLevel = levelLabel.frame.width
-        let wTime  = timerLabel.frame.width
-        let wDemo  = showDemo ? demoOverlayLabel.frame.width : 0
-        let total  = wLevel + gap + wTime + (showDemo ? gap + wDemo : 0)
-        var x = -total / 2
-        levelLabel.position = CGPoint(x: x, y: rowY); x += wLevel + gap
-        timerLabel.position = CGPoint(x: x, y: rowY); x += wTime + gap
-        if showDemo { demoOverlayLabel.position = CGPoint(x: x, y: rowY) }
-    }
-    
-    private func updateLevelSelectionLabel() {
-        let isCompleted = selectedStartLevel < maxLevelReached
-        let starStr = isCompleted ? " ★" : ""
-        // Auf Touch-Geräten übernehmen die Buttons die Auswahl -> Tastatur-Hinweis weglassen.
-        let hint = isCompactLayout ? "" : "  (◀/▶ TO SELECT)"
-        levelSelectionLabel.text = "STARTING LEVEL: \(selectedStartLevel)\(starStr)\(hint)"
-    }
-
-    private func updateModeSelectionLabel() {
-        let modeName = (selectedMode == .madMeteoroids) ? "MAD METEOROIDS" : "ANCIENT ASTEROIDS"
-        let hint = isCompactLayout ? "" : "  (▲/▼ TO SELECT)"
-        modeSelectionLabel.text = "MODE: \(modeName)\(hint)"
-    }
-
-    /// Aktualisiert die drei Umschalt-Zeilen der Einstellungen mit dem aktuellen Stand.
-    private func updateSettingsLabels() {
-        settingsMusicLabel.text = "MUSIC: \(MusicPlayer.shared.isEnabled ? "ON" : "OFF")"
-        settingsSfxLabel.text = "SFX STYLE: \(SoundManager.shared.useSampledSFX ? "SAMPLE" : "PROCEDURAL")"
-        settingsAutoFireLabel.text = "AUTO-FIRE: \(autoFire ? "ON" : "OFF")"
-        settingsHintLabel.text = isCompactLayout ? "TAP TO TOGGLE   X: BACK"
-                                                 : "M: MUSIC   N: SFX   F: AUTO-FIRE   ESC: BACK"
-    }
-    
     private func clearGameEntitiesKeepOptions() {
         for ast in activeAsteroids {
             ast.removeFromParent()
@@ -3592,7 +3149,7 @@ public final class GameScene: SKScene {
         self.activeCats.append(cat)
     }
 
-    private func clearGameEntities() {
+    func clearGameEntities() {
         for ast in activeAsteroids {
             ast.removeFromParent()
         }
@@ -3632,321 +3189,6 @@ public final class GameScene: SKScene {
         activeCats.removeAll()
     }
 
-    // MARK: - UI Configuration
-    
-    private func setupUIElements() {
-        let halfWidth = size.width / 2
-        let halfHeight = size.height / 2
-        
-        // Power-Up Notification HUD Alert
-        powerUpNotificationLabel.fontSize = 24
-        powerUpNotificationLabel.horizontalAlignmentMode = .center
-        powerUpNotificationLabel.verticalAlignmentMode = .center
-        powerUpNotificationLabel.zPosition = 100
-        powerUpNotificationLabel.isHidden = true
-        self.addChild(powerUpNotificationLabel)
-        
-        // Title screen
-        titleLabel.text = "EXPLOIDS"
-        titleLabel.fontName = RetroFont.pixel
-        titleLabel.fontSize = 46
-        titleLabel.fontColor = .cyan
-        titleLabel.verticalAlignmentMode = .center
-        titleLabel.position = CGPoint(x: 0, y: 250)
-        titleLabel.zPosition = 100
-        titleLabel.isHidden = true
-        self.addChild(titleLabel)
-        
-        startPromptLabel.text = "PRESS SPACE TO START"
-        startPromptLabel.fontSize = 20
-        startPromptLabel.fontColor = .white
-        startPromptLabel.position = CGPoint(x: 0, y: 170)
-        startPromptLabel.zPosition = 100
-        startPromptLabel.isHidden = true
-        self.addChild(startPromptLabel)
-        
-        instructionsLabel.text = "W/▲: THRUST   A/D/◀/▶: ROTATE   SPACE: FIRE (HOLD = AUTO)   I: GLOSSARY"
-        instructionsLabel.fontSize = 14
-        instructionsLabel.fontColor = .lightGray
-        instructionsLabel.position = CGPoint(x: 0, y: -270)
-        instructionsLabel.zPosition = 100
-        instructionsLabel.isHidden = true
-        self.addChild(instructionsLabel)
-        
-        // HUD
-        scoreLabel.fontSize = 20
-        scoreLabel.fontColor = .cyan
-        scoreLabel.horizontalAlignmentMode = .left
-        scoreLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 40)
-        scoreLabel.zPosition = 100
-        scoreLabel.isHidden = true
-        self.addChild(scoreLabel)
-        
-        hiScoreLabel.fontSize = 20
-        hiScoreLabel.fontColor = SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
-        hiScoreLabel.horizontalAlignmentMode = .right
-        hiScoreLabel.position = CGPoint(x: halfWidth - 20, y: halfHeight - 40)
-        hiScoreLabel.zPosition = 100
-        hiScoreLabel.isHidden = true
-        self.addChild(hiScoreLabel)
-        
-        // Timer HUD
-        timerLabel.fontSize = 20
-        timerLabel.fontColor = .white
-        timerLabel.horizontalAlignmentMode = .center
-        timerLabel.position = CGPoint(x: 0, y: halfHeight - 40)
-        timerLabel.zPosition = 100
-        timerLabel.isHidden = true
-        self.addChild(timerLabel)
-        
-        // Level HUD
-        levelLabel.fontSize = 16
-        levelLabel.fontColor = .cyan
-        levelLabel.horizontalAlignmentMode = .left
-        levelLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 65)
-        levelLabel.zPosition = 100
-        levelLabel.isHidden = true
-        self.addChild(levelLabel)
-
-        // Lives HUD (extra lives from the Extra-Life power-up)
-        livesLabel.fontSize = 16
-        livesLabel.fontColor = SKColor(red: 1.0, green: 0.3, blue: 0.45, alpha: 1.0)
-        livesLabel.horizontalAlignmentMode = .left
-        livesLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 90)
-        livesLabel.zPosition = 100
-        livesLabel.isHidden = true
-        self.addChild(livesLabel)
-
-        // Laserbeam-Visual (Polylinie, pro Frame neu aufgebaut; additives Leuchten)
-        beamNode.strokeColor = SKColor(red: 0.4, green: 1.0, blue: 0.4, alpha: 0.95)
-        beamNode.lineWidth = 7.0
-        beamNode.lineCap = .round
-        beamNode.blendMode = .add
-        beamNode.zPosition = 50
-        beamNode.isHidden = true
-        self.addChild(beamNode)
-
-        // Level Selection (Start Screen)
-        levelSelectionLabel.fontSize = 20
-        levelSelectionLabel.fontColor = SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
-        levelSelectionLabel.horizontalAlignmentMode = .center
-        levelSelectionLabel.position = CGPoint(x: 0, y: 78)
-        levelSelectionLabel.zPosition = 100
-        levelSelectionLabel.isHidden = true
-        self.addChild(levelSelectionLabel)
-
-        // Mode Selection (Start Screen)
-        modeSelectionLabel.fontSize = 20
-        modeSelectionLabel.fontColor = SKColor(red: 0.4, green: 1.0, blue: 0.6, alpha: 1.0)
-        modeSelectionLabel.horizontalAlignmentMode = .center
-        modeSelectionLabel.position = CGPoint(x: 0, y: 120)
-        modeSelectionLabel.zPosition = 100
-        modeSelectionLabel.isHidden = true
-        self.addChild(modeSelectionLabel)
-
-        // Einstellungen-Ansicht
-        settingsTitleLabel.text = "SETTINGS"
-        settingsTitleLabel.fontName = RetroFont.pixel
-        settingsTitleLabel.fontSize = 32
-        settingsTitleLabel.fontColor = SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
-        settingsTitleLabel.position = CGPoint(x: 0, y: 120)
-        settingsTitleLabel.zPosition = 100
-        settingsTitleLabel.isHidden = true
-        self.addChild(settingsTitleLabel)
-
-        let settingsRows: [(SKLabelNode, CGFloat)] = [
-            (settingsMusicLabel, 50), (settingsSfxLabel, 10), (settingsAutoFireLabel, -30)
-        ]
-        for (label, y) in settingsRows {
-            label.fontSize = 22
-            label.fontColor = .white
-            label.horizontalAlignmentMode = .center
-            label.position = CGPoint(x: 0, y: y)
-            label.zPosition = 100
-            label.isHidden = true
-            self.addChild(label)
-        }
-
-        settingsHintLabel.fontSize = 16
-        settingsHintLabel.fontColor = .lightGray
-        settingsHintLabel.horizontalAlignmentMode = .center
-        settingsHintLabel.position = CGPoint(x: 0, y: -110)
-        settingsHintLabel.zPosition = 100
-        settingsHintLabel.isHidden = true
-        self.addChild(settingsHintLabel)
-        updateSettingsLabels()
-
-        // Level Cleared Overlay
-        levelClearedLabel.fontSize = 40
-        levelClearedLabel.fontColor = .green
-        levelClearedLabel.horizontalAlignmentMode = .center
-        levelClearedLabel.position = CGPoint(x: 0, y: 50)
-        levelClearedLabel.zPosition = 100
-        levelClearedLabel.isHidden = true
-        self.addChild(levelClearedLabel)
-        
-        prepareNextLevelLabel.fontSize = 20
-        prepareNextLevelLabel.fontColor = .white
-        prepareNextLevelLabel.horizontalAlignmentMode = .center
-        prepareNextLevelLabel.position = CGPoint(x: 0, y: 0)
-        prepareNextLevelLabel.zPosition = 100
-        prepareNextLevelLabel.isHidden = true
-        self.addChild(prepareNextLevelLabel)
-        
-        // Name Entry
-        nameEntryPromptLabel.text = "NEW HIGH SCORE!"
-        nameEntryPromptLabel.fontSize = 36
-        nameEntryPromptLabel.fontColor = SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
-        nameEntryPromptLabel.position = CGPoint(x: 0, y: 100)
-        nameEntryPromptLabel.zPosition = 100
-        nameEntryPromptLabel.isHidden = true
-        self.addChild(nameEntryPromptLabel)
-        
-        nameEntryInputLabel.fontSize = 24
-        nameEntryInputLabel.fontColor = .white
-        nameEntryInputLabel.position = CGPoint(x: 0, y: 30)
-        nameEntryInputLabel.zPosition = 100
-        nameEntryInputLabel.isHidden = true
-        self.addChild(nameEntryInputLabel)
-        
-        // Game Over
-        gameOverLabel.text = "GAME OVER"
-        gameOverLabel.fontName = RetroFont.pixel
-        gameOverLabel.fontSize = 40
-        gameOverLabel.fontColor = .red
-        gameOverLabel.position = CGPoint(x: 0, y: 180)
-        gameOverLabel.zPosition = 100
-        gameOverLabel.isHidden = true
-        self.addChild(gameOverLabel)
-        
-        finalScoreLabel.fontSize = 20
-        finalScoreLabel.fontColor = .white
-        finalScoreLabel.position = CGPoint(x: 0, y: 120)
-        finalScoreLabel.zPosition = 100
-        finalScoreLabel.isHidden = true
-        self.addChild(finalScoreLabel)
-        
-        restartLabel.text = "PRESS R TO REPLAY   ESC FOR TITLE"
-        restartLabel.fontSize = 20
-        restartLabel.fontColor = .white
-        restartLabel.position = CGPoint(x: 0, y: -180)
-        restartLabel.zPosition = 100
-        restartLabel.isHidden = true
-        self.addChild(restartLabel)
-
-        // „▶ REPLAY"-Overlay (Wiedergabe eines Highscore-Laufs). Oben am Bildrand, dezent.
-        replayOverlayLabel.text = "▶ REPLAY  (ESC TO EXIT)"
-        replayOverlayLabel.fontName = RetroFont.pixel
-        replayOverlayLabel.fontSize = 16
-        replayOverlayLabel.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
-        replayOverlayLabel.position = CGPoint(x: 0, y: 250)
-        replayOverlayLabel.zPosition = 200
-        replayOverlayLabel.isHidden = true
-        self.addChild(replayOverlayLabel)
-        
-        // High scores
-        highScoresTitleLabel.text = "HIGH SCORES"
-        highScoresTitleLabel.fontSize = 24
-        highScoresTitleLabel.fontColor = SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
-        highScoresTitleLabel.position = CGPoint(x: 0, y: 35)
-        highScoresTitleLabel.zPosition = 100
-        highScoresTitleLabel.isHidden = true
-        self.addChild(highScoresTitleLabel)
-
-        for i in 0..<5 {
-            let label = SKLabelNode(fontNamed: "Courier")
-            label.fontSize = 20
-            label.fontColor = .white
-            label.position = CGPoint(x: 0, y: CGFloat(-8 - i * 30))
-            label.zPosition = 100
-            label.isHidden = true
-            self.addChild(label)
-            highScoreLineLabels.append(label)
-        }
-        
-        // Quit confirmation labels
-        quitPromptLabel.text = "QUIT GAME?"
-        quitPromptLabel.fontSize = 40
-        quitPromptLabel.fontColor = .red
-        quitPromptLabel.position = CGPoint(x: 0, y: 50)
-        quitPromptLabel.zPosition = 100
-        quitPromptLabel.isHidden = true
-        self.addChild(quitPromptLabel)
-        
-        quitSubPromptLabel.text = "PRESS Y TO CONFIRM / ESC TO CANCEL"
-        quitSubPromptLabel.fontSize = 20
-        quitSubPromptLabel.fontColor = .white
-        quitSubPromptLabel.position = CGPoint(x: 0, y: -10)
-        quitSubPromptLabel.zPosition = 100
-        quitSubPromptLabel.isHidden = true
-        self.addChild(quitSubPromptLabel)
-        
-        // Glossary container
-        glossaryContainer.isHidden = true
-        self.addChild(glossaryContainer)
-        
-        glossaryStaticContainer.isHidden = true
-        self.addChild(glossaryStaticContainer)
-        
-        // Glossary prompt label on start screen
-        glossaryPromptLabel.text = "PRESS I FOR GLOSSARY"
-        glossaryPromptLabel.fontSize = 18
-        glossaryPromptLabel.fontColor = .cyan
-        glossaryPromptLabel.position = CGPoint(x: 0, y: -340)
-        glossaryPromptLabel.zPosition = 100
-        glossaryPromptLabel.isHidden = true
-        self.addChild(glossaryPromptLabel)
-
-        // Demo-Hinweis auf dem Startbildschirm (nur bei aktivem Attract-Modus eingeblendet).
-        demoPromptLabel.text = "PRESS D FOR DEMO"
-        demoPromptLabel.fontName = RetroFont.pixel
-        demoPromptLabel.fontSize = 16
-        demoPromptLabel.fontColor = SKColor(red: 0.6, green: 1.0, blue: 0.6, alpha: 1.0)
-        demoPromptLabel.position = CGPoint(x: 0, y: -370)
-        demoPromptLabel.zPosition = 100
-        demoPromptLabel.isHidden = true
-        self.addChild(demoPromptLabel)
-
-        // Overlay während eines Demo-Laufs (Autopilot spielt).
-        demoOverlayLabel.fontName = RetroFont.pixel
-        demoOverlayLabel.fontSize = 16
-        demoOverlayLabel.fontColor = SKColor(red: 0.6, green: 1.0, blue: 0.6, alpha: 1.0)
-        demoOverlayLabel.position = CGPoint(x: 0, y: 250)
-        demoOverlayLabel.zPosition = 200
-        demoOverlayLabel.isHidden = true
-        self.addChild(demoOverlayLabel)
-    }
-    
-    private func updateHighScoreLabels() {
-        for (index, label) in highScoreLineLabels.enumerated() {
-            if index < highScores.count {
-                let entry = highScores[index]
-                let initials = entry.initials.padding(toLength: 3, withPad: " ", startingAt: 0)
-                let baseText = "\(index + 1). \(initials)   \(entry.score)"
-                if let dm = entry.deathMessage {
-                    label.text = "\(baseText) - \(dm)"
-                } else {
-                    label.text = baseText
-                }
-            } else {
-                label.text = "\(index + 1). ---       0"
-            }
-        }
-    }
-    
-    private func updateNameEntryInputLabel() {
-        var displayStr = "ENTER INITIALS: "
-        for i in 0..<3 {
-            if i < typedInitials.count {
-                let idx = typedInitials.index(typedInitials.startIndex, offsetBy: i)
-                displayStr += "\(typedInitials[idx]) "
-            } else {
-                displayStr += "_ "
-            }
-        }
-        nameEntryInputLabel.text = displayStr.trimmingCharacters(in: .whitespaces)
-    }
-    
     public override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
         let halfWidth = size.width / 2
@@ -4041,137 +3283,6 @@ public final class GameScene: SKScene {
         return replay
     }
     
-    // MARK: - Mad Meteoroids Field Rotation
-
-    /// Dreht einen Punkt um den Ursprung (Bildschirmmitte) um den Winkel `a` (Radiant).
-    private func rotatedAroundOrigin(_ p: CGPoint, by a: CGFloat) -> CGPoint {
-        if a == 0 { return p }
-        let c = cos(a)
-        let s = sin(a)
-        return CGPoint(x: p.x * c - p.y * s, y: p.x * s + p.y * c)
-    }
-
-    /// Radius des kreisförmigen Spielfelds im Mad-Modus. Objekte jenseits dieses Radius werden auf
-    /// die diametral gegenüberliegende Seite umgesetzt (rotations-invariantes Wrapping).
-    private func madFieldRadius() -> CGFloat {
-        let halfWidth = (size.width > 100 ? size.width : 1024.0) / 2
-        let halfHeight = (size.height > 100 ? size.height : 768.0) / 2
-        return sqrt(halfWidth * halfWidth + halfHeight * halfHeight) + 100.0
-    }
-
-    /// Setzt einen Punkt, der den Feldradius verlassen hat, auf die gegenüberliegende Seite knapp
-    /// innerhalb des Radius (kreisförmiges Wrapping). Punkte innerhalb bleiben unverändert.
-    private func circularWrapped(_ p: CGPoint, radius r: CGFloat) -> CGPoint {
-        let d = hypot(p.x, p.y)
-        if d > r {
-            let scale = (r * 0.98) / d
-            return CGPoint(x: -p.x * scale, y: -p.y * scale)
-        }
-        return p
-    }
-
-    /// Drehgeschwindigkeit (Radiant/Sekunde) für ein Level, linear interpoliert zwischen dem
-    /// Level-1- und dem Level-10-Wert, ab Level 10 gedeckelt.
-    private func fieldSpeedRadPerSec(forLevel level: Int) -> CGFloat {
-        let clamped = max(1, min(level, 10))
-        let t = CGFloat(clamped - 1) / 9.0
-        let deg = MadRotation.minSpeedDegPerSec + t * (MadRotation.maxSpeedDegPerSec - MadRotation.minSpeedDegPerSec)
-        return deg * .pi / 180.0
-    }
-
-    /// Initialisiert den Rotations-Scheduler fürs aktuelle Level: Drehrichtung wählen und die
-    /// Richtungswechsel zeitlich planen. Im Ancient-Modus wird die Rotation deaktiviert.
-    private func configureFieldRotationForLevel(currentTime: TimeInterval) {
-        scratchActive = false
-        scratchElapsed = 0.0
-
-        guard gameMode == .madMeteoroids else {
-            fieldAngularVelocity = 0.0
-            nextDirectionChangeTime = .greatestFiniteMagnitude
-            return
-        }
-
-        let speed = fieldSpeedRadPerSec(forLevel: currentLevel)
-        fieldRotationDirection = Bool.random(using: &rng) ? 1.0 : -1.0
-        fieldAngularVelocity = fieldRotationDirection * speed
-
-        if currentLevel >= 10 {
-            directionChangesRemaining = Int.max
-            directionChangeInterval = MadRotation.highLevelChangeInterval
-            nextDirectionChangeTime = currentTime + directionChangeInterval
-        } else {
-            let idx = currentLevel - 1
-            let changes = (idx >= 0 && idx < MadRotation.changesPerLevel.count) ? MadRotation.changesPerLevel[idx] : 0
-            directionChangesRemaining = changes
-            if changes > 0 {
-                // Wechsel gleichmäßig über die 60-Sekunden-Leveldauer verteilen.
-                directionChangeInterval = 60.0 / Double(changes + 1)
-                nextDirectionChangeTime = currentTime + directionChangeInterval
-            } else {
-                directionChangeInterval = 0.0
-                nextDirectionChangeTime = .greatestFiniteMagnitude
-            }
-        }
-    }
-
-    /// Schreibt den Rotations-Zustand pro Frame fort: wickelt laufende Plattenscratches ab und
-    /// löst fällige Richtungswechsel aus. Aktualisiert `fieldAngularVelocity`.
-    private func updateFieldRotation(deltaTime: TimeInterval, currentTime: TimeInterval) {
-        let speed = fieldSpeedRadPerSec(forLevel: currentLevel)
-
-        // Laufenden Plattenscratch abwickeln: die Drehzahl schwingt kurz vor und wieder zurück.
-        if scratchActive {
-            scratchElapsed += deltaTime
-            let progress = scratchElapsed / MadRotation.scratchDuration
-            if progress >= 1.0 {
-                scratchActive = false
-                fieldAngularVelocity = fieldRotationDirection * speed
-            } else {
-                let osc = cos(2.0 * .pi * CGFloat(progress)) // +1 -> -1 -> +1 über die Dauer
-                fieldAngularVelocity = fieldRotationDirection * speed * MadRotation.scratchSpeedMultiplier * osc
-                return
-            }
-        }
-
-        // Geplanter Richtungswechsel fällig?
-        if currentTime >= nextDirectionChangeTime && directionChangesRemaining > 0 {
-            if currentLevel >= 10 {
-                nextDirectionChangeTime = currentTime + directionChangeInterval
-                // Gelegentlich wird aus dem Wechsel ein Plattenscratch statt einer sauberen Umkehr.
-                if Double.random(in: 0...1, using: &rng) < MadRotation.scratchChance {
-                    scratchActive = true
-                    scratchElapsed = 0.0
-                    return
-                }
-            } else {
-                directionChangesRemaining -= 1
-                nextDirectionChangeTime = (directionChangesRemaining > 0)
-                    ? currentTime + directionChangeInterval
-                    : .greatestFiniteMagnitude
-            }
-            fieldRotationDirection *= -1.0
-        }
-
-        fieldAngularVelocity = fieldRotationDirection * speed
-    }
-
-    /// Wendet die Feld-Rotation dieses Frames auf einen Asteroiden an (Position + Velocity drehen,
-    /// Silhouette mitdrehen) und führt das kreisförmige Wrapping mit „erst eintreten"-Gate aus.
-    private func applyFieldRotation(toAsteroid ast: Asteroid) {
-        ast.position = rotatedAroundOrigin(ast.position, by: fieldDeltaThisFrame)
-        ast.velocity = rotatedAroundOrigin(ast.velocity, by: fieldDeltaThisFrame)
-        ast.zRotation += fieldDeltaThisFrame
-
-        let r = madFieldRadius()
-        let d = hypot(ast.position.x, ast.position.y)
-        if !ast.hasEnteredScreen {
-            // Sichtbaren Bereich erreicht? (Der Bildschirm-Eckradius ist r - 100.)
-            if d <= r - 100.0 { ast.hasEnteredScreen = true }
-        } else {
-            ast.position = circularWrapped(ast.position, radius: r)
-        }
-    }
-
     /// Verteilt die Sterne gleichmäßig über die kreisförmige Spielfeld-Scheibe. Nötig beim Start
     /// des Mad-Modus, damit das rotierende Sternenfeld keine leeren Ecken zeigt.
     private func scatterStarsAcrossField() {
@@ -4356,456 +3467,9 @@ public final class GameScene: SKScene {
         return SKTexture(cgImage: cgImage)
     }
     
-    // MARK: - Input Simulation Helpers
-    
-    /// Simulates pressing a key down (useful for headless testing and the iOS touch/controller layer).
-    public func simulateKeyDown(keyCode: UInt16) {
-        handleKeyDown(keyCode: keyCode, characters: nil, charactersIgnoringModifiers: nil, isCommandDown: false)
-    }
-
-    /// Simulates releasing a key (useful for headless testing and the iOS touch/controller layer).
-    public func simulateKeyUp(keyCode: UInt16) {
-        handleKeyUp(keyCode: keyCode)
-    }
-
-    /// Simulates typing a letter (useful for initials entry testing).
-    public func simulateTypeCharacter(_ char: String) {
-        handleKeyDown(keyCode: 0, characters: char, charactersIgnoringModifiers: char, isCommandDown: false)
-    }
-
-    /// For testing: erzeugt sofort einen Kopf-Boss, hängt ihn ein und gibt ihn zurück.
-    @discardableResult
-    public func spawnFloatingHeadForTesting() -> FloatingHead {
-        let head = FloatingHead(screenSize: size)
-        self.addChild(head)
-        self.activeHead = head
-        return head
-    }
-
-    /// For testing: erzeugt sofort eine Weltraumkatze, hängt sie ein und gibt sie zurück.
-    @discardableResult
-    public func spawnSpaceCatForTesting(startOnLeft: Bool = true) -> SpaceCat {
-        let cat = SpaceCat(screenSize: size, startOnLeft: startOnLeft)
-        self.addChild(cat)
-        self.activeCats.append(cat)
-        return cat
-    }
-    
-    /// For testing: directly adds an asteroid.
-    public func addAsteroidForTesting(_ asteroid: Asteroid) {
-        self.addChild(asteroid)
-        self.activeAsteroids.append(asteroid)
-    }
-
-    /// For testing: selects the game mode used by the next fresh game session.
-    public func setGameModeForTesting(_ mode: GameMode) {
-        self.selectedMode = mode
-    }
-
-    /// Für Tests/Replay: startet ein frisches Spiel mit festgelegtem Seed, Start-Level und Modus.
-    /// Setzt die Auswahl-Felder und ruft `startNewGame(seed:)` – damit ist ein deterministischer
-    /// Lauf vollständig per Code reproduzierbar (Grundlage der Determinismus-Probe).
-    public func startNewGameForTesting(seed: UInt64, startLevel: Int = 1, mode: GameMode = .ancientAsteroids) {
-        self.selectedStartLevel = startLevel
-        self.selectedMode = mode
-        startNewGame(seed: seed)
-    }
-
-    /// Für Tests/Balancing: startet einen Demo-Lauf mit fester Persona + Seed unter Autopilot-
-    /// Steuerung (klassischer Modus, Startlevel der Persona). Danach die Simulation über
-    /// `advanceOneStep()` treiben und beobachten, wie lange `gameState == .playing` bleibt.
-    public func startAutopilotDemoForTesting(persona: AutopilotPersona, seed: UInt64) {
-        autopilotPersona = persona
-        autopilotRng = GameRandom(seed: seed ^ 0xA0710_5EED)
-        selectedMode = .ancientAsteroids
-        selectedStartLevel = persona.startLevel
-        autoFire = true
-        startNewGame(seed: seed)
-    }
-
-    /// Für Tests: die aktuell aktive Autopilot-Persona (nil = kein Autopilot).
-    public var autopilotPersonaNameForTesting: String? { autopilotPersona?.name }
-
-    /// For testing: the effective spawn config for the current mode and level.
-    public func currentConfigForTesting() -> LevelSpawnConfig {
-        return currentConfig()
-    }
-    
-    /// For testing: directly adds a laser.
-    public func addLaserForTesting(_ laser: Laser) {
-        self.addChild(laser)
-        self.activeLasers.append(laser)
-    }
-    
-    /// For testing: directly adds a power-up.
-    public func addPowerUpForTesting(_ powerUp: PowerUp) {
-        self.addChild(powerUp)
-        self.activePowerUps.append(powerUp)
-    }
-
-    /// For testing: fügt ein UFO an einer Position hinzu (z.B. um Bomben-Treffer zu provozieren).
-    @discardableResult
-    public func addUFOForTesting(at position: CGPoint) -> UFO {
-        let ufo = UFO(isSmall: false, startOnLeft: true, screenSize: size)
-        ufo.position = position
-        self.addChild(ufo)
-        self.activeUFOs.append(ufo)
-        return ufo
-    }
-
-    /// For testing: Anzahl der PowerUp-Knoten im Szenengraph (zur Erkennung verwaister Nodes).
-    public var powerUpNodeCountInSceneForTesting: Int {
-        return self.children.compactMap { $0 as? PowerUp }.count
-    }
-
-    /// For testing: prüft, dass für JEDEN Entity-Typ die Anzahl der Knoten im Szenengraph exakt der
-    /// Länge des zugehörigen Tracking-Arrays entspricht. Schlägt fehl, sobald ein Objekt im
-    /// Szenengraph hängt, das nicht (mehr) getrackt wird (verwaister Node), oder umgekehrt. Das ist
-    /// die zentrale „nichts bleibt unzerstörbar/uneinsammelbar hängen"-Invariante.
-    public var entityTrackingConsistentForTesting: Bool {
-        func count<T>(_ type: T.Type) -> Int { children.compactMap { $0 as? T }.count }
-        return count(Asteroid.self) == activeAsteroids.count
-            && count(UFO.self)      == activeUFOs.count
-            && count(SpaceCat.self) == activeCats.count
-            && count(PowerUp.self)  == activePowerUps.count
-            && count(Laser.self)    == activeLasers.count
-    }
-    
-    /// For testing: returns the triple shot end time.
-    public var tripleShotEndTimeForTesting: TimeInterval {
-        return tripleShotEndTime
-    }
-    
-    /// For testing: returns the rapid fire end time.
-    public var rapidFireEndTimeForTesting: TimeInterval {
-        return rapidFireEndTime
-    }
-    
-    /// For testing: returns the glossary container Y position.
-    public var glossaryContainerYForTesting: CGFloat {
-        return glossaryContainer.position.y
-    }
-    
-    /// For testing: sets the active powerups end times.
-    public func setPowerUpTimersForTesting(triple: TimeInterval, rapid: TimeInterval) {
-        self.tripleShotEndTime = triple
-        self.rapidFireEndTime = rapid
-    }
-    
-    /// For testing: directly adds score.
-    public func addScoreForTesting(_ amount: Int) {
-        self.score += amount
-    }
-    
-    /// For testing: sets the level time remaining.
-    public func setLevelTimeRemainingForTesting(_ time: TimeInterval) {
-        self.levelTimeRemaining = time
-    }
-
-    /// For testing: sets the accumulated play time (drives `difficultyFactor`). Lets a formula test
-    /// skip simulating minutes of real frames.
-    public func setPlayTimeForTesting(_ time: TimeInterval) {
-        self.playTime = time
-    }
-    
-    /// For testing: clears all active asteroids and lasers.
-    public func clearAllEntitiesForTesting() {
-        clearGameEntities()
-    }
-    
-    /// For testing: directly spawns a power-up.
-    public func spawnPowerUpForTesting(type: PowerUpType, position: CGPoint) {
-        let p = PowerUp(type: type, position: position)
-        self.addChild(p)
-        self.activePowerUps.append(p)
-    }
-
-    /// For testing: directly applies a power-up's effect (as if collected).
-    public func collectPowerUpForTesting(type: PowerUpType) {
-        collectPowerUp(PowerUp(type: type, position: .zero))
-    }
-
-    /// For testing: applies one fatal hit to the ship (shield/extra-life/game-over path).
-    public func damageShipForTesting() {
-        damageShip()
-    }
-
-    /// For testing: fires the player's primary weapon once.
-    public func fireLaserForTesting() {
-        fireLaser()
-    }
-
-    /// For testing: runs one frame of the laser beam (bypasses the hold-to-fire gating).
-    public func fireBeamForTesting(currentTime: TimeInterval = 0.0) {
-        fireBeam(currentTime: currentTime)
-    }
-
-    /// For testing: number of stored extra lives.
-    public var extraLivesForTesting: Int { extraLives }
-
-    /// For testing: gibt dem Schiff viele Extra-Leben, damit ein langer Lauf (Bosse, Level-Übergänge)
-    /// nicht vorzeitig endet. Rein für Determinismus-Tests; das Wiederbeleben ist deterministisch.
-    public func setExtraLivesForTesting(_ n: Int) { extraLives = n }
-
-    /// For testing: directly spawns a UFO.
-    public func spawnUFOForTesting(isSmall: Bool, startOnLeft: Bool) {
-        let u = UFO(isSmall: isSmall, startOnLeft: startOnLeft, screenSize: size)
-        self.addChild(u)
-        self.activeUFOs.append(u)
-    }
-    
-    /// For testing: directly spawns a Gravity Well.
-    public func spawnGravityWellForTesting(position: CGPoint) {
-        let well = GravityWell()
-        well.position = position
-        self.addChild(well)
-        self.activeGravityWells.append(well)
-    }
-    
-    // MARK: - Glossary
-    
-    private func addGlossaryItem(
-        graphic: SKNode,
-        title: String,
-        titleColor: SKColor,
-        description: String,
-        yPosition: CGFloat
-    ) {
-        let itemContainer = SKNode()
-        itemContainer.position = CGPoint(x: 0, y: yPosition)
-        
-        graphic.position = CGPoint(x: -280, y: 0)
-        itemContainer.addChild(graphic)
-        
-        if !(graphic is GravityWell) {
-            let rotateAction = SKAction.repeatForever(SKAction.rotate(byAngle: .pi, duration: 4.0))
-            graphic.run(rotateAction)
-        } else {
-            let rotateAction = SKAction.repeatForever(SKAction.rotate(byAngle: -.pi, duration: 6.0))
-            graphic.run(rotateAction)
-        }
-        
-        let titleNode = SKLabelNode(fontNamed: "Courier-Bold")
-        titleNode.text = title
-        titleNode.fontSize = 18
-        titleNode.fontColor = titleColor
-        titleNode.horizontalAlignmentMode = .left
-        titleNode.position = CGPoint(x: -200, y: 10)
-        itemContainer.addChild(titleNode)
-        
-        let descNode = SKLabelNode(fontNamed: "Courier")
-        descNode.text = description
-        descNode.fontSize = 14
-        descNode.fontColor = .lightGray
-        descNode.horizontalAlignmentMode = .left
-        descNode.position = CGPoint(x: -200, y: -15)
-        itemContainer.addChild(descNode)
-        
-        glossaryContainer.addChild(itemContainer)
-    }
-    
-    private func buildGlossary() {
-        glossaryContainer.removeAllChildren()
-        glossaryStaticContainer.removeAllChildren()
-        
-        // Statischer Titel/Footer liegen ÜBER der durchscrollenden Liste, mit einem schwarzen
-        // Streifen darunter, damit der scrollende Text dahinter sauber verschwindet.
-        glossaryStaticContainer.zPosition = 200
-
-        // Add static Title (mit dunklem Hintergrundstreifen)
-        let titleStrip = SKShapeNode(rect: CGRect(x: -1000, y: 258, width: 2000, height: 70))
-        titleStrip.fillColor = .black
-        titleStrip.strokeColor = .clear
-        titleStrip.zPosition = 0
-        glossaryStaticContainer.addChild(titleStrip)
-
-        let titleNode = SKLabelNode(fontNamed: "Courier-Bold")
-        titleNode.text = "GLOSSARY"
-        titleNode.fontSize = 32
-        titleNode.fontColor = .cyan
-        titleNode.position = CGPoint(x: 0, y: 280)
-        titleNode.zPosition = 1
-        glossaryStaticContainer.addChild(titleNode)
-
-        // Add static footer instruction (ebenfalls mit dunklem Streifen)
-        let footerStrip = SKShapeNode(rect: CGRect(x: -1000, y: -326, width: 2000, height: 42))
-        footerStrip.fillColor = .black
-        footerStrip.strokeColor = .clear
-        footerStrip.zPosition = 0
-        glossaryStaticContainer.addChild(footerStrip)
-
-        let footerNode = SKLabelNode(fontNamed: "Courier")
-        footerNode.text = "W/S/▲/▼ TO SCROLL  •  ESC/I TO RETURN TO TITLE"
-        footerNode.fontSize = 16
-        footerNode.fontColor = .white
-        footerNode.position = CGPoint(x: 0, y: -310)
-        footerNode.zPosition = 1
-        glossaryStaticContainer.addChild(footerNode)
-        
-        // Blink the footer instruction
-        let fadeOut = SKAction.fadeOut(withDuration: 0.8)
-        let fadeIn = SKAction.fadeIn(withDuration: 0.8)
-        let blink = SKAction.sequence([fadeOut, fadeIn])
-        footerNode.run(SKAction.repeatForever(blink))
-        
-        // Item 1: Player Ship
-        let shipNode = Ship()
-        shipNode.xScale = 1.3
-        shipNode.yScale = 1.3
-        shipNode.isHidden = false
-        addGlossaryItem(
-            graphic: shipNode,
-            title: "PLAYER SHIP",
-            titleColor: .cyan,
-            description: "Your vector fighter. Rotate: A/D/◀/▶, Thrust: W/▲, Fire: SPACE.",
-            yPosition: 150
-        )
-        
-        // Item 2: Option Drone
-        let droneNode = OptionDrone()
-        droneNode.xScale = 2.0
-        droneNode.yScale = 2.0
-        addGlossaryItem(
-            graphic: droneNode,
-            title: "OPTION DRONE",
-            titleColor: SKColor(red: 0.8, green: 0.0, blue: 1.0, alpha: 1.0),
-            description: "Collect 'O' power-up. Follows you and fires helper lasers.",
-            yPosition: 50
-        )
-        
-        // Item 3: Normal Asteroid
-        let normalAst = Asteroid(sizeClass: .large, isImplodingType: false, isWobblingType: false)
-        normalAst.position = .zero
-        addGlossaryItem(
-            graphic: normalAst,
-            title: "NORMAL ASTEROID",
-            titleColor: .lightGray,
-            description: "Classic space rock. Splits into smaller parts when shot.",
-            yPosition: -50
-        )
-        
-        // Item 4: Imploding Asteroid
-        let implodingAst = Asteroid(sizeClass: .large, isImplodingType: true, isWobblingType: false)
-        implodingAst.position = .zero
-        addGlossaryItem(
-            graphic: implodingAst,
-            title: "IMPLODING ASTEROID",
-            titleColor: SKColor(red: 1.0, green: 0.3, blue: 0.8, alpha: 1.0),
-            description: "Absorbs shots and grows, then collapses into a gravity well.",
-            yPosition: -150
-        )
-        
-        // Item 5: Wobbling Asteroid
-        let wobblingAst = Asteroid(sizeClass: .large, isImplodingType: false, isWobblingType: true)
-        wobblingAst.position = .zero
-        addGlossaryItem(
-            graphic: wobblingAst,
-            title: "WOBBLING ASTEROID",
-            titleColor: SKColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0),
-            description: "Unstable rock. Grows over time and explodes into debris.",
-            yPosition: -250
-        )
-        
-        // Item 6: Large UFO
-        // codereview-ok: UFO nur statische Glossar-Grafik (Init direkt auf position/velocity=.zero); kein Pfad verschiebt es in eine echte Szene — harmlos (2026-07-01)
-        let ufoLarge = UFO(isSmall: false, startOnLeft: true, screenSize: .zero)
-        ufoLarge.position = .zero
-        ufoLarge.velocity = .zero
-        addGlossaryItem(
-            graphic: ufoLarge,
-            title: "LARGE UFO",
-            titleColor: SKColor(red: 0.2, green: 1.0, blue: 0.2, alpha: 1.0),
-            description: "Drifts across the screen, firing random lasers. Worth 200 pts.",
-            yPosition: -350
-        )
-        
-        // Item 7: Small UFO
-        let ufoSmall = UFO(isSmall: true, startOnLeft: true, screenSize: .zero)
-        ufoSmall.position = .zero
-        ufoSmall.velocity = .zero
-        addGlossaryItem(
-            graphic: ufoSmall,
-            title: "SMALL UFO",
-            titleColor: SKColor(red: 1.0, green: 0.3, blue: 0.8, alpha: 1.0),
-            description: "Fast, lethal saucer that snipes targets. Worth 500 pts.",
-            yPosition: -450
-        )
-        
-        // Item 8: Gravity Well
-        let wellNode = GravityWell()
-        wellNode.position = .zero
-        addGlossaryItem(
-            graphic: wellNode,
-            title: "GRAVITY WELL",
-            titleColor: .white,
-            description: "A high-pull black hole. Event horizon destroys anything!",
-            yPosition: -550
-        )
-        
-        // Items 9+: Power-Ups einzeln untereinander, jeweils mit Kapsel-Grafik, Beschreibung
-        // und (wo sinnvoll) einem Tipp.
-        let powerUpEntries: [(type: PowerUpType, title: String, color: SKColor, desc: String)] = [
-            (.shield, "SHIELD [S]", SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0),
-             "Stacks up to 3 layers; each one absorbs a fatal hit. Stays until used."),
-            (.triple, "TRIPLE LASER [W]", SKColor(red: 1.0, green: 0.2, blue: 0.0, alpha: 1.0),
-             "Three-way spread shot. Great against swarms."),
-            (.rapid, "RAPID FIRE [R]", SKColor(red: 1.0, green: 0.85, blue: 0.0, alpha: 1.0),
-             "Machine-gun fire rate while you hold fire."),
-            (.option, "OPTION DRONE [O]", SKColor(red: 0.8, green: 0.0, blue: 1.0, alpha: 1.0),
-             "A wingman that fires with you. Stack up to two."),
-            (.bomb, "SCREEN BOMB [B]", SKColor(red: 1.0, green: 0.0, blue: 0.2, alpha: 1.0),
-             "Hits every object on screen once, just like a direct shot."),
-            (.beam, "LASER BEAM [L]", SKColor(red: 0.3, green: 1.0, blue: 0.3, alpha: 1.0),
-             "Hold fire for a sweeping beam. Spin to win!"),
-            (.rear, "REAR LASER [T]", SKColor(red: 0.4, green: 0.7, blue: 1.0, alpha: 1.0),
-             "Adds a shot out your tail. Watch your back."),
-            (.compress, "COMPRESS [C]", SKColor(red: 0.9, green: 0.9, blue: 0.95, alpha: 1.0),
-             "Shrinks you (and drones). Two stages – level 2 is a single pixel. Timed."),
-            (.extraLife, "EXTRA LIFE [+]", SKColor(red: 1.0, green: 0.3, blue: 0.45, alpha: 1.0),
-             "If killed, revives you centered, briefly invincible.")
-        ]
-
-        var py: CGFloat = -650
-        for entry in powerUpEntries {
-            let capsule = PowerUp(type: entry.type, position: .zero)
-            capsule.xScale = 1.2
-            capsule.yScale = 1.2
-            addGlossaryItem(
-                graphic: capsule,
-                title: entry.title,
-                titleColor: entry.color,
-                description: entry.desc,
-                yPosition: py
-            )
-            py -= 100
-        }
-        // Unterster Eintrag (für die Scroll-Schleife).
-        glossaryContentBottom = py + 100
-    }
 }
 
 /// A node representing a background star.
 private final class StarNode: SKSpriteNode {
     var parallaxFactor: CGFloat = 0.0
-}
-
-/// A helper node representing an R-Type Option drone.
-private final class OptionDrone: SKShapeNode {
-    override init() {
-        super.init()
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: 5, y: 0))
-        path.addLine(to: CGPoint(x: -3, y: 3))
-        path.addLine(to: CGPoint(x: -2, y: 0))
-        path.addLine(to: CGPoint(x: -3, y: -3))
-        path.closeSubpath()
-        self.path = path
-        self.strokeColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0)
-        self.fillColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 0.1)
-        self.lineWidth = 1.5
-    }
-    
-    required init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
 }
