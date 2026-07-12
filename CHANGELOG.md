@@ -2,6 +2,13 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.4] — 2026-07-12
+- Build/CI: fixed a Swift 6 concurrency error that only surfaced on the stable toolchain
+  (Swift 6.1 on the CI runner) — `ReplayPlayer.advanceStep` calls the MainActor-isolated
+  `GameScene.injectReplayInput`, so it is now explicitly `@MainActor`. Newer toolchains (6.3+)
+  inferred this by default and hid the problem; the annotation makes it build on both. Caught by
+  the freshly added CI on its very first run.
+
 ## [0.14.3] — 2026-07-12
 - Cleanup: removed the dead "Wave Cannon / charge shot" feature — the charge level was never
   raised, so the ship charge indicator, the `playChargeShot` SFX + charge-hum synthesis, and the

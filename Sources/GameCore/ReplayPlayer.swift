@@ -24,7 +24,13 @@ public final class ReplayPlayer {
     /// Speist die Tastenereignisse des aktuellen Schritts in die Szene ein und schaltet einen Schritt
     /// weiter. Rückgabe `false`, wenn keine weiteren Schritte mehr vorliegen (dann wurde nichts mehr
     /// eingespeist).
+    ///
+    /// `@MainActor`, weil die Methode die MainActor-isolierte `GameScene.injectReplayInput` aufruft
+    /// (SKScene ist MainActor). Ohne die Annotation gilt sie unter Swift 6.1 als nonisolated und der
+    /// Aufruf ist ein Fehler — neuere Toolchains (6.3+) leiten die Isolation per Default ab und
+    /// verschleiern das; explizit markiert baut es auf beiden. Beide Aufrufer sitzen in GameScene.
     @discardableResult
+    @MainActor
     public func advanceStep(injectingInto scene: GameScene) -> Bool {
         guard Int(currentFrame) < replay.frameCount else { return false }
 
