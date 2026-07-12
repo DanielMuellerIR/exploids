@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 
 /// A procedural retro synthesizer for generating game sound effects and engine hum.
-/// Handles audio graph configuration, overlapping sound effects, and continuous engine/charging hum.
+/// Handles audio graph configuration, overlapping sound effects, and the continuous engine hum.
 public final class SoundManager: @unchecked Sendable {
     
     /// The shared singleton instance.
@@ -39,11 +39,9 @@ public final class SoundManager: @unchecked Sendable {
     private var sampleVariantIndex: [String: Int] = [:]
     private var samplesLoaded = false
     
-    // Engine & Charging Hum State
+    // Engine Hum State
     private let engineLock = NSLock()
     private var isThrustActive: Bool = false
-    private var isChargingActive: Bool = false
-    private var currentChargeProgress: Double = 0.0
 
     // Kopf-Boss-Stimme: ein tiefes, aufsteigendes „Moooo" (vokal-artig). Gesteuert über
     // setHeadVoice(active:openness:); `openness` (0=Lippen zu/gedämpft, 1=Mund offen/voller) wird
@@ -58,9 +56,6 @@ public final class SoundManager: @unchecked Sendable {
     private var engineVolLfoPhase: Double = 0.0
     private var engineCurrentFrequency: Double = 50.0
     private var engineCurrentVolume: Double = 0.0
-    
-    // Charge Hum Synthesis State (only mutated on the audio render thread)
-    private var chargePhase: Double = 0.0
 
     // Head Voice Synthesis State (only mutated on the audio render thread)
     private var headVoicePhase: Double = 0.0       // Grundton-Phase
@@ -167,11 +162,6 @@ public final class SoundManager: @unchecked Sendable {
         playSound(.bomb)
     }
     
-    /// Plays a heavy energy blast sound for the Wave Cannon.
-    public func playChargeShot() {
-        playSound(.chargeShot)
-    }
-    
     /// Plays a wavy UFO scanning sound.
     public func playUfoSound() {
         playSound(.ufo)
@@ -199,19 +189,6 @@ public final class SoundManager: @unchecked Sendable {
         engineLock.unlock()
     }
     
-    /// Sets the real-time charging state and progression to synthesize the Wave Cannon charge tone.
-    public func setChargingActive(_ active: Bool, progress: Double = 0.0) {
-        guard !isMuted else { return }
-        if active && !audioEngine.isRunning {
-            start()
-        }
-        
-        engineLock.lock()
-        isChargingActive = active
-        currentChargeProgress = progress
-        engineLock.unlock()
-    }
-
     /// Steuert die Kopf-Boss-Stimme (tiefes, aufsteigendes „Moooo").
     /// - active: ob die Stimme klingen soll (typisch: während der Kopf den Mund öffnet + UFOs ausspeit).
     /// - openness: 0 = Lippen geschlossen (gedämpftes „m"), 1 = Mund offen (volleres „oo").
@@ -291,14 +268,12 @@ public final class SoundManager: @unchecked Sendable {
             return noErr
         }
         
-        // Engine + Charge Hum Source Node
+        // Engine Hum Source Node
         let engineNode = AVAudioSourceNode { [weak self] (isSilence, timestamp, frameCount, outputData) -> OSStatus in
             guard let self = self else { return noErr }
             
             self.engineLock.lock()
             let thrustActive = self.isThrustActive
-            let charging = self.isChargingActive
-            let chargeProg = self.currentChargeProgress
             let headActive = self.isHeadVoiceActive
             let headOpen = self.headVoiceOpenness
             let headRestart = self.headVoiceRestart
@@ -322,7 +297,7 @@ public final class SoundManager: @unchecked Sendable {
                 }
             }
             
-            if self.engineCurrentVolume < 0.001 && !thrustActive && !charging
+            if self.engineCurrentVolume < 0.001 && !thrustActive
                 && !headActive && self.headVoiceVolume < 0.001 {
                 isSilence.pointee = true
                 self.engineCurrentVolume = 0.0
@@ -367,31 +342,8 @@ public final class SoundManager: @unchecked Sendable {
                 let noise = Double.random(in: -0.05...0.05)
                 
                 var sampleValue = (mixedWave + noise) * finalVolume
-                
-                // 2. Synthesize Charge Hum (if charging)
-                if charging {
-                    let chargeFreq = 250.0 + 850.0 * chargeProg
-                    let chargeLfo = sin(self.chargePhase * 0.04) * 8.0
-                    let finalChargeFreq = chargeFreq + chargeLfo
-                    
-                    let sineWave = sin(self.chargePhase)
-                    let pulseFrac = self.chargePhase / (2.0 * .pi)
-                    let pulse = (pulseFrac - floor(pulseFrac) < 0.25) ? 0.3 : -0.3
-                    
-                    let combinedChargeWave = 0.8 * sineWave + 0.2 * pulse
-                    
-                    let pulseVol = 0.75 + 0.25 * sin(self.chargePhase * 0.08)
-                    let chargeVolume = 0.25 * chargeProg * pulseVol
-                    
-                    sampleValue += combinedChargeWave * chargeVolume
-                    
-                    self.chargePhase += 2.0 * .pi * finalChargeFreq / localSampleRate
-                    if self.chargePhase >= 2.0 * .pi {
-                        self.chargePhase -= 2.0 * .pi
-                    }
-                }
 
-                // 3. Synthesize Head Voice (tiefes, aufsteigendes „Moooo")
+                // 2. Synthesize Head Voice (tiefes, aufsteigendes „Moooo")
                 let headTarget = headActive ? 0.45 : 0.0
                 // Schneller Einsatz, aber sanftes AUSFADEN am Ende (~0,4 s Release statt abruptem Stopp).
                 let headRamp = headActive ? 0.0008 : 0.00006
@@ -478,7 +430,6 @@ public final class SoundManager: @unchecked Sendable {
         case .explosion:     return "explosion"
         case .powerUp:       return "powerup"
         case .bomb:          return "bomb"
-        case .chargeShot:    return "chargeshot"
         case .ufo:           return "ufo"
         case .levelComplete: return "levelcomplete"
         case .implosion:     return "implosion"
@@ -497,7 +448,7 @@ public final class SoundManager: @unchecked Sendable {
         // Stereo/sampleRate – passt zum Format der generierten .m4a-Dateien, daher ist beim Laden
         // keine Format-Konvertierung nötig (Puffer werden direkt verwendet).
         guard let canonical = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else { return }
-        let names = ["laser", "explosion", "powerup", "bomb", "chargeshot", "ufo", "levelcomplete", "implosion", "bosshead"]
+        let names = ["laser", "explosion", "powerup", "bomb", "ufo", "levelcomplete", "implosion", "bosshead"]
         for n in names {
             var variants: [AVAudioPCMBuffer] = []
             var idx = 0
@@ -630,7 +581,6 @@ final class ActiveSound: @unchecked Sendable {
         case explosion
         case powerUp
         case bomb
-        case chargeShot
         case ufo
         case levelComplete
         case implosion
@@ -653,8 +603,6 @@ final class ActiveSound: @unchecked Sendable {
             self.totalFrames = Int(0.42 * sampleRate)
         case .bomb:
             self.totalFrames = Int(1.1 * sampleRate)
-        case .chargeShot:
-            self.totalFrames = Int(0.38 * sampleRate)
         case .ufo:
             self.totalFrames = Int(0.28 * sampleRate)
         case .levelComplete:
@@ -730,25 +678,7 @@ final class ActiveSound: @unchecked Sendable {
             lastSample = filtered
             
             sampleValue = filtered * volume * 0.6
-            
-        case .chargeShot:
-            let startFreq = 1100.0
-            let endFreq = 80.0
-            let currentFreq = startFreq + (endFreq - startFreq) * progress
-            let volume = 1.0 - progress
-            
-            let fraction = phase / (2.0 * .pi)
-            let triangle = 4.0 * abs((fraction - floor(fraction)) - 0.5) - 1.0
-            let square = (phase.truncatingRemainder(dividingBy: 2.0 * .pi) < .pi) ? 0.7 : -0.7
-            let mixed = 0.5 * triangle + 0.5 * square
-            
-            sampleValue = mixed * volume * 0.32
-            
-            phase += 2.0 * .pi * currentFreq / sampleRate
-            if phase >= 2.0 * .pi {
-                phase -= 2.0 * .pi
-            }
-            
+
         case .ufo:
             let baseFreq = 580.0
             let vibrato = sin(progress * 12.0 * 2.0 * .pi) * 120.0

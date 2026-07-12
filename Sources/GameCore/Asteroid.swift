@@ -298,7 +298,7 @@ public final class Asteroid: SKShapeNode {
         
         pitch = pitch.truncatingRemainder(dividingBy: 2.0 * .pi)
         yaw = yaw.truncatingRemainder(dividingBy: 2.0 * .pi)
-        
+
         if isWobblingType {
             timeInCurrentPhase += deltaTime
             // wobble scale oscillates between 0.85 and 1.15 scale.
@@ -310,7 +310,15 @@ public final class Asteroid: SKShapeNode {
             self.xScale = wobbleScale
             self.yScale = wobbleScale
         }
-        
+        // Der (teure) SKShapeNode-Path-Neuaufbau passiert NICHT mehr hier pro Sim-Schritt, sondern
+        // einmal pro gerendertem Bild über `refreshWireframe()` (aufgerufen vom Host bzw. Renderer).
+        // Bei 120 Hz Sim / 60 Hz Bild halbiert das die Path-Rebuilds; rein visuell, kein Sim-Einfluss.
+    }
+
+    /// Baut den 3D-projizierten Drahtgitter-Pfad aus dem aktuellen `pitch`/`yaw` neu auf. Rein
+    /// visuell (kein Kollisions-/Sim-State) — wird einmal pro gerendertem Bild aufgerufen, nicht
+    /// pro Simulationsschritt (siehe `update(deltaTime:)`).
+    public func refreshWireframe() {
         updateWireframePath()
     }
     

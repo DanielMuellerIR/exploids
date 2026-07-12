@@ -99,7 +99,7 @@ exploids --render-replay run.replay --out run.gif --scale 480 --fps 30
 
 Exploids is a hobby clone, not a product. For honest context, with the weak spots named too:
 
-**Versus the original Asteroids (1979)** — the original is monochrome vector graphics with splitting rocks, two saucers, hyperspace and an extra life at 10,000 points. Exploids keeps that core and adds a second, rotating-field mode (Mad Meteoroids), nine power-ups, gravity wells, imploding and wobbling special asteroids, two bosses, a charge shot and a sweeping laser beam, color, chiptune music, an in-game glossary, local high-score entry and deterministic replays you can re-watch or export as GIFs.
+**Versus the original Asteroids (1979)** — the original is monochrome vector graphics with splitting rocks, two saucers, hyperspace and an extra life at 10,000 points. Exploids keeps that core and adds a second, rotating-field mode (Mad Meteoroids), nine power-ups, gravity wells, imploding and wobbling special asteroids, two bosses, a sweeping laser beam, color, chiptune music, an in-game glossary, local high-score entry and deterministic replays you can re-watch or export as GIFs.
 
 **Versus Maelstrom** — [Maelstrom](https://github.com/libsdl-org/Maelstrom) (Ambrosia, 1992; a GPL SDL port since 1995, today an SDL2/SDL3 build that runs on Apple Silicon) is the best-known still-maintained open-source Asteroids clone for the Mac, and the fairer yardstick: it already has power-ups, bonus objects and rich sound. Where Exploids actually differs:
 

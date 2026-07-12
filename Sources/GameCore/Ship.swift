@@ -54,42 +54,13 @@ public final class Ship: SKShapeNode {
 
     /// Convenience: mindestens eine Schild-Stufe aktiv?
     public var isShieldActive: Bool { shieldLevel > 0 }
-    
-    // Charge Visual Elements
-    private let chargeIndicatorNode = SKShapeNode()
-    
-    /// The current charge status of the Wave Cannon, from 0.0 (empty) to 1.0 (fully charged).
-    public var chargeLevel: CGFloat = 0.0 {
-        didSet {
-            if chargeLevel <= 0.0 {
-                chargeIndicatorNode.isHidden = true
-            } else {
-                chargeIndicatorNode.isHidden = false
-                let scale = min(1.5, chargeLevel * 1.5)
-                chargeIndicatorNode.xScale = scale
-                chargeIndicatorNode.yScale = scale
-                
-                if chargeLevel >= 1.0 {
-                    // Fully charged pulsating indicator
-                    // codereview-ok: Ship-Flacker bewusst NICHT geseedet (separater Stream ohne Sim-Einfluss), rein visuell, kein Gameplay-Bug (2026-07-01)
-                    chargeIndicatorNode.strokeColor = Bool.random() ? .white : .orange
-                    chargeIndicatorNode.fillColor = SKColor(red: 1.0, green: 0.6, blue: 0.1, alpha: 0.5)
-                } else {
-                    // Charging indicator
-                    chargeIndicatorNode.strokeColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0)
-                    chargeIndicatorNode.fillColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 0.2)
-                }
-            }
-        }
-    }
-    
+
     public override var isHidden: Bool {
         didSet {
             if isHidden {
                 flameNode.isHidden = true
                 thrusterEmitter?.particleBirthRate = 0
                 thrusterEmitter?.resetSimulation()
-                chargeLevel = 0.0
             }
         }
     }
@@ -152,16 +123,6 @@ public final class Ship: SKShapeNode {
             ring.isHidden = true
             self.addChild(ring)
         }
-        
-        // Setup Charge Indicator at the ship's nose (18, 0)
-        let chargePath = CGPath(ellipseIn: CGRect(x: -6, y: -6, width: 12, height: 12), transform: nil)
-        chargeIndicatorNode.path = chargePath
-        chargeIndicatorNode.strokeColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1.0)
-        chargeIndicatorNode.fillColor = SKColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 0.2)
-        chargeIndicatorNode.lineWidth = 1.2
-        chargeIndicatorNode.position = CGPoint(x: 18, y: 0)
-        chargeIndicatorNode.isHidden = true
-        self.addChild(chargeIndicatorNode)
         
         // Setup emitter node for procedural particle thruster
         let emitter = SKEmitterNode()

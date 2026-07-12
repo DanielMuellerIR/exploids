@@ -118,6 +118,9 @@ enum ReplayRenderer {
             }
 
             if (simFrame - options.startFrame) % stride == 0 {
+                // Asteroiden-Drahtgitter vor dem Capture neu aufbauen (der Sim-Schritt tut das nicht
+                // mehr pro Schritt, sondern der Host pro gerendertem Bild — hier headless).
+                scene.refreshAsteroidWireframes()
                 if let img = renderFrame(renderer: renderer, commandQueue: commandQueue,
                                          texture: texture, viewport: viewport) {
                     images.append(img)
@@ -196,6 +199,8 @@ enum ReplayRenderer {
             renderer.update(atTime: simTime)
             if simFrame < options.startFrame { simFrame += 1; continue }
             if (simFrame - options.startFrame) % stride == 0 {
+                // Asteroiden-Drahtgitter vor dem Capture neu aufbauen (siehe GIF-Pfad oben).
+                scene.refreshAsteroidWireframes()
                 if let img = renderFrame(renderer: renderer, commandQueue: commandQueue,
                                          texture: texture, viewport: viewport),
                    let buf = makePixelBuffer(from: img, width: width, height: height) {

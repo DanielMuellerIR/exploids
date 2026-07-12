@@ -906,6 +906,20 @@ public final class GameScene: SKScene {
             timeAccumulator -= GameScene.simStep
             if !advanceOneStep() { break }   // false = Wiedergabe zu Ende (wurde hier beendet)
         }
+
+        // Asteroiden-Drahtgitter EINMAL pro gerendertem Bild neu aufbauen (nicht mehr pro Sim-Schritt).
+        // Rein visuell; der headless Renderer ruft dies separat vor jedem Capture (siehe ReplayRenderer).
+        refreshAsteroidWireframes()
+    }
+
+    /// Baut die (rein visuellen) Asteroiden-Drahtgitter-Pfade für alle aktiven Asteroiden neu auf.
+    /// Einmal pro gerendertem Bild aufgerufen — der teure SKShapeNode-Path-Rebuild hängt damit an
+    /// der Bildrate, nicht an der (bis zu doppelt so hohen) Simulationsrate. Kein Sim-/Determinismus-
+    /// Einfluss; die Sim verändert nur `pitch`/`yaw` der Asteroiden, gezeichnet wird der Endstand.
+    public func refreshAsteroidWireframes() {
+        for asteroid in activeAsteroids {
+            asteroid.refreshWireframe()
+        }
     }
 
     /// Treibt die Simulation um GENAU einen festen Schritt (`simStep`) voran. Gemeinsamer Einstieg
@@ -2397,8 +2411,7 @@ public final class GameScene: SKScene {
         // Stop key states and engine sound hum
         activeKeys.removeAll()
         SoundManager.shared.setThrustActive(false)
-        SoundManager.shared.setChargingActive(false)
-        
+
         // Play explosion sound effect
         SoundManager.shared.playExplosion()
         createShipExplosion(at: ship.position)
@@ -2587,7 +2600,6 @@ public final class GameScene: SKScene {
 
         // Stop sound engine hum
         SoundManager.shared.setThrustActive(false)
-        SoundManager.shared.setChargingActive(false)
         SoundManager.shared.stopAllHeadSounds()
         headWasSpawning = false
         
@@ -2752,8 +2764,7 @@ public final class GameScene: SKScene {
                 ship.setScale(1.0)
                 ship.isHidden = false
                 ship.shieldLevel = 0
-                ship.chargeLevel = 0.0
-                
+
                 // Reset scoring
                 score = 0
                 scoreLabel.text = "SCORE: 00000"
@@ -3263,7 +3274,16 @@ public final class GameScene: SKScene {
         
         // Aufnahme dieses Laufs an den Eintrag hängen (falls vorhanden und kodierbar), damit der
         // Highscore-Lauf später exakt nachgespielt werden kann (Phase 2.5 / GIF in Phase 3).
-        let replayData: Data? = lastReplay.flatMap { try? $0.encoded() }
+        // Schlägt das Kodieren fehl, bleibt der Highscore erhalten (nur ohne Replay) — der Fehler
+        // wird aber geloggt statt still verschluckt (früher `try?` ohne Meldung).
+        var replayData: Data? = nil
+        if let replay = lastReplay {
+            do {
+                replayData = try replay.encoded()
+            } catch {
+                print("Highscore: Replay-Kodierung fehlgeschlagen, Eintrag ohne Aufnahme gespeichert: \(error)")
+            }
+        }
 
         let newEntry = HighScore(initials: initials, score: score, date: Date(),
                                  deathMessage: message, replayData: replayData)

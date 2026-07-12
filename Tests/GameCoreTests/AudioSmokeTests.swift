@@ -22,7 +22,6 @@ final class AudioSmokeTests: GameCoreTestCase {
         sm.playExplosion()
         sm.playPowerUp()
         sm.playBomb()
-        sm.playChargeShot()
         sm.playUfoSound()
         sm.playLevelComplete()
         sm.playImplosion()
@@ -32,16 +31,14 @@ final class AudioSmokeTests: GameCoreTestCase {
         // Kommt bis hierher ohne Absturz/Engine-Start durch → bestanden.
     }
 
-    /// Die Dauer-Zustands-Schalter (Schub-Hum, Kopf-Stimme, Ladehum) dürfen im gemuteten
-    /// Zustand in beliebiger Reihenfolge an/aus geschaltet werden, ohne die Engine zu starten.
+    /// Die Dauer-Zustands-Schalter (Schub-Hum, Kopf-Stimme) dürfen im gemuteten Zustand in
+    /// beliebiger Reihenfolge an/aus geschaltet werden, ohne die Engine zu starten.
     func testMutedSoundManagerStateSettersDoNotCrash() {
         let sm = SoundManager.shared
         sm.setThrustActive(true)
         sm.setThrustActive(false)
         sm.setHeadVoice(active: true, openness: 0.5)
         sm.setHeadVoice(active: false, openness: 0.0)
-        sm.setChargingActive(true, progress: 0.5)
-        sm.setChargingActive(false)
     }
 
     /// Der Sample-Modus ist ein reiner Laufzeit-Schalter und muss unabhängig vom Audio-Start

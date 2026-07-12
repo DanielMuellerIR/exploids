@@ -2,6 +2,16 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.3] — 2026-07-12
+- Cleanup: removed the dead "Wave Cannon / charge shot" feature — the charge level was never
+  raised, so the ship charge indicator, the `playChargeShot` SFX + charge-hum synthesis, and the
+  unused `chargeshot_0.m4a` sample were all inert. Docs (README / AGENTS.md) corrected accordingly.
+- Perf: the asteroid wireframe path is now rebuilt once per rendered frame instead of once per
+  120 Hz simulation step (roughly halves the SKShapeNode path rebuilds on a 60 Hz display). Purely
+  visual — the golden replay still reproduces bit-exact and GIF/video rendering is unchanged.
+- Fix: a failed replay encode when saving a high score is now logged instead of silently swallowed
+  (`try?` → `do/catch`); the high score is still stored, just without the replay.
+
 ## [0.14.2] — 2026-07-12
 - Internal: split the 4.8k-line `GameScene.swift` into thematic `extension GameScene` files
   (HUD, attract/autopilot, glossary, Mad-Meteoroids rotation, test hooks) plus standalone
