@@ -195,6 +195,17 @@ Also fixed: asteroids could spawn mid-screen because off-screen spawns were imme
 ## Roadmap
 
 ### Open To-Dos (planned / in progress)
+- **`stepSimulation` / Kollisions-Auflösung entzerren (Hochrisiko-Refactor)**: `GameScene.stepSimulation`
+  ist eine ~777-Zeilen-Methode; die Kollisions-Auflösung und die Mad-Feldrotation ließen sich in eigene
+  Typen ziehen. Bewusst noch NICHT gemacht — hier hängt die RNG-Ziehreihenfolge am bit-exakten Replay.
+  Nur mit Golden-Replay-Absicherung angehen (`exploids --replay-verify <file>` gegen einen gespeicherten
+  Lauf; muss nach jedem Schritt identisch bleiben). Eigener, konzentrierter Arbeitsblock, kein Nebenbei.
+- **`isInvincible`-Doppelschaden prüfen (latenter Fund)**: In der Kollisions-Schleife von `stepSimulation`
+  wird `isInvincible` einmal als `let` berechnet und über alle Kollisionsblöcke desselben Frames nicht neu
+  gelesen. Löst ein Treffer via Extra-Life-Revive `invincibilityEndTime` aus, schützt das die nachfolgenden
+  Blöcke im selben Frame nicht → cross-type Doppelschaden (z.B. Asteroid + UFO im selben Frame) theoretisch
+  möglich. Verifizieren (Test, der zwei gleichzeitige Treffer erzeugt), und falls real, `isInvincible` pro
+  Block frisch auswerten. (Aus der Backlog-Verifikation 2026-07-12, Nebenbefund zum Boss-`break`.)
 - **v0.10.0-Playtest abnehmen + Balance-Tuning**: Playtest zu HEAD `0031c71` auswerten — Balance-Gefühl prüfen (weniger Objekte, schwarze Löcher 20 % kleiner + seltener, erst ab Level 5; Power-up-Sammelradius 30→40), Mündungsblitz + Treffer-Feedback der Katze, Kopf-Look (Zardoz-Textur, bewegliche Augen). Ggf. Tuning-Konstanten justieren: `SpaceCat` (`artHeight`/`collisionRadius`/`bodyCenterNorm`/`eyeNorm`), `FloatingHead` (`headHeight`/`leftEyeNorm`/`rightEyeNorm`/`mouthNorm`), `GravityWell`-Radien/Stärke.
 - **v0.11.1 veröffentlichen**: `git push` (2 ausstehende Commits) + `bash wrappers/sign-and-release.sh --publish` (Tag `v0.11.1` + signiertes DMG + GitHub-Release). Enthält den autoFire-Replay-Fix. Danach: eine frische Runde spielen → GIF aus demselben Binary rendern.
 - **Fixed-Timestep-Mikro-Ruckler beobachten**: In v0.12.0 wurde ein möglicher Mikro-Ruckler gemeldet (unsicher, evtl. Fremdlast auf dem Rechner). Falls reproduzierbar: `GameScene.simStepsPerSecond` von 120 auf 240 erhöhen (Einzeiler — feinerer Schritt, robuster gegen Takt-Jitter).
