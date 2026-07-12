@@ -3,6 +3,20 @@
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
 ## [0.14.4] — 2026-07-12
+
+First signed & notarized release since v0.13.0 — this DMG bundles everything from v0.14.0 through
+v0.14.4.
+
+**For players:**
+- Fix: watching the title-screen demo no longer leaves a movement key "stuck" when you then start a
+  game (the ship could keep rotating on its own).
+- Asteroid rendering is a little smoother, especially on lower-end hardware.
+
+Everything else in this range is internal — a large refactor, a new automated test workflow (CI),
+and build-portability fixes — with no effect on gameplay. Details below and in the entries for
+v0.14.0–v0.14.3.
+
+**Under the hood (v0.14.4):**
 - Build/CI: fixed Swift 6 concurrency errors that only surfaced on the stable toolchain
   (Swift 6.1 on the CI runner) and were hidden by newer local toolchains (6.3+, which infer the
   isolation by default). `ReplayPlayer.advanceStep` calls the MainActor-isolated
