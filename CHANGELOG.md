@@ -2,6 +2,17 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.2] — 2026-07-12
+- Internal: split the 4.8k-line `GameScene.swift` into thematic `extension GameScene` files
+  (HUD, attract/autopilot, glossary, Mad-Meteoroids rotation, test hooks) plus standalone
+  `OptionDrone.swift` — pure code move, verified bit-exact against a golden replay.
+- Internal: deduplicated the entities' `distance`/`moveToward`/`wrapAround` helpers into a shared
+  `VectorMath.swift`, and gathered scattered gameplay magic numbers into a `GameplayTuning` enum.
+- Tests: split the 2.3k-line single-file test suite by domain (physics, power-ups/weapons, bosses,
+  modes, replay determinism, autopilot, scene state) over a shared `GameCoreTestCase` base, and
+  added `AudioSmokeTests` covering the previously untested `SoundManager` / `MusicPlayer` surface
+  (muted, no real audio engine). 101 tests, all green.
+
 ## [0.14.1] — 2026-07-12
 - Build: the macOS app-bundle version now comes from the central `VERSION` file instead of being
   hard-coded in `build-app.sh`; the bundle build number is derived from the git commit count

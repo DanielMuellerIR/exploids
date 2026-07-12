@@ -86,7 +86,16 @@ exploids/
 ├── assets/
 │   └── generate-dmg-background.swift  # renders the DMG install-window background
 ├── Sources/GameCore/          # platform-independent engine (SpriteKit/AVFoundation)
-│   ├── GameScene.swift        # key inputs, game loop, modes, spawning, collision wiring
+│   ├── GameScene.swift        # game loop, modes, spawning, collision wiring, input handling
+│   ├── GameScene+HUD.swift    # HUD/label setup + updates + compact (iOS) layout (file split)
+│   ├── GameScene+Attract.swift # demo/attract mode + autopilot potential-field AI (file split)
+│   ├── GameScene+Glossary.swift # in-game glossary build + scrolling (file split)
+│   ├── GameScene+MadRotation.swift # Mad-Meteoroids field rotation (+ MadRotation enum) (file split)
+│   ├── GameScene+TestHooks.swift # …ForTesting inspection hooks (file split)
+│   ├── OptionDrone.swift      # option-drone helper class (extracted from GameScene)
+│   ├── VectorMath.swift       # shared CGPoint/SKNode vector + wrap helpers (dedup)
+│   ├── HighScoreStore.swift   # high-score + max-level persistence (UserDefaults)
+│   ├── ReplayArchive.swift    # on-disk replay archive (write + prune oldest)
 │   ├── Ship.swift             # player ship (outline rendering, physics, friction, wrap)
 │   ├── Asteroid.swift         # asteroids (procedural shape, splitting, screen-entry)
 │   ├── Laser.swift            # projectiles incl. .catEye twin-laser (velocity, lifetime, wrap)
@@ -117,9 +126,15 @@ exploids/
 │   ├── project.yml            # XcodeGen spec
 │   └── Exploids/              # AppDelegate, GameViewController (SKView), TouchControlsView
 └── Tests/
-    └── GameCoreTests/
-        └── GameCoreTests.swift # 93 unit tests (physics, wrap, lasers, power-ups, modes,
-                                #   bosses, weapon×enemy matrix, replay determinism)
+    └── GameCoreTests/         # unit tests, split by domain (shared base: TestSupport.swift)
+        ├── PhysicsTests.swift        # ship/laser/asteroid physics, wrap, collision helpers
+        ├── PowerUpWeaponTests.swift  # power-ups + weapon behaviour
+        ├── BossTests.swift          # FloatingHead + SpaceCat + UFO
+        ├── ModeTests.swift          # Ancient/Mad modes, level/rotation
+        ├── ReplayDeterminismTests.swift # GameRandom, replay encode/decode, determinism, archive
+        ├── AutopilotTests.swift     # autopilot personas + demo behaviour
+        ├── GameSceneStateTests.swift # state machine, high scores, misc scene state
+        └── AudioSmokeTests.swift    # SoundManager/MusicPlayer smoke tests (muted, no engine)
 ```
 
 **Releases are on-demand only — intentionally no auto-release CI.** A signed,
@@ -140,7 +155,7 @@ beam, imploding/wobbling special asteroids, a pixel-font HUD with an in-game glo
 local high-score entry, a recorded-sample SFX mode (alongside the procedural synth), a
 **deterministic replay system** (re-watch high-score runs in-app, render promo GIFs
 headlessly — see its section below), and a **demo/attract mode** (autopilot plays on the
-title screen — see its section below). 97 unit tests, all green.
+title screen — see its section below). 101 unit tests, all green.
 
 ### Demo/Attract-Modus — IMPLEMENTIERT (v0.13.0)
 
