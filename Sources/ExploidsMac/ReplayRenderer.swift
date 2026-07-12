@@ -14,8 +14,10 @@ import GameCore
 /// (speist die aufgezeichneten Eingaben ein), `SKRenderer.update(atTime:)` tickt die visuellen
 /// SKActions auf dieselbe Sim-Zeit, und `SKRenderer.render(...)` zeichnet den Zustand in eine
 /// Offscreen-Metal-Textur, die als `CGImage` gelesen und per ImageIO zu einem GIF kodiert wird.
-/// (Läuft im CLI-Pfad ohnehin auf dem Main-Thread; bewusst ohne `@MainActor`, damit der Aufruf aus
-/// der nonisolated `Main.main()` wie die übrigen SpriteKit-Aufrufe nur Concurrency-Warnungen erzeugt.)
+/// `@MainActor`, weil die Render-Funktionen eine `GameScene` treiben und SpriteKit ansteuern (alles
+/// MainActor). Läuft im CLI-Pfad ohnehin auf dem Main-Thread; unter Swift 6.1 sind die Aufrufe ohne
+/// die Annotation Fehler (nicht bloß Warnungen wie auf neueren Toolchains).
+@MainActor
 enum ReplayRenderer {
 
     /// Render-Optionen mit vernünftigen Defaults für ein Promo-GIF.

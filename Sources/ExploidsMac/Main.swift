@@ -216,7 +216,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 /// The entry point of the game application.
+///
+/// `@MainActor`, weil `main()` und sämtliche CLI-Helfer AppKit/SpriteKit (SKScene/SKView, alle
+/// MainActor-isoliert) ansteuern. Ohne die Annotation gelten die statischen Funktionen als
+/// nonisolated und die Aufrufe sind unter Swift 6.1 Fehler (neuere Toolchains leiten es per Default
+/// ab und verschleierten das). Der `@main`-Einstiegspunkt läuft ohnehin auf dem Main-Thread.
 @main
+@MainActor
 struct Main {
     static func main() {
         let arguments = CommandLine.arguments
