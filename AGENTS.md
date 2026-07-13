@@ -378,3 +378,24 @@ aus demselben installierten Build sind zuverlässig. (Korrektur: die scheinbare 
 Wahrheit der Größen-Bug — siehe Abschnitt „Aufnahme-Größe" oben; jetzt behoben.)
 
 **Nächste geplante Phase:** Nach Abschluss des v0.10.0-Playtests (siehe Open To-Dos) deterministisches Replay-System Phase 1 fortsetzen: `GameRandom` PRNG + Determinismus-Regressionstest (Details in `docs/replay-system-plan.md`). Trace-Pipeline in einem lokalen Temp-Verzeichnis (potrace/rsvg/imagemagick) aus lokalen Quellbildern; Hinweis: `magick`-SVG-Render IMMER `-background none` VOR die Input-SVG stellen (sonst weisser Hintergrund).
+
+## Verzeichnisstruktur
+
+<!-- directory-structure: generated -->
+- [AGENTS.md](AGENTS.md) — Projektprofil, Arbeitsregeln und dieses Datei-Verzeichnis.
+- [CHANGELOG.md](CHANGELOG.md) — Projektdokumentation.
+- [README.de.md](README.de.md) — Projekt-Einstieg und Nutzerdokumentation.
+- [README.md](README.md) — Projekt-Einstieg und Nutzerdokumentation.
+- [turrican-like-powerup-tts.md](turrican-like-powerup-tts.md) — Projektdokumentation.
+- [docs/replay-system-plan.md](docs/replay-system-plan.md) — Projektdokumentation.
+- `Exploids.app/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `Icon/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `Sources/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `Tests/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `assets/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `docs/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `ios/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `screenshots/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `tools/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+- `wrappers/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
+<!-- /directory-structure -->
