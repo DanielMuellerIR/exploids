@@ -1,401 +1,167 @@
-# Exploids: Native macOS Retro-HighRes Asteroids
+# Exploids — dauerhafte Projektregeln
 
-Exploids is a native macOS Asteroids clone with a C-64 inspired vector aesthetic executed at modern high resolution and butter-smooth frame rates (supporting Apple Silicon and ProMotion 120Hz). Almost all graphics are procedural vector rendering — only the two bosses use traced vector-contour textures — and all sound effects are synthesized in real time (with an optional recorded-sample SFX mode); the bundled media assets are two chiptune background-music tracks, the two boss textures, and the optional recorded sound effects (see Asset Licensing).
+Stand: 2026-07-14. Nativer Asteroids-Klon mit C64-inspirierter Vektorgrafik für
+macOS und einen frühen iOS-Port. Swift 6, SpriteKit, AVFoundation, SwiftPM.
 
-## Typ & Zweck
-- **Typ:** Spiel (Shooter/Arcade)
-- **Zweck:** Nativer Asteroids-Klon mit C64-inspirierter Vektorgrafik und Echtzeit-Sound-Synthese.
-- **Plattform:** macOS-GUI, iOS
+## Zweck und Architektur
 
-## Tech Stack & Architecture
+Das SwiftPM-Workspace trennt:
 
-- **Language**: Swift 6 (strict concurrency compliant).
-- **GUI & Windowing**: AppKit (`NSApplication`, `NSWindow`, `NSAppearance`).
-- **Render Engine**: SpriteKit (`SKView`, `SKScene`, `SKShapeNode`). Coordinates are centered around `(0, 0)` with standard wrap-around physics boundaries.
-- **Audio Engine**: AVFoundation (`AVAudioEngine`, `AVAudioSourceNode`). Procedural synth sounds calculated in real-time on the audio render thread. On **iOS** the background music is **not** played via a separate `AVAudioPlayer` but as an `AVAudioPlayerNode` on the *same* `AVAudioEngine` as the SFX (`SoundManager.makeMusicNode`), so there is a single render path; `SoundManager` also restarts the engine on `AVAudioEngineConfigurationChange` (e.g. plugging/unplugging headphones). On macOS the music keeps using `AVAudioPlayer` (no such issue there).
-- **Build System**: Swift Package Manager (SPM) executable package.
+- `Sources/GameCore/`: plattformunabhängige Simulation, Entities, Kollision,
+  Audio, deterministischer Zufall, Replay und Persistenz.
+- `Sources/ExploidsMac/`: dünne AppKit-Shell und headless Replay-/GIF-Renderer.
+- `ios/`: frühe Xcode/iOS-App, bindet `GameCore` ein; noch kein Release.
+- `Tests/GameCoreTests/`: Tests nach Physik, Waffen, Bosse, Modi, Replay,
+  Autopilot, Szenenzustand und Audio.
+- `wrappers/sign-and-release.sh`: manueller signierter/notarisierter Releasepfad.
+- `VERSION`: einzige Quelle der Produktversion.
 
----
+`GameCore` bleibt AppKit-frei und für macOS/iOS kompilierbar. Eingaben laufen über
+plattformneutrale `handle`/`simulateKeyDown`-/`simulateKeyUp`-Pfade; Shells übersetzen
+nur Tastatur, Touch oder GameController. Quit ist Callback, kein `NSApp` im Core.
 
-## iOS Audio: distorted sound under the Xcode debugger (gotcha)
+## Simulations- und Replay-Verträge
 
-**Symptom:** On a physical iPhone, the background music (and SFX) sound **completely
-distorted / unrecognizable** when the app is launched from Xcode with **CMD+R**. Quitting the
-app and relaunching it by tapping its icon makes the sound perfectly clean.
+Die Simulation ist deterministisch: `GameRandom` (SplitMix64) liefert jeden
+gameplay-relevanten Zufall; Zeit läuft über den Fixed Timestep 1/120 s; Replay speichert
+Seed, Eingaben, Schrittzahl und Szenengröße. Renderer und `--replay-verify` müssen die
+gespeicherte Größe nutzen, weil Spawn-/Wrap-/Gegnerlogik davon abhängt.
 
-**Cause:** The attached **LLDB debugger perturbs the real-time audio render thread** on device.
-This is *not* an app bug — every Xcode `CMD+R` reinstalls *and* attaches the debugger, so it
-always reproduces; an icon-launch runs without the debugger and is fine. **The shipped/Release
-build is unaffected.** The iOS Simulator does **not** reproduce it (audio formats all line up at
-48 kHz there).
+- Nie gameplay-relevantes `SystemRandom`, Wandzeit oder frameabhängige Ziehungen
+  einführen. Visuelle Zufälligkeit klar von Simulation trennen.
+- Reihenfolge und Anzahl der RNG-Ziehungen sind Teil des Replayformats. Refactors von
+  `stepSimulation`, Kollision oder Spawning können bitgenaue Replays brechen, selbst
+  wenn das sichtbare Verhalten gleich wirkt.
+- Der geplante Split der großen `stepSimulation` ist Hochrisiko: nur in einem eigenen
+  Arbeitsblock und nach jedem kleinen Schnitt gegen ein gespeichertes Golden Replay
+  mit `exploids --replay-verify <datei>` prüfen.
+- Aufnahme und Wiedergabe verwenden denselben Inputpfad. Demo-/Autopilotläufe werden
+  weder als Nutzerhighscore noch als Replayarchiv-Eintrag gespeichert.
+- Replaydateien sind klein, aber lokale Nutzerdaten unter Application Support. Nie
+  automatisch committen oder veröffentlichen.
+- Änderungen am Replayformat brauchen Versionierung, Kompatibilitätsentscheidung,
+  Encode/Decode-/Drift-Tests und klare Ablehnung inkompatibler Altformate.
 
-**How to verify audio from Xcode without the artifact:** Edit Scheme → **Run** → **Info** tab →
-uncheck **"Debug executable"**, then run. Audio is clean. Re-enable it for normal debugging.
+## Gameplay-Invarianten
 
-Do **not** "fix" this in code (it cost a long debugging detour once): all playback formats are
-already consistent, and `AVAudioEngineConfigurationChange` does *not* fire in this case.
+- Zwei Modi bleiben getrennt: Ancient wrappt am festen Feld; Mad rotiert Positionen
+  und Geschwindigkeiten im flachen Weltkoordinatensystem. Kein rotierender Parent, der
+  die bestehende World-Space-Kollision unbemerkt ändert.
+- Level sind zeitbasiert. Autopilot-Balancing darf nicht nur „alle Gegner töten“ als
+  Fitness optimieren; Überlebenszeit und mehrere Seeds messen.
+- Entity-Arrays und SpriteKit-Szenengraph müssen konsistent bleiben. Spawns während
+  einer Collection-Iteration nicht durch anschließendes Snapshot-Überschreiben
+  verlieren. Die vorhandene Tracking-Invariante in Tests erhalten.
+- Fixed-Timestep nicht aufgrund eines einzelnen subjektiven Rucklerberichts ändern.
+  Erst reproduzieren und messen; 120→240 ist eine Simulationsänderung mit Replaygate.
+- Der mögliche `isInvincible`-Doppelschaden ist ein offener Befund: Test mit zwei
+  Kollisionsarten im selben Frame erstellen, dann nur bei Beleg reparieren.
+- Beam-/Waffenwirkung gegen UFO, Katze und Boss ist Matrixverhalten; Änderungen immer
+  über Waffen×Gegner-Regressionstests absichern.
 
----
+## Audio und iOS-Debuggerfalle
 
-## Asset Licensing
+SFX werden prozedural in Echtzeit berechnet; optional gibt es aufgenommene Samples.
+Auf iOS laufen Musik und SFX über denselben `AVAudioEngine`-Renderpfad, Musik als
+`AVAudioPlayerNode`; bei `AVAudioEngineConfigurationChange` wird die Engine neu
+gestartet. macOS verwendet weiterhin `AVAudioPlayer` für Musik.
 
-⚠️ **Background music is NON-COMMERCIAL ONLY.** The two chiptune tracks
-(`Sources/GameCore/Music/asteroid-storm.mp3`, `neon-vectors.mp3`) were generated with
-**musely.ai** on its **Free Plan**. Per https://musely.ai/terms-and-conditions the Free
-Plan grants *"Personal, non-commercial use only. No attribution required."*
+Auf einem echten iPhone kann Start per Xcode `Cmd+R` völlig verzerrtes Audio erzeugen,
+weil der angehängte LLDB-Debugger den Echtzeit-Audiothread stört. Icon-Start und
+Release sind sauber; Simulator reproduziert es nicht. Das ist keine App-Korrektur:
+zum Gegencheck im Scheme „Debug executable“ deaktivieren. Nicht erneut Formate oder
+Enginecode wegen dieses Debuggerartefakts umbauen.
 
-**Generation parameters (for reproducing / making more tracks in the same style):**
-- Style tags: `boss music rush`, `fast`, `c-64`
-- Description prompt: *"Manic pulse-wave SID lead, fast broken-chord arpeggios, funky
-  syncopated square bass, noise-channel hats and snare, bright minor-key melody, cosmic
-  shoot-em-up energy, asteroid-field intensity"*
+## Assets, Lizenzen und Veröffentlichung
 
-Implication: the game **must not be distributed commercially** (no paid sales, no
-monetized App Store release) while it ships this music. Before any commercial use, replace
-the tracks (own/CC0/commercially-licensed music) or obtain a paid musely plan with a
-commercial license. All other audio is procedurally synthesized (no third-party rights).
+- Die beiden MP3-Hintergrundtracks unter `Sources/GameCore/Music/` stammen aus einem
+  Free-Plan und sind ausschließlich nichtkommerziell lizenziert. Solange sie gebündelt
+  sind: keine bezahlte, monetarisierte oder rechtlich unklare App-Store-Veröffentlichung.
+- Vor jeder App-Store-/kommerziellen Verteilung beide Tracks durch selbst erzeugte,
+  CC0- oder kommerziell sauber lizenzierte Musik ersetzen. Eine spätere bezahlte
+  Lizenz ändert die Rechte alter Generierungen nicht automatisch.
+- Projektlizenz muss den Musik-Carve-out ausdrücklich nennen; Code-Lizenz nicht auf
+  diese Dateien ausdehnen.
+- Press Start 2P unter SIL OFL 1.1; `Fonts/OFL.txt` und Attribution erhalten.
+- Boss-Texturen und optionale Samples müssen in der Assetübersicht mit Herkunft und
+  Lizenz geführt werden. Neue Medien ohne belegte Lizenz nicht committen.
+- Öffentliche Dokumente/Artefakte auf private Pfade, interne Hosts, Kontakte und
+  Assistentenformulierungen prüfen.
 
-**Heading font:** `Sources/GameCore/Fonts/PressStart2P-Regular.ttf` (Press Start 2P) is licensed
-under the **SIL Open Font License 1.1** (`Fonts/OFL.txt`) — free for any use **including
-commercial**, so unlike the music it imposes no commercial restriction. Registered at runtime via
-`RetroFont` (CoreText), used for the EXPLOIDS / GAME OVER headings.
+Releases sind absichtlich manuell. `bash wrappers/sign-and-release.sh --publish`
+erstellt Build, Signatur, DMG, Notarisierung, Tag und GitHub-Release und läuft nur nach
+ausdrücklichem konkreten Auftrag. Kein Auto-Release bei normalen Pushes.
 
-**Open-source note:** The project is intended to be released as open source. The music files
-are **NOT covered by the project's code license** — they retain musely.ai's separate
-non-commercial Free-Plan terms. When adding a `LICENSE` file, state this carve-out explicitly
-(e.g. "code under <OSS license>; `Sources/GameCore/Music/*.mp3` under musely.ai Free Plan,
-non-commercial"). This prevents a fork from assuming the OSS license grants commercial rights
-to the music.
+## Bauen und testen
 
----
-
-## File Structure
-
-The package has three SwiftPM targets: **`GameCore`** (platform-independent engine
-library, also compiles for iOS), **`ExploidsMac`** (the macOS AppKit executable shell,
-product name `exploids`), and the **`GameCoreTests`** test target. A separate Xcode
-project under `ios/` is the iOS app target and links `GameCore` as a package dependency.
-
-```
-exploids/
-├── Package.swift              # SPM manifest: GameCore lib + ExploidsMac exe + GameCoreTests
-├── VERSION                    # single source of truth for the version string
-├── build-app.sh               # builds the double-clickable Exploids.app (macOS)
-├── wrappers/
-│   └── sign-and-release.sh     # sign + notarize + DMG (+ optional GitHub release)
-├── assets/
-│   └── generate-dmg-background.swift  # renders the DMG install-window background
-├── Sources/GameCore/          # platform-independent engine (SpriteKit/AVFoundation)
-│   ├── GameScene.swift        # game loop, modes, spawning, collision wiring, input handling
-│   ├── GameScene+HUD.swift    # HUD/label setup + updates + compact (iOS) layout (file split)
-│   ├── GameScene+Attract.swift # demo/attract mode + autopilot potential-field AI (file split)
-│   ├── GameScene+Glossary.swift # in-game glossary build + scrolling (file split)
-│   ├── GameScene+MadRotation.swift # Mad-Meteoroids field rotation (+ MadRotation enum) (file split)
-│   ├── GameScene+TestHooks.swift # …ForTesting inspection hooks (file split)
-│   ├── OptionDrone.swift      # option-drone helper class (extracted from GameScene)
-│   ├── VectorMath.swift       # shared CGPoint/SKNode vector + wrap helpers (dedup)
-│   ├── HighScoreStore.swift   # high-score + max-level persistence (UserDefaults)
-│   ├── ReplayArchive.swift    # on-disk replay archive (write + prune oldest)
-│   ├── Ship.swift             # player ship (outline rendering, physics, friction, wrap)
-│   ├── Asteroid.swift         # asteroids (procedural shape, splitting, screen-entry)
-│   ├── Laser.swift            # projectiles incl. .catEye twin-laser (velocity, lifetime, wrap)
-│   ├── PowerUp.swift          # the nine power-up types and their vector glyphs
-│   ├── GravityWell.swift      # singularities that pull objects
-│   ├── UFO.swift              # enemy saucers and their shots
-│   ├── FloatingHead.swift     # boss "Der Götze" (spawner with state machine + evade AI)
-│   ├── SpaceCat.swift         # space-cat miniboss (stalk/cover/predictive twin-laser)
-│   ├── ArtTexture.swift       # loads traced boss PNG contours from Art/ as textures
-│   ├── Collision.swift        # world-space collision helpers
-│   ├── GameRandom.swift       # seeded PRNG (SplitMix64) — deterministic gameplay RNG
-│   ├── Replay.swift           # replay model (Codable, compact binary plist)
-│   ├── ReplayRecorder.swift   # records seed + inputs + step count per run (fixed-timestep)
-│   ├── ReplayPlayer.swift     # plays a recording back bit-exactly into a GameScene
-│   ├── SoundManager.swift     # real-time procedural SFX + optional recorded-sample mode
-│   ├── MusicPlayer.swift      # chiptune background music (M toggle)
-│   ├── AudioSession.swift     # shared AVAudioSession configuration (iOS)
-│   ├── RetroFont.swift        # registers Press Start 2P (CoreText) for headings
-│   ├── Fonts/                 # PressStart2P-Regular.ttf + OFL.txt
-│   ├── Art/                   # traced boss textures: space_cat.png, zardoz_head.png
-│   ├── Music/                 # asteroid-storm.mp3, neon-vectors.mp3
-│   └── SFX/                   # optional recorded sound effects (.m4a incl. bosshead_0)
-├── Sources/ExploidsMac/       # macOS AppKit shell (executable, product "exploids")
-│   ├── Main.swift             # app entrypoint, lifecycle, CLI flags (replay export/render)
-│   ├── GameWindow.swift       # configures the Cocoa window and SKView
-│   └── ReplayRenderer.swift   # headless GIF rendering (SKRenderer + Metal + ImageIO)
-├── ios/                       # iOS app target (Xcode project, links GameCore) — WIP
-│   ├── project.yml            # XcodeGen spec
-│   └── Exploids/              # AppDelegate, GameViewController (SKView), TouchControlsView
-└── Tests/
-    └── GameCoreTests/         # unit tests, split by domain (shared base: TestSupport.swift)
-        ├── PhysicsTests.swift        # ship/laser/asteroid physics, wrap, collision helpers
-        ├── PowerUpWeaponTests.swift  # power-ups + weapon behaviour
-        ├── BossTests.swift          # FloatingHead + SpaceCat + UFO
-        ├── ModeTests.swift          # Ancient/Mad modes, level/rotation
-        ├── ReplayDeterminismTests.swift # GameRandom, replay encode/decode, determinism, archive
-        ├── AutopilotTests.swift     # autopilot personas + demo behaviour
-        ├── GameSceneStateTests.swift # state machine, high scores, misc scene state
-        └── AudioSmokeTests.swift    # SoundManager/MusicPlayer smoke tests (muted, no engine)
+```bash
+swift build
+swift test
+bash build-app.sh
 ```
 
-**Releases are on-demand only — intentionally no auto-release CI.** A signed,
-notarized DMG plus the matching GitHub release is produced by running
-`bash wrappers/sign-and-release.sh --publish` (build → codesign → DMG → notarize →
-staple → tag `vX.Y.Z` → upload to the release page). This is run manually when a
-release is wanted; it is a deliberate decision *not* to trigger releases on every
-push (notarization takes minutes and the VERSION-derived tag would collide).
+iOS-Änderungen zusätzlich mit dem Xcode-Projekt/Simulator und auf Gerät prüfen; Audio
+auf Gerät ohne Debugger gegenhören. Release-/Notarisierungsbefehle sind kein normaler
+Testschritt. Testanzahlen nicht in dauerhafte Doku schreiben.
 
----
+Änderungsspezifische Gates:
 
-## Current Status: v0.13.0
+- Simulation/Kollision/RNG: relevante Unit-Tests plus Golden-Replay-Verifikation;
+  mehrere Seeds und Szenengrößen.
+- Replay: Encode/Decode, Inputfolge, Schrittzahl, Szenengröße und headless Render;
+  neue Binary reproduziert Goldenlauf bitgenau oder Formatänderung wird explizit.
+- Entities/Power-ups/Bosse: Array↔Szenengraph-Invariante und Waffenmatrix.
+- Audio: gemuteter Smoke-Test ohne echte Engine; macOS echter Start; iOS Simulator
+  und Gerät ohne LLDB bei Renderpfadänderungen.
+- iOS-Eingabe: Touch-hold/release, gleichzeitige Aktionen, App-Lifecycle und optional
+  GameController über denselben Core-Inputpfad.
+- UI/Gameplaygefühl: automatisierte Tests ersetzen nicht 120-Hz-/Geräte-Playtest,
+  aber subjektiver Test ersetzt keine deterministische Regression.
+- Assets: Lizenzbeleg, Bundle-Scan und kommerzielle Zulässigkeit vor Distribution.
 
-Shipped feature set (signed + notarized macOS release; the iOS target is an early WIP):
-two game modes, nine power-ups, gravity wells, enemy UFO saucers, two bosses (the
-"Der Götze" head boss and the space-cat minibosses), a sweeping laser
-beam, imploding/wobbling special asteroids, a pixel-font HUD with an in-game glossary,
-local high-score entry, a recorded-sample SFX mode (alongside the procedural synth), a
-**deterministic replay system** (re-watch high-score runs in-app, render promo GIFs
-headlessly — see its section below), and a **demo/attract mode** (autopilot plays on the
-title screen — see its section below). 101 unit tests, all green.
+## Code- und Git-Regeln
 
-### Demo/Attract-Modus — IMPLEMENTIERT (v0.13.0)
+- Swift-6-Strict-Concurrency erhalten. Echtzeit-Audiothread nicht blockieren,
+  allozieren oder mit UI-/Dateiarbeit belasten.
+- Identifier Englisch, Doku/Kommentare Deutsch; komplexe Simulation/RNG/Audio-
+  Invarianten anfängerfreundlich erklären. Kommentare bei Refactor/Rename erhalten.
+- Kleine, testbare Schnitte. Hochrisiko-`stepSimulation` nicht nebenbei refactoren.
+- Nur konkrete Todo-Pfade stagen; fremdes WIP, Replays, Builds und lokale Medien
+  unangetastet. Kein `git add .`, `git add -A`, Reset oder Clean.
+- Nach verifizierter Verhaltensänderung `VERSION` passend erhöhen, committen und nur zu
+  den kanonischen privaten Fleet-Remote pushen. Reine AGENTS-/Doku-Reorganisation braucht keinen Produktversions-
+  Bump. GitHub/`origin`, Tag, Notarisierung und Release nur ausdrücklich.
 
-Auf dem Startbildschirm spielt nach **30 s Leerlauf** (oder auf Taste **D**) ein computergesteuerter
-Autopilot eine Demo. Bei Game Over trägt der Pilot **keinen** Highscore ein (kein `.nameEntry`); die
-Highscore-Liste (Game-Over-Screen) wird **10 s** gezeigt, dann **15 s** Startbildschirm, dann die
-nächste Demo — Endlos-Kreislauf. **Jede** menschliche Eingabe bricht die Automatik ab und gibt die
-Kontrolle zurück. Demo-Läufe werden nicht aufgezeichnet/archiviert.
+## Aktiver Backlog
 
-- Host aktiviert das über `GameScene.attractModeEnabled` (nur `ExploidsMac`; Tests/Headless-Render
-  bleiben ruhig). Zustandsmaschine + Echtzeit-Timer in `GameScene.updateAttract`; der Autopilot
-  steuert per `applyAutopilotInput` (setzt `activeKeys` direkt, wie der ReplayPlayer den Input-Pfad
-  nutzt). Auf dem Startbildschirm kollidiert „D" mit dem Level-+1-Alias — im Attract-Modus gewinnt
-  Demo, sonst bleibt „D" = Level +1 (Tests/Headless unverändert). Level-Auswahl über ◀/▶ und „A".
-- **KI-Modell:** Potenzialfeld-Navigation (`Sources/GameCore/Autopilot.swift` = reine Persona-Daten;
-  Logik in `applyAutopilotInput`). Gefahren stoßen ab (∝ Nähe², gegen die VORAUSGESCHAUTE Position,
-  `lookahead`), Schützen/Power-ups ziehen schwach an; das Schiff fliegt durch die Lücken (mobil →
-  feindliche Snipes verfehlen) und feuert nach vorn. Wrap-bewusste Distanzen (Ancient-Modus wrappt).
-  Wichtig: Level sind zeitbasiert (60 s überleben, nicht abräumen) und einen NAHEN großen Asteroiden
-  zerschießt man ungern (die zwei Splitter fliegen schneller Richtung Schiff) — das Feld lenkt drum.
-- **4 Personas** (Roster, reihum), je passendes Startlevel: **Ace** (L4, Experte — erreicht Level 10,
-  Ø ~3 min, im Extremfall die vollen ~10 min), **Cowboy** (L6, offensiv-schnell aber sauber),
-  **Rookie** (L5, vorsichtig aber schludrig), **Kamikaze** (L7, riskant — stirbt am ehesten früh,
-  dafür spektakulär). Tuning-Werte je Persona in `AutopilotPersona` (influence/cruiseSpeed/aimJitter/
-  deadzone/wellFearMult/startLevel). Balancing mit dem headless Mess-Ansatz aus den Autopilot-Tests
-  (Überlebenszeit über mehrere Seeds) justierbar.
+Kanonisch in `backlog.md`: `isInvincible`-Befund testgetrieben klären; Hochrisiko-
+Simulationsextraktion nur mit Golden Replay; iOS-Steuergefühl/Assets/Releasefähigkeit;
+Musik vor App Store ersetzen; Balance/Fixed-Timestep beobachten; Promo-GIF auswählen;
+Scroll-Modus später. Veraltete Versions-/Publish-Todos und erledigte Featurechronik
+gehören in Changelog/Releases, nicht hierher.
 
-Two selectable game modes (start screen: ▲/▼ to switch, ◀/▶ for level, Space to start):
-- **Ancient Asteroids**: the classic mode — fixed playfield, objects wrap around the screen edges. Unchanged.
-- **Mad Meteoroids**: the whole playfield (asteroids, gravity wells, power-ups, starfield) rotates continuously around the screen center while the player ship stays exempt (Crazy-Comets style). Rotation speed scales with level (~6°/s at L1 up to ~30°/s from L10), with scheduled direction changes (L1–3 constant, then 2-2-2-3-3-4 changes per level, ~every 10s from L10) and occasional "record-scratch" jolts at high levels. UFOs and their shots stay screen-fixed in this first version. The field uses circular wrapping (objects leaving the field radius re-enter on the opposite side) so rotation stays coherent. Implementation note: gameplay objects are kept in one flat coordinate space — their positions/velocities are rotated per frame around the origin rather than parented to a rotating container — so the existing world-space collision system needs no changes. Tuning constants live in the `MadRotation` enum in `GameScene.swift`.
+## Progressive Details und Scope
 
-Also fixed: asteroids could spawn mid-screen because off-screen spawns were immediately folded back by edge-wrapping; they now reliably fly in from the edge (see `Asteroid.hasEnteredScreen`).
+- Replayplan und Format: [`docs/replay-system-plan.md`](docs/replay-system-plan.md).
+- Voice-Sample-Workflow: [`turrican-like-powerup-tts.md`](turrican-like-powerup-tts.md).
+- Release: Wrapper und öffentliche README.
+- Implementierte Features/Buggeschichte: Changelog und Git-Historie.
 
+`.agents/AGENTS.md` liegt in einem gitignorierten lokalen Tool-Verzeichnis und ist
+nicht Teil des Repos: lokale/nicht autoritative Sonderregel, weder in Root-Regeln
+übernehmen noch veröffentlichen. Dasselbe gilt für ignorierte `.claude`-Konfiguration.
 
----
-
-## Roadmap
-
-### Open To-Dos (planned / in progress)
-- **`stepSimulation` / Kollisions-Auflösung entzerren (Hochrisiko-Refactor)**: `GameScene.stepSimulation`
-  ist eine ~777-Zeilen-Methode; die Kollisions-Auflösung und die Mad-Feldrotation ließen sich in eigene
-  Typen ziehen. Bewusst noch NICHT gemacht — hier hängt die RNG-Ziehreihenfolge am bit-exakten Replay.
-  Nur mit Golden-Replay-Absicherung angehen (`exploids --replay-verify <file>` gegen einen gespeicherten
-  Lauf; muss nach jedem Schritt identisch bleiben). Eigener, konzentrierter Arbeitsblock, kein Nebenbei.
-- **`isInvincible`-Doppelschaden prüfen (latenter Fund)**: In der Kollisions-Schleife von `stepSimulation`
-  wird `isInvincible` einmal als `let` berechnet und über alle Kollisionsblöcke desselben Frames nicht neu
-  gelesen. Löst ein Treffer via Extra-Life-Revive `invincibilityEndTime` aus, schützt das die nachfolgenden
-  Blöcke im selben Frame nicht → cross-type Doppelschaden (z.B. Asteroid + UFO im selben Frame) theoretisch
-  möglich. Verifizieren (Test, der zwei gleichzeitige Treffer erzeugt), und falls real, `isInvincible` pro
-  Block frisch auswerten. (Aus der Backlog-Verifikation 2026-07-12, Nebenbefund zum Boss-`break`.)
-- **v0.10.0-Playtest abnehmen + Balance-Tuning**: Playtest zu HEAD `0031c71` auswerten — Balance-Gefühl prüfen (weniger Objekte, schwarze Löcher 20 % kleiner + seltener, erst ab Level 5; Power-up-Sammelradius 30→40), Mündungsblitz + Treffer-Feedback der Katze, Kopf-Look (Zardoz-Textur, bewegliche Augen). Ggf. Tuning-Konstanten justieren: `SpaceCat` (`artHeight`/`collisionRadius`/`bodyCenterNorm`/`eyeNorm`), `FloatingHead` (`headHeight`/`leftEyeNorm`/`rightEyeNorm`/`mouthNorm`), `GravityWell`-Radien/Stärke.
-- **v0.11.1 veröffentlichen**: `git push` (2 ausstehende Commits) + `bash wrappers/sign-and-release.sh --publish` (Tag `v0.11.1` + signiertes DMG + GitHub-Release). Enthält den autoFire-Replay-Fix. Danach: eine frische Runde spielen → GIF aus demselben Binary rendern.
-- **Fixed-Timestep-Mikro-Ruckler beobachten**: In v0.12.0 wurde ein möglicher Mikro-Ruckler gemeldet (unsicher, evtl. Fremdlast auf dem Rechner). Falls reproduzierbar: `GameScene.simStepsPerSecond` von 120 auf 240 erhöhen (Einzeiler — feinerer Schritt, robuster gegen Takt-Jitter).
-- **v0.12.1-Änderungen** (Replay-Szenengrössen-Fix + `--render-video mp4`): mit dem v0.13.0-Release nach GitHub veröffentlicht und notarisiert. Bestehende Replays rendern bereits korrekt; das Release sorgt dafür, dass der installierte App-Build künftig die Szenengrösse direkt mitaufnimmt.
-- **Turrican-style power-up voice samples**: Generate short, bitcrushed announcer samples ("Power Up!", "Extra Life!", "Game Over!") locally via TTS + post-processing. Full workflow (Qwen3-TTS / F5-TTS on MLX, then `pedalboard` bitcrush) is documented in `turrican-like-powerup-tts.md`. Would replace/augment the current procedural SFX for power-up pickups.
-- **Scroll mode (3rd game mode)**: Ship stays centered, the world scrolls so the player can never reach the screen edge (infinite-scroller feel). Core is camera-follow (`cameraNode.position = ship.position`); the work is HUD re-anchoring to the camera node, ship-relative wrapping (to avoid a seam pop), starfield tiling, and shake offset. Estimated ~half a day as a standalone third mode (alongside Ancient Asteroids / Mad Meteoroids). Decide later whether/how it combines with Mad rotation (rotation pivot would need to follow the ship).
-- **iOS port + free App Store release** (wanted, first-time App Store submission): The renderer is SpriteKit, so the entire game logic (`GameScene`, all entities, collision, the AVFoundation audio) runs on iOS unchanged — roughly 70% of the code is reusable as-is. What needs rewriting (~30%): the entry point (`Main.swift`, `NSApplication` → UIKit/SwiftUI app lifecycle), `GameWindow.swift` (`NSWindow` → `UIViewController` hosting an `SKView`), the input layer (`keyDown`/`keyUp` → touch), and an `NSColor` → `SKColor` sweep (~21 sites, trivial). Suggested architecture: split `GameCore` into a platform-independent **library target** + thin macOS and iOS app targets (one codebase). **Done (steps 1+2):** `GameCore` is now a platform-independent **library target** (the AppKit shell lives in a separate `ExploidsMac` executable target) and is **verified to compile for iOS** (`swiftc -typecheck` against the iOS simulator SDK, Swift 6). The `NSEvent` `keyDown`/`keyUp` overrides are thin macOS-only bridges behind `#if canImport(AppKit)` over platform-independent `handleKeyDown`/`handleKeyUp`; `simulateKeyDown`/`Up`/`TypeCharacter` call those directly (no synthetic `NSEvent`) and are the iOS input entry point. `NSApp.terminate` → `onQuit` callback (set by the shell); `NSColor` → `SKColor` everywhere; `Package.swift` declares `.iOS(.v17)`. macOS app unchanged: `swift build`/93 tests/`build-app.sh` all green. **Done (step 3, early WIP):** an Xcode iOS app target now lives under `ios/` (XcodeGen `project.yml`; `AppDelegate`, `GameViewController` hosting an `SKView`, `TouchControlsView` on-screen controls) and links the `GameCore` library; the touch overlay drives `simulateKeyDown`/`Up`. It builds and runs, but is young and **not yet released** — still needs on-device control-feel tuning, app-icon/launch-screen/asset-catalog polish, and the music-license swap below before any App Store submission. **Controls**: input is already abstracted via `simulateKeyDown`/`simulateKeyUp` (`GameScene.swift`), so touch buttons/gamepad just drive the same flags — no logic change. Plan: on-screen buttons (rotate L/R bottom-left, thrust + fire bottom-right; the hold-to-fire laser beam maps perfectly to touch-and-hold) **plus** MFi/Bluetooth `GameController` support (low effort, console-quality for serious players). Risk is purely control *feel* (needs on-device tuning), not technical feasibility. **Prerequisites**: (a) a paid Apple Developer account ($99/yr); (b) **replace the two musely.ai music tracks first** — Free-Plan terms forbid commercial use *and* explicitly list "distribution on … Apple Music"; a free no-IAP app is a gray area, and a retroactive paid upgrade does NOT cover already-generated tracks. Cleanest fix: regenerate own tracks via the local ACE-Step `musicgen` skill (fully owned). First-time submission → expect a learning curve (provisioning profiles, app icons/asset catalog, launch screen, App Store Connect metadata, privacy nutrition labels).
-
-### BUG (BEHOBEN 2026-06-23): verwaiste Power-ups (z.B. [C]) — uneinsammelbar, unsterblich
-
-Symptom: ein Power-up lag fest, ließ sich nicht einsammeln, lief nie ab und überlebte sogar
-Game-Over + ESC + Level-Wechsel. **Ursache:** Die Einsammel-Schleife in `GameScene.update`
-baute `remainingPowerUps` aus einem Schnappschuss und **überschrieb** danach `activePowerUps`.
-Sammelt man eine **Bombe** ein, ruft `collectPowerUp` → `detonateBomb` → `spawnPowerUp` (20%
-UFO-Beute), das *während* der Schleife neue Power-ups an `activePowerUps` anhängt — die gingen
-beim Überschreiben verloren und blieben als **verwaiste SKNodes** im Szenengraph (nicht in
-`activePowerUps` → kein Lifetime-Update, keine Kollision, kein Clear). **Fix:** erst die
-einzusammelnden per `filter` bestimmen, dann einsammeln und **identitäts-basiert** aus dem Array
-entfernen (`removeAll { $0 === … }`) — bewahrt gleichzeitig gespawnte Power-ups. Regressionstest:
-`testBombDropsDoNotOrphanPowerups` (Invariante: PowerUp-Nodes im Szenengraph == `activePowerUps`).
-
-### Promo-GIF einer spannenden Spielszene (TODO)
-
-Wir brauchen ein animiertes GIF (z.B. für README/App-Store-Promo) einer packenden Spielszene.
-**Empfohlener Weg (kein neuer Code):** Szene mit der macOS-Bildschirmaufnahme aufnehmen
-(`Cmd+Shift+5`, Fensterausschnitt), das `.mov` zur Weiterverarbeitung übergeben → daraus per
-`ffmpeg` (palettegen/paletteuse) ein optimiertes, geloopptes GIF (oder APNG/WebP) mit einer
-knackigen ~4–6 s Stelle schneiden. Vorteil: null Risiko/Wartung, beste Qualität.
-**Alternative (mehr Aufwand):** In-App-Recorder in der macOS-App (SKView-Frames via AVAssetWriter)
-für cursor-freie, pixelgenaue Aufnahme — nur bauen, falls die Bildschirmaufnahme nicht reicht.
-*Status: teilweise gelöst — das Replay-System rendert inzwischen cursor-freie GIFs headless aus
-einem aufgezeichneten Lauf (`exploids --render-replay … --out …` bzw. `--render-demo`, siehe
-Replay-Abschnitt). Für ein kuratiertes Promo-GIF einer bestimmten Szene bleibt der
-Bildschirmaufnahme-Weg eine Option; finale Auswahl noch offen.*
-
-**Nächste Schritte (offene Punkte):**
-
-- **Promo-GIF aus v0.12.0-Lauf**: Einen guten Replay-Lauf nachliefern (neue notarisierte v0.12.0 spielen; jeder Game Over landet als Datei in `~/Library/Application Support/Exploids/replays`), dann GIF rendern via `exploids --render-last-replay --out <gif>` oder gezielt die Datei mit dem höchsten Score.
-- **Finales Promo-GIF aus dem 76710-Replay**: Replay-Datei `…/Exploids/replays/2026-06-25_191055_score-76710_lvl-10.replay` (im App-Support-Verzeichnis); dazu ein lokales Review-Video (Länge 8:01, Echtzeit). Sobald Start-Zeitpunkt + Dauer aus dem Review-Video feststehen: `exploids --render-replay <replay> --out x.gif --from <sekunden*120> --max-frames <dauer_s*30>` (HUD aus per Default, Zielraum 6–10 s, max ~15 s).
-
-### Gegner-Erweiterung: Boss + Miniboss
-
-Stand: 2026-06-23. **Kopf-Boss UND Weltraumkatzen sind implementiert** (Details je unten). Andock-
-punkte im Code: UFOs sind `SKShapeNode`-Subklassen in `activeUFOs[]` (regulärer Spawn auf max. 2
-gedeckelt); Gegner mit Lebenspunkten + Zustandsautomat sind `FloatingHead` (Boss) und `SpaceCat`
-(Miniboss).
-
-**Kopf-Boss „Der Götze" (echter Boss).** Geschnitzter Greisen-Totem: wilde Mähne, buschige
-überhängende Brauen, tief liegende stiere Augen (rote Pupillen folgen dem Schiff), große
-knollige Hakennase, mächtiger wallender Bart mit markantem Kinn. Steinton-Vektor (Bone/Bronze)
-mit **animiert öffnendem Mund**. Geschlossen: geschwungene **Doppelbogen-Lippen** (zwei Bögen
-oben, ein Bogen unten) in **derselben Linienfarbe wie der restliche Kopf** (kein Sondergelb),
-KEINE Zähne. Offen: Schlund mit **gelben Linien** + unregelmäßigen Fängen, UFO materialisiert
-mittig. Look Zardoz-inspiriert, aber bewusst eigen. *Status: Look final.*
-- **Reiner Spawner** — schießt nie selbst. Größe ~Radius 80 (größter Asteroid = 40).
-- **Auftreten:** zufällig einmal in **Level 5–7**, erneut in **Level 10**; in L10 (letztes Level)
-  danach **alle 4–7 Min** per Timer. Bewusst selten (nutzt sich sonst ab).
-- **10 Treffer** bis zerstört (`FloatingHead.hitsToDestroy`, zentral justierbar — Playtest mit 10,
-  evtl. 20). Gleicht aus, dass der Kopf groß ist und Dauerfeuer aktiv ist. Feedback: Weiß-Flash pro
-  Treffer + bleibender Vektor-Schaden, der mit sinkendem Leben einsetzt (≤66 % ein Auge, ≤33 %
-  zweites Auge + Kiefer), Explosion beim Tod.
-- **Zustandsautomat:** Einschweben (Augen tracken sofort) → **Lauern ~3–5 s (zufällig, ø 4)** =
-  Tötungsfenster → **Mund auf (animiert)** → **10 UFOs** (Mix aus großen + kleinen,
-  zufällig) **gestaffelt über ~2,5 s** ausgespien, dabei **das `activeUFOs`-Limit von 2 umgangen**
-  → Rückzug (Einmal-Bedrohung, kein Zyklus).
-- **Aktive Ausweich-KI** (während Lauern + Spawnen): Der Kopf **flieht vor dem Schiff** und **weicht
-  den Spieler-Schüssen intelligent aus** (gleitet seitlich aus der Schussbahn), bleibt dabei im Bild.
-  Bewusst **zügig, aber gedeckelt** (`maxMoveSpeed`), keine Wahnsinns-Geschwindigkeit. So wird er –
-  auch über den Umweg „Deckung durch andere Objekte" – manchmal schwer zu treffen. Tunables in
-  `FloatingHead` (`fleeStrength`, `dodgeStrength`/`dodgeRadius`, `maxMoveSpeed`, …). Hitbox ~68.
-  Er weicht anderen Objekten NICHT aus (darf über ihnen liegen). *Idee „Objekte zerschellen am Kopf"
-  bewusst zurückgestellt (würde dem Spieler die Zerstör-Arbeit abnehmen).*
-- **UFO-Spawn-Ursprung = Mund-Mittelpunkt**, mit kurzem Materialisier-Blitz; dann ziehen sie heraus.
-- **Sanfte UFO-Verfolgung (gilt für ALLE UFOs, regulär + Armada):** UFOs beschleunigen leicht und
-  gedeckelt Richtung Spieler (`UFO.homingAccel`/`maxSpeed`), statt nur seitlich wegzufliegen — sie
-  kommen „ein bisschen auf uns zu", bleiben aber durch die horizontale Grund-Bewegung killbar und
-  verlassen den Schirm. Bewusst moderat, damit es mit vielen Objekten nicht zu schwer wird.
-- **Kill während des Ausstoßes stoppt die restlichen UFOs sofort.**
-- Schiff-Kontakt = Tod. Kopf **wrappt nicht**. In **Mad-Meteoroids** bewegt er sich mit derselben
-  Ausweich-KI (kein zusätzliches Mitrotieren mit dem Feld – das machte schwindelig).
-- **2000 Punkte** fürs Zerstören. Strategie: schnell vor dem Mund-Öffnen töten, sonst wenigstens
-  die Armada beim Rauskommen abfangen; Ignorieren kann übel ausgehen.
-- **Sound:** Beim Mund-Öffnen ein gruseliges, tiefes, sonores menschliches **„Moooooo"** —
-  beginnt gedämpft (Lippen zu) und öffnet sich hörbar (voller), läuft solange UFOs ausgespien
-  werden, dann Stop → Mund zu → Rückzug.
-  - **Prozedural: ERLEDIGT** — `SoundManager.setHeadVoice(active:openness:)` (tiefer, aufsteigender
-    Sägezahn-Vokal mit openness-gesteuertem Tiefpass); GameScene triggert es während der Spawn-Phase
-    mit `mouthOpenness`.
-  - **Timing-Anforderung:** Sample startet, sobald sich der Mund zu öffnen beginnt, und läuft
-    weiter, bis ALLE 10 UFOs erschienen sind (~3 s Spawn-Phase). Deshalb **lange Samples** (großzügig)
-    mit **Ausfaden am Ende** (Fade wird beim Konvertieren nach `.m4a` via `ffmpeg afade` gesetzt).
-  - **Sample-Variante: ERLEDIGT** — die ⭐-Favoriten-Wahl (Gallery-ID `178222118321504`, 7 s) exportiert,
-    nach `Sources/GameCore/SFX/bosshead_0.m4a` (44,1 kHz Stereo, End-Fade via `ffmpeg afade`) gewandelt,
-    im Manifest eingetragen. Im **Sample-Modus** (`useSampledSFX`) spielt `SoundManager.playBossHead()`
-    das lange Mooo **einmal beim Mund-Öffnen** (Flanke in `GameScene.updateFloatingHead`), `stopBossHead()`
-    bei Spawn-Ende/Kill/Statuswechsel; im prozeduralen Modus weiter `setHeadVoice(...)`.
-
-**Weltraumkatzen (Minibosse). IMPLEMENTIERT (2026-06-23).** Kleiner als der Kopf-Boss; agieren
-völlig gezielt, kein sinnloses Herumtreiben. Code: `Sources/GameCore/SpaceCat.swift` (Entität,
-`SKNode`-Zustandsautomat, analog zu `FloatingHead`), Einbindung in `GameScene.updateSpaceCats`/
-`fireCatTwinLaser`/`spawnSpaceCat`; Laser-Typ `.catEye` in `Laser.swift`.
-- **Verhalten:** pirschen sich an den Spieler heran (halten dabei einen Schuss-Abstand `attackDistance`),
-  **suchen Deckung hinter großen/mittleren Asteroiden** (Steering-Kraft Richtung „hinter dem nächsten
-  Asteroiden, vom Schiff weg"), **weichen Objekten aus** (Abstoß-Kraft) und **weichen Spielerschüssen
-  aus** (seitlich aus der Bahn, wie der Kopf-Boss). Bewegung gedeckelt (`maxMoveSpeed`).
-- **Angriff (Laseraugen):** **Zwillings-Laser** — zwei **parallele, längere** orange Streifen
-  (`.catEye`, deutlich anders als gelber Spieler- und schmaler roter UFO-Schuss), **halbe
-  Spielerschuss-Geschwindigkeit** (`SpaceCat.laserSpeed = 300`). **Predictive Aim:** iterativ
-  vorausberechnete Schiffsposition (nutzt `ship.velocity`).
-- **Ablauf:** **dreimal** je ein Doppelschuss-Versuch (`totalAttacks`), **dazwischen jeweils
-  ausweichen** (`repositioning` mit seitlichem Impuls); danach **Flucht zum Bildschirmrand — kein
-  Wrap** (verschwindet, kommt nicht zurück).
-- **Entscheidungen zu den vormals offenen Punkten (zentral justierbar, im Playtest abstimmbar):**
-  - **HP = 3** (`SpaceCat.hitsToDestroy`, mehr als ein UFO mit 1, weit weniger als der Boss mit 10).
-    Nach dem ersten Playtest von 2 auf 3 erhöht (waren zu leicht).
-  - **Punkte = 750** (`pointValue`, zwischen kleinem UFO 500 und Boss 2000).
-  - **Vektor-Design:** violette sitzende Linien-Katze mit **Körper** (Rumpf + Pfötchen + Schweif) und
-    aufgesetztem, bewusst **kleinerem Kopf** (Ohren, Schnurrhaare, glühende orange Schlitz-Augen, die
-    beim Feuern/Treffer pulsen). Kollisionsradius 26 (deckt Körper + Kopf ab). Körper nach dem ersten
-    Playtest ergänzt (vorher nur ein Kopf).
-  - **Auslöser/Häufigkeit:** ab **Level 3**, zeitgesteuert (erster Auftritt 12–25 s nach Eignung,
-    danach Abstand 35–60 s), **max. 1 gleichzeitig**, und **nie zusammen mit dem Kopf-Boss**.
-- **Kollisionen / Waffenwirkung:** Schiff-Kontakt = Tod (Katze überlebt, Miniboss); Augenlaser-Treffer
-  = Tod; alle Spielerschüsse (Normal/Triple/Rapid/Rear/Drohnen) treffen sie; ein Bomben-Treffer zählt
-  wie ein direkter Schuss (1 Stufe Schaden); der **Laserbeam** trifft sie ebenfalls (gedrosselt, sonst
-  würde der Dauer-Strahl pro Frame Schaden machen). Death-Causes `.spaceCat`/`.spaceCatLaser`.
-- **Laserbeam-Fix (Playtest):** Der Beam traf zuvor NUR Asteroiden – UFOs, Katzen und Boss konnten
-  damit gar nicht zerstört werden. Jetzt trifft er alle (UFOs sofort, Mehr-HP-Gegner gedrosselt über
-  `lastBeamHitTime`). Regressionstests decken die Waffe×Gegner-Matrix + eine „keine verwaisten Nodes"-
-  Invariante (`entityTrackingConsistentForTesting`) ab.
-- *Offen / Tuning:* Feinabstimmung von Frequenz/Schwierigkeit nach dem Playtest; ggf. Sound für
-  den Augenlaser (aktuell der UFO-Sound wiederverwendet); optionaler Glossar-Eintrag.
-
-### Deterministisches Replay-System — IMPLEMENTIERT (v0.11.0–v0.12.0)
-
-Die Spielsimulation ist **bit-exakt reproduzierbar**: ein geseedeter PRNG (`GameRandom`,
-SplitMix64) speist alle gameplay-relevanten Zufallszahlen, und die Zeit läuft über eine einzige
-akkumulierte `gameTime`. Seit v0.12.0 läuft die Simulation im **Fixed-Timestep**: `update(_:)`
-summiert die reale Frame-Zeit in einem Akkumulator und treibt die Sim in festen Schritten
-(`GameScene.simStep` = 1/120 s) über `advanceOneStep()` → `stepSimulation(deltaTime:)`. Damit hängt
-ein Lauf nur noch an (Seed + Eingaben). Jeder Lauf wird aufgezeichnet (`Replay` / `ReplayRecorder` /
-`ReplayPlayer`, nur Seed + Eingaben + `frameCount`, wenige KB) und bei Game Over an den Highscore
-gehängt. **In-App-Wiedergabe:** Titelbildschirm, Zifferntaste 1–5 für den Highscore-Eintrag, ESC
-verlässt. **Headless-GIF-Rendering:** `ReplayRenderer` (SKRenderer + Offscreen-Metal + ImageIO) im
-ExploidsMac-Target treibt die Sim direkt per `advanceOneStep()` (`externalStepDriving`); CLI
-`exploids --render-replay <file> --out <gif>` (plus `--export-replay`, `--render-demo`), Capture-Stride
-automatisch auf Echtzeit. **Replay-Format v3** (Fixed-Timestep, ohne dt-Folge); v2-Aufnahmen (variabler
-Zeitschritt, mit Auto-Feuer) werden als inkompatibel abgelehnt.
-
-**Aufnahme-Größe (seit v0.12.1):** Das `Replay` speichert die Szenengröße (Default macOS-Fenster
-1024×768); Renderer und `--replay-verify` nutzen sie automatisch. Das ist kritisch — die Simulation
-hängt an `size` (Spawn-Positionen, Wrap-Grenzen, Gegner-Eintritt), eine Wiedergabe in anderer Größe
-driftet komplett. Die früher vermutete „binary-spezifische Float-Drift" war in Wahrheit genau dieser
-Größen-Bug: ein GameCore-Rebuild reproduziert denselben Lauf bit-genau, solange Größe + Seed + Inputs
-stimmen. Der GIF-Renderer entkoppelt Sim- von Ausgabegröße (`--sim-scale` Sim, `--scale` GIF).
-
-**Replay-Archiv (seit v0.12.0):** Bei Game Over wird die Aufnahme JEDES Laufs als Datei nach
-`~/Library/Application Support/Exploids/replays` geschrieben (host-gesetzt über `replaySaveDirectory`;
-Default aus, damit Tests/Headless nichts schreiben) — unabhängig vom Highscore, damit sich nach einem
-guten Spiel ein GIF rendern lässt, ohne dass der Lauf in die Liste muss. CLI:
-`exploids --render-last-replay --out <gif>` (rendert die neueste Aufnahme), `--reset-highscores`
-(leert die Highscore-Liste; über die App-Binary bei beendetem Spiel ausführen).
-
-**Voller Plan + Erfolgskriterien:** [`docs/replay-system-plan.md`](docs/replay-system-plan.md)
-(Phase 1 + 2 + 3 vollständig, inkl. 3.1 Fixed-Timestep). **Spielgefühl** des Fixed-Timestep ist final
-über einen Playtest abzunehmen (auf 120 Hz im Idealfall ein Sim-Schritt pro Bild wie zuvor). **Bekannte
-Einschränkung:** treue Wiedergabe braucht exakt die Binary, die den Lauf aufgenommen hat — eine neu
-gebaute Binary kann driften (Float-Reproduzierbarkeit ist binary-spezifisch); In-App-Replays und GIFs
-aus demselben installierten Build sind zuverlässig. (Korrektur: die scheinbare Binary-Drift war in
-Wahrheit der Größen-Bug — siehe Abschnitt „Aufnahme-Größe" oben; jetzt behoben.)
-
-**Nächste geplante Phase:** Nach Abschluss des v0.10.0-Playtests (siehe Open To-Dos) deterministisches Replay-System Phase 1 fortsetzen: `GameRandom` PRNG + Determinismus-Regressionstest (Details in `docs/replay-system-plan.md`). Trace-Pipeline in einem lokalen Temp-Verzeichnis (potrace/rsvg/imagemagick) aus lokalen Quellbildern; Hinweis: `magick`-SVG-Render IMMER `-background none` VOR die Input-SVG stellen (sonst weisser Hintergrund).
+Die frühere Status-, Feature- und Testchronik liegt unverändert unter
+`docs/archive/agent-context-legacy-2026-07-14.md`; sie ist Referenz, keine aktive
+Anweisung.
 
 ## Verzeichnisstruktur
 
-<!-- directory-structure: generated -->
-- [AGENTS.md](AGENTS.md) — Projektprofil, Arbeitsregeln und dieses Datei-Verzeichnis.
-- [CHANGELOG.md](CHANGELOG.md) — Projektdokumentation.
-- [README.de.md](README.de.md) — Projekt-Einstieg und Nutzerdokumentation.
-- [README.md](README.md) — Projekt-Einstieg und Nutzerdokumentation.
-- [turrican-like-powerup-tts.md](turrican-like-powerup-tts.md) — Projektdokumentation.
-- [docs/replay-system-plan.md](docs/replay-system-plan.md) — Projektdokumentation.
-- `Exploids.app/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `Icon/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `Sources/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `Tests/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `assets/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `docs/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `ios/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `screenshots/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `tools/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-- `wrappers/` — Projektbestandteil; Details stehen im Code bzw. in der verlinkten Dokumentation.
-<!-- /directory-structure -->
+- [`README.md`](README.md) / [`README.de.md`](README.de.md): Nutzer- und Projektüberblick.
+- `Package.swift`: Targets, Plattformen und Abhängigkeiten.
+- [`CHANGELOG.md`](CHANGELOG.md): veröffentlichte Änderungen.
+- `build-app.sh`: App-Build.
+- [`backlog.md`](backlog.md): verifizierte offene Arbeit.
+- [`docs/replay-system-plan.md`](docs/replay-system-plan.md): Replayvertrag und Format.
+- [`turrican-like-powerup-tts.md`](turrican-like-powerup-tts.md): Voice-Sample-Workflow.
+- [`docs/archive/agent-context-legacy-2026-07-14.md`](docs/archive/agent-context-legacy-2026-07-14.md): frühere Chronik, nicht autoritativ.
