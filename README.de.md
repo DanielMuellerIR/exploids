@@ -10,7 +10,7 @@ Ein nativer macOS-Arcade-Shooter im Asteroids-Stil (Swift 6 · SpriteKit) mit ei
 
 ## Download
 
-**[➜ Aktuelles signiertes & notarisiertes DMG herunterladen](https://github.com/DanielMuellerIR/exploids/releases/latest)** — öffnen, *Exploids* in den Programme-Ordner ziehen und doppelklicken. Mit Developer ID signiert und von Apple notarisiert, öffnet also ohne Gatekeeper-Warnung. Benötigt macOS 14 oder neuer (Apple Silicon).
+**[➜ Aktuelles signiertes & notarisiertes DMG herunterladen](https://github.com/DanielMuellerIR/exploids/releases/latest)** — öffnen, *Exploids* in den Programme-Ordner ziehen und doppelklicken. Mit Developer ID signiert und von Apple notarisiert, öffnet also ohne Gatekeeper-Warnung. Benötigt macOS 11 oder neuer (Apple Silicon).
 
 Lieber selbst aus dem Quellcode bauen? Siehe [Bauen & starten](#bauen--starten-kommandozeile--headless-tauglich) weiter unten.
 
