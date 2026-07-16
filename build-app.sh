@@ -64,7 +64,7 @@ cat > Exploids.app/Contents/Info.plist << EOF
     <key>CFBundleVersion</key>
     <string>${BUILD_NUMBER}</string>
     <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
+    <string>11.0</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

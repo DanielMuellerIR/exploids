@@ -7,7 +7,9 @@ let package = Package(
         // GameCore ist plattformunabhängig (SpriteKit/AVFoundation) und gegen das iOS-SDK
         // verifiziert kompilierbar. Die App-Shell ExploidsMac ist weiterhin macOS-only; ein
         // iOS-App-Target (Xcode) wird die GameCore-Library als Abhängigkeit einbinden.
-        .macOS(.v14),
+        // macOS 11 ist die echte API-Untergrenze (UTType.gif im GIF-Export);
+        // alles andere (AVAudioSourceNode, Concurrency) liegt darunter.
+        .macOS(.v11),
         .iOS(.v17)
     ],
     products: [
