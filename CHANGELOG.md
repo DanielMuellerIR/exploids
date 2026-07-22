@@ -2,6 +2,18 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.6] — 2026-07-22
+
+- Fix: Attract-mode demos no longer unlock or persist levels for the player, and the selected mode,
+  start level and auto-fire setting are restored after both manual abort and demo game over.
+- Build: the bare SwiftPM executable now reports `--version` from the central `VERSION` file, just
+  like the app bundle; a headless integration check prevents future drift.
+- Docs: requirements consistently state the actual macOS 11 minimum, and controls correctly describe
+  held fire as continuous fire plus the separate Laser beam power-up instead of the removed charge shot.
+- Cleanup: removed the unused per-step `maxThreat` bookkeeping from the demo autopilot.
+- Tests: XCTest now suppresses the sound engine before singleton initialization, so headless gameplay
+  tests do not briefly open an audio device before the shared test setup mutes it.
+
 ## [0.14.4] — 2026-07-12
 
 First signed & notarized release since v0.13.0 — this DMG bundles everything from v0.14.0 through

@@ -12,14 +12,20 @@ public struct HighScoreStore {
     public static let highScoresKey = "exploids_high_scores"
     public static let maxLevelKey = "exploids_max_level_reached"
 
-    public init() {}
+    private let defaults: UserDefaults
+
+    /// Standardmaessig bleibt der bestehende App-Speicher erhalten. Tests koennen
+    /// eine eigene Suite injizieren und beruehren dadurch keine echten Spielstaende.
+    public init(userDefaults: UserDefaults = .standard) {
+        self.defaults = userDefaults
+    }
 
     /// Lädt die gespeicherte Highscore-Liste. Beim allerersten Start (noch nichts
     /// gespeichert) kommt eine Default-Liste zurück — mit Todesmeldung, damit die
     /// Einträge genauso formatiert sind wie eigene (Format-Stil siehe
     /// `GameScene.recordHighScore`).
     public func loadHighScores() -> [HighScore] {
-        guard let data = UserDefaults.standard.data(forKey: Self.highScoresKey) else {
+        guard let data = defaults.data(forKey: Self.highScoresKey) else {
             return [
                 HighScore(initials: "DM ", score: 10000, date: Date(), deathMessage: "Crushed in a black hole on Level 9"),
                 HighScore(initials: "JAB", score: 7500, date: Date(), deathMessage: "Vaporized by UFO laser on Level 7"),
@@ -42,7 +48,7 @@ public struct HighScoreStore {
     public func save(_ highScores: [HighScore]) {
         do {
             let data = try JSONEncoder().encode(highScores)
-            UserDefaults.standard.set(data, forKey: Self.highScoresKey)
+            defaults.set(data, forKey: Self.highScoresKey)
         } catch {
             print("Failed to encode high scores: \(error)")
         }
@@ -51,11 +57,11 @@ public struct HighScoreStore {
     /// Maximal erreichtes Level (für die Level-Vorwahl auf dem Startbildschirm);
     /// mindestens 1, auch wenn noch nie etwas gespeichert wurde.
     public func loadMaxLevelReached() -> Int {
-        max(1, UserDefaults.standard.integer(forKey: Self.maxLevelKey))
+        max(1, defaults.integer(forKey: Self.maxLevelKey))
     }
 
     /// Merkt sich das maximal erreichte Level dauerhaft.
     public func saveMaxLevelReached(_ level: Int) {
-        UserDefaults.standard.set(level, forKey: Self.maxLevelKey)
+        defaults.set(level, forKey: Self.maxLevelKey)
     }
 }

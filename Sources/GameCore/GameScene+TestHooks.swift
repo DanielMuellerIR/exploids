@@ -2,10 +2,18 @@
 // für Headless-Tests, Replays und die iOS-Touch-Schicht.
 // Reiner Datei-Split aus GameScene.swift — kein Verhalten geändert.
 
+import Foundation
 import SpriteKit
 
 extension GameScene {
     // MARK: - Input Simulation Helpers
+
+    /// Verbindet die Szene vor `presentScene` mit einer isolierten UserDefaults-
+    /// Suite. Dadurch lesen und schreiben Tests niemals echte Spielerwerte.
+    public func useUserDefaultsForTesting(_ defaults: UserDefaults) {
+        precondition(view == nil, "Test-UserDefaults muessen vor presentScene gesetzt werden")
+        highScoreStore = HighScoreStore(userDefaults: defaults)
+    }
     
     /// Simulates pressing a key down (useful for headless testing and the iOS touch/controller layer).
     public func simulateKeyDown(keyCode: UInt16) {
@@ -64,11 +72,14 @@ extension GameScene {
     /// Steuerung (klassischer Modus, Startlevel der Persona). Danach die Simulation über
     /// `advanceOneStep()` treiben und beobachten, wie lange `gameState == .playing` bleibt.
     public func startAutopilotDemoForTesting(persona: AutopilotPersona, seed: UInt64) {
+        rememberUserSelectionBeforeDemo()
         autopilotPersona = persona
         autopilotRng = GameRandom(seed: seed ^ 0xA0710_5EED)
         selectedMode = .ancientAsteroids
         selectedStartLevel = persona.startLevel
         autoFire = true
+        attractPhase = .demoPlaying
+        attractTimer = 0
         startNewGame(seed: seed)
     }
 

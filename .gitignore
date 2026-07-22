@@ -1,4 +1,5 @@
 .DS_Store
+.commit-lock
 .build/
 Packages/
 # Generiertes App-Bundle (per build-app.sh erzeugt, nicht versionieren)

@@ -10,12 +10,27 @@ final class AutopilotTests: GameCoreTestCase {
 
     // MARK: - Autopilot / Demo-Modus
 
+    /// Jede Demo-Probe bekommt eine eigene Persistenz-Domain. So kann selbst ein
+    /// fehlgeschlagener Progressions-Guard keine echten Spielerwerte veraendern.
+    private func makeIsolatedScene(
+        size: CGSize = CGSize(width: 1024, height: 768)
+    ) -> (scene: GameScene, view: SKView, defaults: UserDefaults, suiteName: String) {
+        let suiteName = "io.github.danielmuellerir.exploids.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let scene = GameScene(size: size)
+        scene.useUserDefaultsForTesting(defaults)
+        let view = SKView(frame: CGRect(origin: .zero, size: size))
+        view.presentScene(scene)
+        return (scene, view, defaults, suiteName)
+    }
+
     /// Läuft ein Autopilot-Lauf, bis er endet (Game Over) oder das Schrittlimit erreicht ist.
     /// Rückgabe: die überlebte Zeit in Sekunden (Schritte ÷ 120).
     private func runAutopilot(_ persona: AutopilotPersona, seed: UInt64, maxSteps: Int = 78000) -> Double {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
-        view.presentScene(scene)
+        let fixture = makeIsolatedScene()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let scene = fixture.scene
         scene.externalStepDriving = true
         scene.startAutopilotDemoForTesting(persona: persona, seed: seed)
         var step = 0
@@ -49,10 +64,14 @@ final class AutopilotTests: GameCoreTestCase {
     /// Initialen-Eingabe (`.nameEntry`) gesprungen, sondern direkt in den Game-Over-Screen (dort ist
     /// die Highscore-Liste zu sehen). Zudem wird der Lauf nicht aufgezeichnet/archiviert.
     func testAutopilotDemoSkipsHighscoreEntryAndRecording() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
-        view.presentScene(scene)
+        let fixture = makeIsolatedScene()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let scene = fixture.scene
         scene.externalStepDriving = true
+        scene.transitionTo(.startScreen)
+        scene.setGameModeForTesting(.madMeteoroids)
+        scene.selectedStartLevel = 3
+        scene.autoFire = false
         scene.startAutopilotDemoForTesting(persona: .ace, seed: 3)
         XCTAssertEqual(scene.autopilotPersonaNameForTesting, "ACE")   // Demo aktiv
 
@@ -65,6 +84,47 @@ final class AutopilotTests: GameCoreTestCase {
         XCTAssertEqual(scene.gameState, .gameOver, "Demo-Game-Over darf nicht in die Namenseingabe springen")
         XCTAssertNil(scene.autopilotPersonaNameForTesting, "Nach dem Demo-Lauf ist kein Autopilot mehr aktiv")
         XCTAssertNil(scene.lastReplay, "Ein Demo-Lauf wird nicht aufgezeichnet/archiviert")
+        XCTAssertEqual(scene.selectedMode, .madMeteoroids, "Game Over muss den gewaehlten Modus restaurieren")
+        XCTAssertEqual(scene.selectedStartLevel, 3, "Game Over muss den gewaehlten Startlevel restaurieren")
+        XCTAssertFalse(scene.autoFire, "Game Over muss die Auto-Feuer-Auswahl restaurieren")
+    }
+
+    /// Regression fuer zwei Demo-Grenzen zugleich: Ein Levelaufstieg des
+    /// Autopiloten darf nichts freischalten, und eine menschliche Eingabe muss
+    /// anschliessend alle vom Demo-Start ueberschriebenen Menuewerte restaurieren.
+    func testDemoLevelUpDoesNotPersistProgressAndAbortRestoresSelection() {
+        let fixture = makeIsolatedScene()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        fixture.defaults.set(3, forKey: HighScoreStore.maxLevelKey)
+
+        // didMove hat vor dem Setzen bereits geladen; aus der isolierten Suite
+        // noch einmal einlesen, damit In-Memory- und Persistenzstand beide 3 sind.
+        let scene = fixture.scene
+        scene.loadHighScores()
+        scene.transitionTo(.startScreen)
+        scene.setGameModeForTesting(.madMeteoroids)
+        scene.selectedStartLevel = 3
+        scene.autoFire = false
+        scene.attractModeEnabled = true
+        scene.externalStepDriving = true
+
+        scene.startAutopilotDemoForTesting(persona: .ace, seed: 0xD3A0)
+        scene.isSpawningEnabled = false
+        scene.clearAllEntitiesForTesting()
+        scene.setExtraLivesForTesting(99)
+        scene.setLevelTimeRemainingForTesting(0)
+        for _ in 0..<430 { scene.advanceOneStep() } // 3,5-s-Levelblende bei 120 Hz abschliessen
+
+        XCTAssertEqual(scene.currentLevel, 5, "Fixture muss einen echten Demo-Levelaufstieg erreichen")
+        XCTAssertEqual(scene.maxLevelReached, 3, "Demo darf den In-Memory-Fortschritt nicht erhoehen")
+        XCTAssertEqual(fixture.defaults.integer(forKey: HighScoreStore.maxLevelKey), 3,
+                       "Demo darf keinen Fortschritt in UserDefaults persistieren")
+
+        scene.simulateKeyDown(keyCode: 53) // beliebige menschliche Eingabe bricht Attract ab
+        XCTAssertEqual(scene.gameState, .startScreen)
+        XCTAssertEqual(scene.selectedMode, .madMeteoroids)
+        XCTAssertEqual(scene.selectedStartLevel, 3)
+        XCTAssertFalse(scene.autoFire)
     }
 
 }

@@ -64,10 +64,17 @@ public final class SoundManager: @unchecked Sendable {
     private var headVoiceLP: Double = 0.0          // Tiefpass-Zustand (Vokal-Öffnung „m" -> „oo")
     private var headVoiceVibPhase: Double = 0.0    // Vibrato-Phase
 
-    /// Mute state of the synthesizer. If true, audio engine setup/start is skipped and no sounds are generated.
-    public var isMuted: Bool = CommandLine.arguments.contains("--no-sound") {
+    /// Mute state of the synthesizer. Tests muessen bereits VOR dem ersten
+    /// Singleton-Zugriff stumm sein; `setUp()` waere zu spaet, weil `init()` die
+    /// Engine startet. Das entspricht dem bereits stummen MusicPlayer-Testpfad.
+    public var isMuted: Bool = {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+            || CommandLine.arguments.contains("--no-sound")
+    }() {
         didSet {
-            if isMuted {
+            if isMuted && !oldValue {
                 stop()
             }
         }

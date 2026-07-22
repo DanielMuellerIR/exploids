@@ -34,7 +34,8 @@ struct TouchButton {
 /// (inkl. Multitouch) auf die öffentliche GameScene-Eingabe-API.
 ///
 /// Steuerung im Spiel (`.playing`): Drehen ist auf den LINKEN Daumen gelegt (◄ / ►),
-/// Schub und Feuer auf den RECHTEN (SCHUB / FEUER, Feuer halten = Charge-Shot). Dreh- und
+/// Schub und Feuer auf den RECHTEN (SCHUB / FEUER, Feuer halten = Dauerfeuer; mit aktivem
+/// Laserstrahl-Power-up schwenkt derselbe Hold den Strahl). Dreh- und
 /// Schub-Eingabe sind so auf zwei Daumen getrennt – gleichzeitig drehen + schub + feuer geht.
 final class TouchControlsView: UIView {
 
@@ -370,7 +371,7 @@ final class TouchControlsView: UIView {
                 TouchButton(id: 3, relativeRect: CGRect(x: 0.83, y: 0.03, width: 0.15, height: 0.46),
                             label: "SCHUB", kind: .hold(keyCode: 126)),
                 TouchButton(id: 4, relativeRect: CGRect(x: 0.83, y: 0.51, width: 0.15, height: 0.46),
-                            label: "FEUER", kind: .hold(keyCode: 49)),  // halten = Charge-Shot
+                            label: "FEUER", kind: .hold(keyCode: 49)),  // halten = Dauerfeuer / aktiver Laserstrahl
                 // Oben Mitte: ESC (Quit-Bestätigung)
                 TouchButton(id: 5, relativeRect: CGRect(x: 0.45, y: 0.0, width: 0.10, height: 0.10),
                             label: "ESC", kind: .tap(keyCode: 53)),

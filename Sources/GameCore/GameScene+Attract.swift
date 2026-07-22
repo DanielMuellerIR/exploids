@@ -37,9 +37,8 @@ extension GameScene {
         let shipVel = ship.velocity
         let shipR: CGFloat = 12.0   // grober Schiffsradius für die Rand-zu-Rand-Distanz
 
-        // Abstoßungs-Vektor (weg von Gefahren) und der bedrohlichste einzelne Beitrag.
+        // Abstoßungs-Vektor (weg von Gefahren).
         var fleeX: CGFloat = 0, fleeY: CGFloat = 0
-        var maxThreat: CGFloat = 0
         // Vorausschau: gegen die ZUKÜNFTIGE Position bewegter Gefahren ausweichen, nicht die aktuelle.
         let lookahead: CGFloat = 0.50
 
@@ -62,7 +61,6 @@ extension GameScene {
                     let strength = proximity * proximity * weight
                     fleeX -= fRel.x / fCenter * strength
                     fleeY -= fRel.y / fCenter * strength
-                    if strength > maxThreat { maxThreat = strength }
                 }
             }
             // Zielauswahl nach aktuellem Rand-Abstand (das Nächste zuerst wegschießen), mit Vorhalt.
@@ -109,7 +107,6 @@ extension GameScene {
             let proximity = (range - center) / range
             let strength = proximity * proximity * 3.5 * persona.wellFearMult
             fleeX -= nx * strength; fleeY -= ny * strength
-            if strength > maxThreat { maxThreat = strength }
         }
 
         // Power-up-Ziel (Schild/Extra-Leben zuerst) für die sichere Phase merken.
@@ -196,6 +193,7 @@ extension GameScene {
         autopilotRng = GameRandom(seed: 0xA0710_5EED
                                   &+ UInt64(nextPersonaIndex) &* 0x9E37_79B9
                                   &+ UInt64(persona.startLevel))
+        rememberUserSelectionBeforeDemo()
         selectedMode = .ancientAsteroids     // klassischer Modus: berechenbares, langes Überleben
         selectedStartLevel = persona.startLevel
         autoFire = true                       // Demo feuert durchgehend
@@ -209,6 +207,7 @@ extension GameScene {
     /// Leerlauf am Startbildschirm zurück – der Mensch übernimmt.
     func abortAttractToIdle() {
         autopilotPersona = nil
+        restoreUserSelectionAfterDemo()
         attractPhase = .idle
         attractTimer = 0
         // Vom Autopiloten zuletzt gesetzte Bewegungstasten (Drehen/Schub) verwerfen – sonst „erbt"
@@ -216,6 +215,28 @@ extension GameScene {
         // selbst weiter, bis der Spieler die Richtung einmal selbst drückt und wieder loslässt.
         activeKeys.removeAll()
         transitionTo(.startScreen)
+    }
+
+    /// Sichert die Menueauswahl genau einmal vor einem Demo-Lauf. Der Guard
+    /// verhindert, dass ein versehentlicher zweiter Demo-Start bereits gesetzte
+    /// Demo-Werte als vermeintliche Nutzerauswahl festhaelt.
+    func rememberUserSelectionBeforeDemo() {
+        guard userSelectionBeforeDemo == nil else { return }
+        userSelectionBeforeDemo = DemoUserSelection(
+            mode: selectedMode,
+            startLevel: selectedStartLevel,
+            autoFire: autoFire
+        )
+    }
+
+    /// Stellt die Auswahl nach jedem Pfad zurueck, der eine Demo verlaesst. Das
+    /// Leeren macht den Aufruf idempotent (z. B. Game Over, danach Tastendruck).
+    func restoreUserSelectionAfterDemo() {
+        guard let selection = userSelectionBeforeDemo else { return }
+        selectedMode = selection.mode
+        selectedStartLevel = selection.startLevel
+        autoFire = selection.autoFire
+        userSelectionBeforeDemo = nil
     }
 
     /// Ob gerade ein Autopilot-Demolauf aktiv ist (für die iOS-Schicht, um im Demo-Modus die

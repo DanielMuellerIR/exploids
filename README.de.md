@@ -22,7 +22,7 @@ Lieber selbst aus dem Quellcode bauen? Siehe [Bauen & starten](#bauen--starten-k
 |:--:|:--:|
 | ![Asteroidenfeld mit aufgesammelter Option-Drohne, Schiff mit Schild und geschrumpft](screenshots/sc1.jpg) | ![Glossar der Objekte und Power-Ups](screenshots/sc3.jpg) |
 | **Laserstrahl** | **Gravitationsfeld + Bombe** |
-| ![Der gehaltene Laserstrahl fegt über das Feld](screenshots/sc2.jpg) | ![Ein Gravitationsfeld verzerrt den Raum, während eine Bombe zündet](screenshots/sc4.jpg) |
+| ![Das Laserstrahl-Power-up fegt bei gehaltener Feuertaste über das Feld](screenshots/sc2.jpg) | ![Ein Gravitationsfeld verzerrt den Raum, während eine Bombe zündet](screenshots/sc4.jpg) |
 
 ## Bauen & starten (Kommandozeile / headless-tauglich)
 
@@ -79,7 +79,7 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 ## Steuerung
 
 - **Startbildschirm:** ▲/▼ Spielmodus wechseln · ◀/▶ Startlevel wählen · Leertaste/Enter starten · D (oder 30 s Leerlauf) eine Autopilot-Demo ansehen · I Glossar · 1–5 ein Highscore-Replay ansehen
-- **Im Spiel:** Pfeiltasten / WASD zum Fliegen · Leertaste zum Schießen (halten zum Aufladen / Strahl sweepen) · M Musik an/aus · Esc Pause / Beenden
+- **Im Spiel:** Pfeiltasten / WASD zum Fliegen · Leertaste zum Schießen (halten für Dauerfeuer; mit aktivem Laserstrahl-Power-up halten, um den Strahl zu schwenken) · M Musik an/aus · Esc Pause / Beenden
 - **Replay-Ansicht:** Esc verlässt das Replay zurück zum Startbildschirm.
 - Highscores werden lokal gespeichert; bei einer Platzierung den Namen auf der Liste eintragen.
 - **Cheat:** Taste `#` gibt ein Extra‑Leben — praktisch zum Testen oder für einen entspannten Durchlauf ohne Herausforderung.
@@ -124,7 +124,7 @@ Das Repo enthält außerdem ein iOS-App-Target unter `ios/` (SpriteKit + Touch-S
 
 ## Voraussetzungen
 
-macOS **14+**, Apple Silicon. Zum Bauen: eine vollständige Xcode-Installation (die Skripte nutzen `DEVELOPER_DIR=/Applications/Xcode.app/...` für die SpriteKit-/XCTest-Toolchain).
+macOS **11+**, Apple Silicon. Zum Bauen: eine vollständige Xcode-Installation (die Skripte nutzen `DEVELOPER_DIR=/Applications/Xcode.app/...` für die SpriteKit-/XCTest-Toolchain).
 
 ---
 

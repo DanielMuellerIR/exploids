@@ -10,10 +10,32 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var aboutWindow: NSWindow?
 
-    /// App-Version – Single Source of Truth ist die gebaute Bundle-Version (CFBundleShortVersionString,
-    /// von build-app.sh gesetzt). Fallback fürs nicht-gebündelte `swift run`.
+    /// App-Version – Single Source of Truth ist `VERSION`. Das App-Bundle spiegelt
+    /// sie in CFBundleShortVersionString; die nackte SwiftPM-Binary liest dieselbe
+    /// Datei aus dem Quellbaum statt eine zweite Konstante zu pflegen.
     static func appVersion() -> String {
-        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.8.2"
+        if let bundled = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+           !bundled.isEmpty {
+            return bundled
+        }
+
+        // Main.swift liegt unter Sources/ExploidsMac; drei Ebenen hoeher liegt
+        // die VERSION-Datei. Dieser Pfad ist der dokumentierte Bare-SwiftPM-Fall
+        // (`.build/.../exploids`) im ausgecheckten Quellbaum.
+        let versionURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("VERSION")
+        guard let raw = try? String(contentsOf: versionURL, encoding: .utf8) else {
+            return "unknown"
+        }
+        let version = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+$"#,
+                            options: .regularExpression) != nil else {
+            return "unknown"
+        }
+        return version
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {

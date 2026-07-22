@@ -163,7 +163,7 @@ public final class GameScene: SKScene {
     /// Persistent high scores.
     public private(set) var highScores: [HighScore] = []
     /// Persistenz für Highscores + maximal erreichtes Level (UserDefaults-Details ausgelagert).
-    private let highScoreStore = HighScoreStore()
+    var highScoreStore = HighScoreStore()
 
     // MARK: - Plattform-Layout-Konfiguration (vom Host gesetzt)
     // Defaults erhalten das bisherige macOS-Verhalten 1:1. Der iOS-Host schaltet sie um.
@@ -426,6 +426,15 @@ public final class GameScene: SKScene {
     var attractPhase: AttractPhase = .idle
     /// In der aktuellen Menü-Attract-Phase verstrichene ECHTZEIT (Sekunden). Nur für idle/scores/rest.
     var attractTimer: TimeInterval = 0.0
+
+    /// Auswahl des Menschen, die ein Demo-Lauf nur voruebergehend ueberschreiben darf.
+    /// Nach Abbruch und nach dem natuerlichen Demo-Game-Over wird sie restauriert.
+    struct DemoUserSelection {
+        let mode: GameMode
+        let startLevel: Int
+        let autoFire: Bool
+    }
+    var userSelectionBeforeDemo: DemoUserSelection?
 
     // Enemy Spawning times
     private var lastUFOSpawnTime: TimeInterval = 0.0
@@ -998,7 +1007,9 @@ public final class GameScene: SKScene {
                 if currentTime >= levelClearEndTime {
                     isLevelClearing = false
                     currentLevel += 1
-                    if currentLevel > maxLevelReached {
+                    // Demo-Erfolge gehoeren dem Autopiloten und duerfen weder die
+                    // In-Memory-Auswahl noch den persistenten Fortschritt freischalten.
+                    if !isDemoActive && currentLevel > maxLevelReached {
                         maxLevelReached = currentLevel
                         highScoreStore.saveMaxLevelReached(maxLevelReached)
                     }
@@ -2425,6 +2436,7 @@ public final class GameScene: SKScene {
         // auswerten, DANN die Persona lösen (sonst würde die Bedingung falsch greifen).
         if isDemoActive {
             autopilotPersona = nil
+            restoreUserSelectionAfterDemo()
             attractPhase = .demoScores
             attractTimer = 0
             transitionTo(.gameOver)

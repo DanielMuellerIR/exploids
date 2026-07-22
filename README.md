@@ -20,7 +20,7 @@ Prefer to build from source? See [Build & run](#build--run-cli--headless-friendl
 |:--:|:--:|
 | ![Asteroid field with an option drone acquired, the ship shielded and compressed](screenshots/sc1.jpg) | ![In-game glossary of objects and power-ups](screenshots/sc3.jpg) |
 | **Laser beam** | **Gravity well + screen bomb** |
-| ![The hold-to-fire laser beam sweeping the field](screenshots/sc2.jpg) | ![A gravity well warps space as a screen bomb detonates](screenshots/sc4.jpg) |
+| ![The laser-beam power-up sweeping the field while fire is held](screenshots/sc2.jpg) | ![A gravity well warps space as a screen bomb detonates](screenshots/sc4.jpg) |
 
 ## Build & run (CLI / headless‑friendly)
 
@@ -77,7 +77,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 ## Controls
 
 - **Start screen:** ▲/▼ switch game mode · ◀/▶ choose starting level · Space/Enter start · D (or 30 s idle) watch an autopilot demo · I glossary · 1–5 watch a high‑score replay
-- **In game:** Arrow keys / WASD to fly · Space to fire (hold to charge / sweep the beam) · M toggle music · Esc pause / quit
+- **In game:** Arrow keys / WASD to fly · Space to fire (hold for continuous fire; with the Laser beam power-up active, hold to sweep the beam) · M toggle music · Esc pause / quit
 - **Replay view:** Esc exits the replay back to the title screen.
 - High scores are saved locally; enter your name on the board when you make the cut.
 - **Cheat:** press `#` for a free extra life — handy for testing, or for a relaxed, no‑pressure run.
@@ -122,7 +122,7 @@ The repo also contains an iOS app target under `ios/` (SpriteKit + on‑screen t
 
 ## Requirements
 
-macOS **14+**, Apple Silicon. To build: a full Xcode install (the scripts use `DEVELOPER_DIR=/Applications/Xcode.app/...` for the SpriteKit/XCTest toolchain).
+macOS **11+**, Apple Silicon. To build: a full Xcode install (the scripts use `DEVELOPER_DIR=/Applications/Xcode.app/...` for the SpriteKit/XCTest toolchain).
 
 ---
 
