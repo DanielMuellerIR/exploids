@@ -33,11 +33,30 @@ open Exploids.app                                # launch
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run the unit tests
 ```
 
-### Signed + notarized DMG
+### Install and release
+
+Three entry points, deliberately separated:
 
 ```bash
-bash wrappers/sign-and-release.sh                # -> build/Exploids-<version>.dmg, Gatekeeper-clean
-bash wrappers/sign-and-release.sh --publish      # also tags + uploads the DMG to GitHub Releases
+./build-app.sh                    # build only, stays in the project directory
+./install.sh                      # build, notarize, install into /Applications
+./release.sh                      # build, notarize, package the DMG — never installs
+./release.sh --publish            # also tags + uploads the DMG to GitHub Releases
+./release.sh --no-finder-layout   # skip the Finder window layout (headless runs)
+```
+
+`install.sh` and `release.sh` both notarize the **app itself** and staple its
+ticket before anything else happens. That matters: an app that only travels
+inside a notarized disk image loses its guarantee the moment someone drags it
+out. `release.sh` then notarizes and staples the disk image as well.
+
+Notarization needs a notarytool keychain profile. Keychain profiles are local to
+each Mac and are never synchronized, so the name is taken from `NOTARY_PROFILE`
+or from this clone's own configuration:
+
+```bash
+git config --local exploids.notaryProfile <profile>
+xcrun notarytool store-credentials <profile> --apple-id <apple-id> --team-id <team-id>
 ```
 
 ## Game modes

@@ -13,7 +13,9 @@ Das SwiftPM-Workspace trennt:
 - `ios/`: frühe Xcode/iOS-App, bindet `GameCore` ein; noch kein Release.
 - `Tests/GameCoreTests/`: Tests nach Physik, Waffen, Bosse, Modi, Replay,
   Autopilot, Szenenzustand und Audio.
-- `wrappers/sign-and-release.sh`: manueller signierter/notarisierter Releasepfad.
+- `install.sh`, `release.sh`: Einstiegspunkte für Installation und Release;
+  `wrappers/sign-and-release.sh` ist der Unterbau von `release.sh`.
+- `notarize-lib.sh`: gemeinsame Signier-/Notarisierungs-Helfer (gesourct).
 - `VERSION`: einzige Quelle der Produktversion.
 
 `GameCore` bleibt AppKit-frei und für macOS/iOS kompilierbar. Eingaben laufen über
@@ -88,7 +90,12 @@ Enginecode wegen dieses Debuggerartefakts umbauen.
 - Öffentliche Dokumente/Artefakte auf private Pfade, interne Hosts, Kontakte und
   Assistentenformulierungen prüfen.
 
-Releases sind absichtlich manuell. `bash wrappers/sign-and-release.sh --publish`
+Drei Einstiegspunkte: `build-app.sh` baut nur, `./install.sh` installiert
+notarisiert nach `/Applications`, `./release.sh` packt das DMG (installiert nie).
+Beide heften zuerst der App selbst ein Ticket an. Profilname aus `NOTARY_PROFILE`
+oder `git config exploids.notaryProfile`.
+
+Releases sind absichtlich manuell. `./release.sh --publish`
 erstellt Build, Signatur, DMG, Notarisierung, Tag und GitHub-Release und läuft nur nach
 ausdrücklichem konkreten Auftrag. Kein Auto-Release bei normalen Pushes.
 
