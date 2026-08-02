@@ -13,6 +13,8 @@ Das SwiftPM-Workspace trennt:
 - `ios/`: frühe Xcode/iOS-App, bindet `GameCore` ein; noch kein Release.
 - `Tests/GameCoreTests/`: Tests nach Physik, Waffen, Bosse, Modi, Replay,
   Autopilot, Szenenzustand und Audio.
+- `Tests/*.sh`: Shell-Integrationstests neben `swift test`, gesammelt und
+  aufgerufen über `Tests/run-shell-tests.sh`.
 - `install.sh`, `release.sh`: Einstiegspunkte für Installation und Release;
   `wrappers/sign-and-release.sh` ist der Unterbau von `release.sh`.
 - `notarize-lib.sh`: gemeinsame Signier-/Notarisierungs-Helfer (gesourct).
@@ -104,8 +106,17 @@ ausdrücklichem konkreten Auftrag. Kein Auto-Release bei normalen Pushes.
 ```bash
 swift build
 swift test
+bash Tests/run-shell-tests.sh
 bash build-app.sh
 ```
+
+`swift test` deckt nur den in `Package.swift` registrierten Target
+`Tests/GameCoreTests` ab. Alles daneben — CLI-Versionspfad, Austauschlogik von
+`install.sh`, Aufräumen in `notarize-lib.sh` — läuft über
+`Tests/run-shell-tests.sh`; dort gehört jeder neue Shell-Test eingetragen, sonst
+hat er keinen Aufrufer. Die Shell-Tests arbeiten mit Attrappen in
+Temp-Verzeichnissen: kein Signieren, kein Notarisieren, kein Schreiben nach
+`/Applications`.
 
 iOS-Änderungen zusätzlich mit dem Xcode-Projekt/Simulator und auf Gerät prüfen; Audio
 auf Gerät ohne Debugger gegenhören. Release-/Notarisierungsbefehle sind kein normaler
@@ -125,6 +136,9 @@ Testschritt. Testanzahlen nicht in dauerhafte Doku schreiben.
 - UI/Gameplaygefühl: automatisierte Tests ersetzen nicht 120-Hz-/Geräte-Playtest,
   aber subjektiver Test ersetzt keine deterministische Regression.
 - Assets: Lizenzbeleg, Bundle-Scan und kommerzielle Zulässigkeit vor Distribution.
+- Build-/Install-/Release-Skripte: `bash -n` plus `Tests/run-shell-tests.sh`. Ein
+  echter Release- oder Notarisierungslauf ist kein Testschritt; Fehlerpfade werden
+  mit Attrappen in Temp-Verzeichnissen nachgestellt.
 
 ## Code- und Git-Regeln
 

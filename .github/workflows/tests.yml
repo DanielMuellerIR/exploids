@@ -20,3 +20,8 @@ jobs:
         run: swift --version
       - name: Bauen und testen
         run: swift test
+      # Shell-Integrationstests: CLI-Versionspfad und die Fehlerpfade der
+      # Build-Skripte. Sie arbeiten mit Attrappen in Temp-Verzeichnissen und
+      # brauchen weder Zertifikat noch Notar-Profil.
+      - name: Shell-Tests
+        run: bash Tests/run-shell-tests.sh
