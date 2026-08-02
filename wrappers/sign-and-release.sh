@@ -65,6 +65,37 @@ RW_DMG_PATH="$BUILD_DIR/Exploids-${APP_VERSION}-rw.dmg"
 echo "==> Exploids Sign-and-Release v${APP_VERSION}"
 mkdir -p "$BUILD_DIR"
 
+# Fail-closed-Vorbedingung für --publish: Wenn der Tag vX.Y.Z schon existiert,
+# MUSS er exakt auf HEAD zeigen. Der frühere reine Existenztest ließ einen Tag aus
+# einem älteren Commit unbemerkt stehen und übersprang die Tag-Erzeugung; das
+# Release hätte dann ein aus HEAD gebautes DMG unter einem Tag veröffentlicht, der
+# ganz anderen Quellcode bezeichnet — inklusive abweichender Bundle-Buildnummer,
+# die aus `git rev-list --count HEAD` kommt. Belegt am 2026-08-03: VERSION stand
+# auf 0.14.6, Tag v0.14.6 zeigte auf 5e7c7b0, HEAD auf 9c3a933.
+# Lieber abbrechen als etwas Falsches veröffentlichen.
+require_tag_matches_head() {
+  local tag="$1"
+  local existing head_sha
+  # Die Funktion wird als linke Seite von `||` aufgerufen; darin gilt `set -e`
+  # nicht. Jeder Fehlerfall muss deshalb ausdrücklich zu `return 1` führen, sonst
+  # liefe die Prüfung im Fehlerfall stillschweigend als „bestanden“ durch.
+  if ! head_sha="$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null)" || [ -z "$head_sha" ]; then
+    echo "FEHLER: HEAD in $PROJECT_ROOT nicht auflösbar — Tag-Prüfung unmöglich." >&2
+    return 1
+  fi
+  if existing="$(git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/tags/$tag^{commit}" 2>/dev/null)"; then
+    if [ "$existing" != "$head_sha" ]; then
+      echo "FEHLER: Tag $tag zeigt auf ${existing:0:12}, HEAD ist ${head_sha:0:12}." >&2
+      echo "  Ein Release würde ein aus HEAD gebautes Artefakt unter einem Tag" >&2
+      echo "  veröffentlichen, der anderen Quellstand bezeichnet." >&2
+      echo "  Abhilfe: VERSION erhöhen (neuer Tag) oder das Artefakt aus einem" >&2
+      echo "  Checkout von $tag bauen." >&2
+      return 1
+    fi
+  fi
+  return 0
+}
+
 # ---------- Sanity-Checks ----------
 # Profilermittlung und die eigentliche App-Notarisierung liegen in
 # notarize-lib.sh, damit install.sh denselben Weg geht.
@@ -75,7 +106,14 @@ if ! security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
   security find-identity -v -p codesigning >&2
   exit 1
 fi
-if [ ! -f "$BACKGROUND_SRC" ]; then
+# Schon hier prüfen, nicht erst nach dem minutenlangen Notarisieren.
+if [ "$PUBLISH" = "1" ]; then
+  require_tag_matches_head "v${APP_VERSION}" || exit 1
+fi
+# Der Hintergrund wird ausschließlich vom AppleScript-Layout verwendet; ohne
+# --no-finder-layout ist er Pflicht, mit --no-finder-layout wird er weder
+# gebraucht noch ins Image gepackt.
+if [ "$FINDER_LAYOUT" = "1" ] && [ ! -f "$BACKGROUND_SRC" ]; then
   echo "FEHLER: DMG-Hintergrund fehlt: $BACKGROUND_SRC" >&2
   echo "  swift assets/generate-dmg-background.swift assets/dmg-background.png" >&2
   exit 1
@@ -110,16 +148,19 @@ MOUNT_DIR="/Volumes/$VOLNAME"
 hdiutil attach "$RW_DMG_PATH" -mountpoint "$MOUNT_DIR" -nobrowse -noverify -noautoopen
 
 ln -s /Applications "$MOUNT_DIR/Applications"
-mkdir -p "$MOUNT_DIR/.background"
-cp "$BACKGROUND_SRC" "$MOUNT_DIR/.background/background.png"
-chflags hidden "$MOUNT_DIR/.background"
 
 # Finder-Ansicht setzen. Fenster-Innenmaß 600×400 = Hintergrundbild-Größe.
 # --no-finder-layout überspringt diesen Schritt: Er öffnet ein echtes
 # Finder-Fenster und reißt den Fokus an sich, was headless-Läufe (und Läufe
 # neben laufender Arbeit) stört. Das DMG ist dann funktional, nur ohne
 # Icon-Positionen und Hintergrundbild.
+# Das Hintergrundbild gehört zu diesem Schritt: Einziger Verbraucher ist
+# `set background picture` unten. Ohne Layout wanderte es früher trotzdem als
+# ungenutzte Datei ins Image.
 if [ "$FINDER_LAYOUT" = "1" ]; then
+mkdir -p "$MOUNT_DIR/.background"
+cp "$BACKGROUND_SRC" "$MOUNT_DIR/.background/background.png"
+chflags hidden "$MOUNT_DIR/.background"
 osascript <<APPLESCRIPT
 tell application "Finder"
   tell disk "$VOLNAME"
@@ -184,8 +225,11 @@ if [ "$PUBLISH" = "1" ]; then
   ' "$PROJECT_ROOT/CHANGELOG.md" > "$NOTES_FILE"
   [ -s "$NOTES_FILE" ] || echo "Exploids $TAG" > "$NOTES_FILE"
 
-  # git-Tag setzen (idempotent) und zum github-Remote pushen.
-  if ! git -C "$PROJECT_ROOT" rev-parse "$TAG" >/dev/null 2>&1; then
+  # git-Tag setzen (idempotent) und zum github-Remote pushen. Die Vorbedingung von
+  # oben hier direkt vor dem Push erneut prüfen: Zwischen Start und diesem Punkt
+  # liegen Bau und Notarisierung, HEAD kann sich in der Zeit bewegt haben.
+  require_tag_matches_head "$TAG" || exit 1
+  if ! git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
     git -C "$PROJECT_ROOT" tag -a "$TAG" -m "Exploids $TAG"
     git -C "$PROJECT_ROOT" push github "$TAG"
   fi
