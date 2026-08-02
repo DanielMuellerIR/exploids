@@ -23,7 +23,11 @@ source ./notarize-lib.sh
 require_notary_profile
 
 APP="Exploids.app"
-DESTINATION="/Applications/$APP"
+# Ziel ist /Applications. Die Variable existiert nur, damit sich der Austausch-
+# und Rücksetzpfad in einem Wegwerf-Verzeichnis testen lässt (Tests/install-swap.sh);
+# im normalen Betrieb wird sie nie gesetzt.
+APPS_DIR="${EXPLOIDS_APPS_DIR:-/Applications}"
+DESTINATION="$APPS_DIR/$APP"
 VERSION="$(tr -d ' \n' < VERSION)"
 
 echo "=== 1/4 App bauen ==="
@@ -36,34 +40,79 @@ echo "=== 3/4 Notarisieren ==="
 notarize_app "$APP"
 
 echo "=== 4/4 Installieren ==="
-# Erst neben das Ziel legen, dann atomar austauschen: ein Abbruch mittendrin
-# darf keine halb ersetzte App in /Applications hinterlassen.
-STAGED="/Applications/.$APP.install-$$"
-rm -rf "$STAGED"
-trap 'rm -rf "$STAGED"' EXIT
+# Erst neben das Ziel legen, DORT vollständig prüfen, dann atomar austauschen:
+# ein Abbruch mittendrin darf keine halb ersetzte App in /Applications
+# hinterlassen, und eine von Gatekeeper abgelehnte App darf die vorherige,
+# funktionierende Installation nicht verdrängen. Die alte App bleibt bis nach der
+# Abschlussprüfung am Ziel als Backup liegen und wird im Fehlerfall zurückgeholt.
+STAGED="$APPS_DIR/.$APP.install-$$"
+BACKUP_NAME=".$APP.backup-$$"
+BACKUP="$APPS_DIR/$BACKUP_NAME"
+rm -rf "$STAGED" "$BACKUP"
+trap 'rm -rf "$STAGED" "$BACKUP"' EXIT
 ditto "$APP" "$STAGED"
+
+# Prüfen VOR dem Austausch. Scheitert hier etwas, bleibt das Ziel unangetastet.
+echo "--- Vorabprüfung am Staging-Pfad ---"
+xcrun stapler validate "$STAGED"
+spctl -a -t exec -vv "$STAGED" 2>&1 | tail -2
+
 pkill -x exploids 2>/dev/null || true
-/usr/bin/swift - "$STAGED" "$DESTINATION" <<'SWIFT'
+
+# Atomarer Austausch. $3 = Name des Backups (leer: keins) — das Backup landet als
+# Geschwisterdatei neben dem Ziel und überlebt den Austausch nur mit
+# .withoutDeletingBackupItem; ohne die Option löscht replaceItemAt es sofort.
+swap_app() {   # $1 = Quelle, $2 = Ziel, $3 = Backup-Name oder ""
+    /usr/bin/swift - "$1" "$2" "$3" <<'SWIFT'
 import Foundation
 
 let fileManager = FileManager.default
 let source = URL(fileURLWithPath: CommandLine.arguments[1])
 let destination = URL(fileURLWithPath: CommandLine.arguments[2])
+let backupName = CommandLine.arguments[3]
 if fileManager.fileExists(atPath: destination.path) {
+    var options: FileManager.ItemReplacementOptions = [.usingNewMetadataOnly]
+    if !backupName.isEmpty { options.insert(.withoutDeletingBackupItem) }
     _ = try fileManager.replaceItemAt(
         destination,
         withItemAt: source,
-        backupItemName: nil,
-        options: [.usingNewMetadataOnly]
+        backupItemName: backupName.isEmpty ? nil : backupName,
+        options: options
     )
 } else {
     try fileManager.moveItem(at: source, to: destination)
 }
 SWIFT
-trap - EXIT
+}
 
-# Nach dem Kopieren erneut prüfen: erst dann ist die Installation belegt.
-xcrun stapler validate "$DESTINATION"
-spctl -a -t exec -vv "$DESTINATION" 2>&1 | tail -2
+swap_app "$STAGED" "$DESTINATION" "$BACKUP_NAME"
+
+# Nach dem Austausch am echten Ziel erneut prüfen: erst dann ist die Installation
+# belegt. Beide Prüfungen werden einzeln bewertet, damit ein Fehler nicht über
+# set -e abbricht, bevor zurückgesetzt wurde.
+install_ok=1
+xcrun stapler validate "$DESTINATION" || install_ok=0
+spctl -a -t exec -vv "$DESTINATION" 2>&1 | tail -2 || install_ok=0
+
+if [ "$install_ok" != "1" ]; then
+    echo "FEHLER: Die installierte App besteht die Abschlussprüfung nicht." >&2
+    if [ -d "$BACKUP" ]; then
+        swap_app "$BACKUP" "$DESTINATION" "" || {
+            trap - EXIT
+            rm -rf "$STAGED"
+            echo "  ACHTUNG: Rücksetzen fehlgeschlagen. Die vorherige App liegt noch" >&2
+            echo "  unter $BACKUP und muss von Hand nach $DESTINATION zurück." >&2
+            exit 1
+        }
+        echo "  Zurückgesetzt: $DESTINATION ist wieder die vorherige Installation." >&2
+    else
+        rm -rf "$DESTINATION"
+        echo "  Es gab keine vorherige Installation; $DESTINATION wurde entfernt." >&2
+    fi
+    exit 1
+fi
+
+rm -rf "$STAGED" "$BACKUP"
+trap - EXIT
 
 echo "INSTALL OK: $DESTINATION ($VERSION)"
