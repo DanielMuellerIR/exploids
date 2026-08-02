@@ -11,29 +11,52 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var aboutWindow: NSWindow?
 
     /// App-Version – Single Source of Truth ist `VERSION`. Das App-Bundle spiegelt
-    /// sie in CFBundleShortVersionString; die nackte SwiftPM-Binary liest dieselbe
-    /// Datei aus dem Quellbaum statt eine zweite Konstante zu pflegen.
+    /// sie in CFBundleShortVersionString; die nackte SwiftPM-Binary sucht dieselbe
+    /// Datei ausgehend vom eigenen Speicherort, statt eine zweite Konstante zu pflegen.
     static func appVersion() -> String {
         if let bundled = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
            !bundled.isEmpty {
             return bundled
         }
 
-        // Main.swift liegt unter Sources/ExploidsMac; drei Ebenen hoeher liegt
-        // die VERSION-Datei. Dieser Pfad ist der dokumentierte Bare-SwiftPM-Fall
-        // (`.build/.../exploids`) im ausgecheckten Quellbaum.
-        let versionURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("VERSION")
-        guard let raw = try? String(contentsOf: versionURL, encoding: .utf8) else {
-            return "unknown"
+        // Dokumentierter Bare-SwiftPM-Fall (`.build/<ziel>/release/exploids`): Die
+        // VERSION-Datei liegt in der Wurzel des Checkouts, also einige Ebenen ueber
+        // der Binary. Wir laufen vom Ort der BINARY aus hoch, nicht vom Quellpfad.
+        //
+        // Frueher kam der Startpunkt aus `#filePath`. Das hatte zwei Nachteile: Der
+        // absolute Quellpfad des Build-Rechners landete als Zeichenkette im verteilten
+        // Binary (am 2026-08-03 im signierten Release-Bundle nachgewiesen), und die
+        // Suche haftete am Quellbaum statt an der laufenden Datei. Findet die Suche
+        // nichts – etwa weil jemand nur die nackte Binary woanders hin kopiert hat –,
+        // bleibt es wie bisher bei "unknown".
+        let executableURL = Bundle.main.executableURL
+            ?? URL(fileURLWithPath: CommandLine.arguments[0])
+        var directory = executableURL.resolvingSymlinksInPath().deletingLastPathComponent()
+
+        // Hoechstens fuenf Ebenen: deckt `.build/<ziel>/release/` bequem ab und
+        // verhindert, dass die Suche bis nach / hochlaeuft und dort eine fremde
+        // VERSION-Datei erwischt.
+        for _ in 0..<5 {
+            let candidate = directory.appendingPathComponent("VERSION")
+            if let raw = try? String(contentsOf: candidate, encoding: .utf8),
+               let version = validatedVersion(raw) {
+                return version
+            }
+            let parent = directory.deletingLastPathComponent()
+            if parent.path == directory.path { break }   // Dateisystemwurzel erreicht
+            directory = parent
         }
+        return "unknown"
+    }
+
+    /// Nimmt den Dateiinhalt nur an, wenn er wirklich eine Version der Form `1.2.3` ist.
+    /// Schuetzt die Suche oben davor, eine beliebige fremde Datei namens VERSION als
+    /// Produktversion auszugeben.
+    private static func validatedVersion(_ raw: String) -> String? {
         let version = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+$"#,
                             options: .regularExpression) != nil else {
-            return "unknown"
+            return nil
         }
         return version
     }
