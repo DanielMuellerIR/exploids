@@ -68,9 +68,11 @@ sign_app() {
 # wenn jemand sie aus dem DMG herauszieht oder offline ist.
 notarize_app() {
     local app="$1"
-    local archive
-    archive="$(mktemp -d)/Exploids.zip"
 
+    # Vorprüfungen zuerst — sie brauchen kein Temp-Verzeichnis. Früher wurde es
+    # schon vor diesen Prüfungen angelegt und nur auf dem vollständigen
+    # Erfolgspfad wieder entfernt; jeder frühe return und jeder Fehler von ditto,
+    # notarytool, stapler oder spctl liess es stehen — samt komplettem App-ZIP.
     if ! codesign --verify --strict "$app" >/dev/null 2>&1; then
         echo "FEHLER: '$app' ist nicht gültig signiert — Notarisierung sinnlos." >&2
         return 1
@@ -82,10 +84,20 @@ notarize_app() {
     fi
 
     echo "=== Notarisiere App (Profil: $NOTARY_PROFILE) ==="
-    ditto -c -k --keepParent "$app" "$archive"
-    xcrun notarytool submit "$archive" --keychain-profile "$NOTARY_PROFILE" --wait
-    xcrun stapler staple "$app"
-    xcrun stapler validate "$app"
-    spctl -a -t exec -vv "$app" 2>&1 | tail -2
-    rm -rf "$(dirname "$archive")"
+    local tmpdir status=0
+    tmpdir="$(mktemp -d)"
+    # Der ganze Arbeitsblock steht links von `||`; darin greift das `set -e` der
+    # aufrufenden Skripte nicht, deshalb sind die Schritte mit && verkettet. So
+    # bleibt der erste Fehlerstatus erhalten und das Temp-Verzeichnis wird auf
+    # jedem Weg wieder entfernt. Ein EXIT-Trap wäre hier falsch: notarize-lib.sh
+    # wird gesourct und würde einen Trap des aufrufenden Skripts überschreiben.
+    {
+        ditto -c -k --keepParent "$app" "$tmpdir/Exploids.zip" &&
+        xcrun notarytool submit "$tmpdir/Exploids.zip" --keychain-profile "$NOTARY_PROFILE" --wait &&
+        xcrun stapler staple "$app" &&
+        xcrun stapler validate "$app" &&
+        { spctl -a -t exec -vv "$app" 2>&1 | tail -2; }
+    } || status=$?
+    rm -rf "$tmpdir"
+    return $status
 }
