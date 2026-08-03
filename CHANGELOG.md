@@ -4,6 +4,11 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
 ## [0.14.7] — 2026-08-03
 
+- Release: 0.14.6 is deliberately left untouched. Its tag `v0.14.6` and the published DMG both
+  come from `5e7c7b0`; later work landed on top while `VERSION` still read 0.14.6, so the tag
+  points at an older commit than the current source. Neither the tag nor the published release is
+  moved or rebuilt — everything committed after `5e7c7b0` ships as 0.14.7 instead, and 0.14.7 is
+  the next release. Nothing has been tagged for it yet.
 - Fix: `./release.sh --publish` now refuses to continue when the tag for the current version
   already exists but points at a different commit. Before, the tag step was silently skipped and
   the release uploaded a DMG built from a different source state under that tag — replacing an
