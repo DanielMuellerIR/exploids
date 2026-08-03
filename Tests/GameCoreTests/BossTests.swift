@@ -93,8 +93,10 @@ final class BossTests: GameCoreTestCase {
 
     // MARK: - Boss-Grafiken (vektorisierte Konturen aus dem Ressourcenbundle)
 
-    /// Stellt sicher, dass die getracten Boss-Texturen zur Laufzeit aus `Bundle.module/Art` ladbar
-    /// sind (sonst würden Katze/Kopf still auf den Fallback ausweichen).
+    /// Stellt sicher, dass die getracten Boss-Texturen zur Laufzeit aus `Art/` im
+    /// Ressourcenbundle ladbar sind (sonst würden Katze/Kopf still auf den Fallback ausweichen).
+    /// Belegt zugleich, dass `GameCoreResources.bundle` das Bundle auch im Test-Runner findet —
+    /// dort liegt es NEBEN dem .xctest-Bundle, nicht darin.
     func testBossArtTexturesLoadFromBundle() {
         let cat = ArtTexture.load("space_cat")
         let head = ArtTexture.load("zardoz_head")

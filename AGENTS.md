@@ -112,11 +112,17 @@ bash build-app.sh
 
 `swift test` deckt nur den in `Package.swift` registrierten Target
 `Tests/GameCoreTests` ab. Alles daneben — CLI-Versionspfad, Austauschlogik von
-`install.sh`, Aufräumen in `notarize-lib.sh` — läuft über
-`Tests/run-shell-tests.sh`; dort gehört jeder neue Shell-Test eingetragen, sonst
-hat er keinen Aufrufer. Die Shell-Tests arbeiten mit Attrappen in
-Temp-Verzeichnissen: kein Signieren, kein Notarisieren, kein Schreiben nach
-`/Applications`.
+`install.sh`, Aufräumen in `notarize-lib.sh`, die beiden Fleet-Regeln in
+`Tests/fleet-rules.sh` — läuft über `Tests/run-shell-tests.sh`; dort gehört jeder
+neue Shell-Test eingetragen, sonst hat er keinen Aufrufer. Die Shell-Tests
+arbeiten mit Attrappen in Temp-Verzeichnissen: kein Signieren, kein Notarisieren,
+kein Schreiben nach `/Applications`.
+
+Ressourcen aus `Sources/GameCore` (Art, Fonts, Music, SFX) immer über
+`GameCoreResources.bundle` laden, nie über `Bundle.module`: SwiftPM baut in den
+erzeugten `Bundle.module`-Zugriff den absoluten `.build`-Pfad des Build-Rechners
+ein, der damit in jedem ausgelieferten Binary steht. `Tests/fleet-rules.sh` hält
+das fest.
 
 iOS-Änderungen zusätzlich mit dem Xcode-Projekt/Simulator und auf Gerät prüfen; Audio
 auf Gerät ohne Debugger gegenhören. Release-/Notarisierungsbefehle sind kein normaler

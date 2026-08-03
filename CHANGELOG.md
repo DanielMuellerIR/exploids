@@ -26,6 +26,13 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
   source path recorded at build time, so the build machine's source path is no longer embedded as
   a string in the shipped binary. Behaviour is unchanged: inside a checkout it reports the version,
   a copy moved elsewhere still reports `unknown`.
+- Fix: game resources (art, fonts, music, sound effects) are located relative to the running
+  executable instead of through `Bundle.module`. SwiftPM bakes the build machine's absolute
+  `.build` path into the accessor it generates for `Bundle.module`, so that path ended up as a
+  string in every shipped binary — and on the build machine it was even used as a live fallback,
+  meaning the app could read resources straight out of the source tree there while no other
+  machine could. The replacement also stops the process from being killed by `fatalError` when a
+  resource is missing; the callers already fall back to a placeholder.
 - Build: `./install.sh` and `./release.sh` are the two entry points and the app is notarized in its
   own right before the DMG is built — first release carrying that split.
 - Tests: `Tests/run-shell-tests.sh` gathers the shell integration tests and runs in CI. The CLI
@@ -33,6 +40,11 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
   swap/rollback and for the notarization cleanup.
 - Tests: the "silent before the first singleton access" guarantee is asserted directly instead of
   through a flag that the shared test setup overwrites anyway.
+- Tests: `Tests/fleet-rules.sh` pins the two rules that keep releases safe — the notarization
+  ticket is required before anything is written to the install directory, and no absolute build
+  machine path may reach the shipped bundle. It reads sources only; it never builds, signs,
+  notarizes or touches `/Applications`, because a test that had to run the real install path to
+  prove the guard would itself be the hazard.
 
 ## [0.14.6] — 2026-07-22
 

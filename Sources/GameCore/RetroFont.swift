@@ -19,7 +19,7 @@ public enum RetroFont {
         guard !registered else { return }
         registered = true
 
-        guard let url = Bundle.module.url(forResource: "PressStart2P-Regular", withExtension: "ttf", subdirectory: "Fonts") else {
+        guard let url = GameCoreResources.bundle.url(forResource: "PressStart2P-Regular", withExtension: "ttf", subdirectory: "Fonts") else {
             print("RetroFont: Schriftdatei nicht im Bundle gefunden")
             return
         }

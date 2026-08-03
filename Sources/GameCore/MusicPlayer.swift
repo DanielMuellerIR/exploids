@@ -53,7 +53,7 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
         // Reihenfolge bestimmt die Abwechslung; weitere Tracks hier ergänzen.
         let names = ["asteroid-storm", "neon-vectors"]
         for name in names {
-            if let url = Bundle.module.url(forResource: name, withExtension: "mp3", subdirectory: "Music") {
+            if let url = GameCoreResources.bundle.url(forResource: name, withExtension: "mp3", subdirectory: "Music") {
                 tracks.append(url)
             }
         }

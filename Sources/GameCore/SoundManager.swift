@@ -469,7 +469,7 @@ public final class SoundManager: @unchecked Sendable {
         for n in names {
             var variants: [AVAudioPCMBuffer] = []
             var idx = 0
-            while let url = Bundle.module.url(forResource: "\(n)_\(idx)", withExtension: "m4a", subdirectory: "SFX") {
+            while let url = GameCoreResources.bundle.url(forResource: "\(n)_\(idx)", withExtension: "m4a", subdirectory: "SFX") {
                 if let buf = SoundManager.loadBuffer(url: url, expected: canonical) {
                     variants.append(buf)
                 }
