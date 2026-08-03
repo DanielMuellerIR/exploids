@@ -2,6 +2,33 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.7] — 2026-08-03
+
+- Fix: `./release.sh --publish` now refuses to continue when the tag for the current version
+  already exists but points at a different commit. Before, the tag step was silently skipped and
+  the release uploaded a DMG built from a different source state under that tag — replacing an
+  already published asset when the release existed. The check runs before the build, not after
+  the notarization.
+- Fix: `./install.sh` verifies the notarization ticket and the Gatekeeper verdict at the staging
+  path *before* replacing the app in `/Applications`, keeps the previous installation as a backup
+  until the final check at the destination passes, and restores it if that check fails. A rejected
+  build can no longer displace a working installation.
+- Fix: the notarization helper no longer leaves its temporary directory behind — it holds a full
+  ZIP copy of the app — when a precondition rejects the bundle or any step fails.
+- Fix: `--no-finder-layout` no longer requires and packs the DMG background image. It is only used
+  by the Finder layout step and is now created and copied together with it.
+- Fix: the bare SwiftPM binary resolves `VERSION` relative to its own location instead of the
+  source path recorded at build time, so the build machine's source path is no longer embedded as
+  a string in the shipped binary. Behaviour is unchanged: inside a checkout it reports the version,
+  a copy moved elsewhere still reports `unknown`.
+- Build: `./install.sh` and `./release.sh` are the two entry points and the app is notarized in its
+  own right before the DMG is built — first release carrying that split.
+- Tests: `Tests/run-shell-tests.sh` gathers the shell integration tests and runs in CI. The CLI
+  version check had no caller at all until now; it is joined by regression tests for the install
+  swap/rollback and for the notarization cleanup.
+- Tests: the "silent before the first singleton access" guarantee is asserted directly instead of
+  through a flag that the shared test setup overwrites anyway.
+
 ## [0.14.6] — 2026-07-22
 
 - Fix: Attract-mode demos no longer unlock or persist levels for the player, and the selected mode,
