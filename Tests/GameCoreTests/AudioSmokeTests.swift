@@ -12,6 +12,19 @@ final class AudioSmokeTests: GameCoreTestCase {
 
     // MARK: - SoundManager
 
+    /// Der SoundManager muss schon stumm sein, BEVOR das Singleton zum ersten Mal
+    /// angefasst wird — `init()` startet sonst die echte Audio-Engine, und `setUp()`
+    /// der Basisklasse kommt dafür zu spät.
+    ///
+    /// Die Prüfung hängt bewusst nicht an `isMuted`: Das setzt `setUp()` ohnehin auf
+    /// `true` und würde eine kaputte Erkennung überdecken. Geprüft wird die Erkennung
+    /// selbst, die den Startwert von `isMuted` liefert.
+    func testCurrentProcessIsDetectedAsSilentTestRun() {
+        XCTAssertTrue(SoundManager.startsMutedForCurrentProcess,
+                      "XCTest wird nicht erkannt — der SoundManager würde beim ersten "
+                      + "Singleton-Zugriff die echte Audio-Engine starten.")
+    }
+
     /// Alle SFX-Auslöser dürfen bei gemutetem Manager gefahrlos aufgerufen werden
     /// (guard !isMuted → früher return, kein Engine-Start). Basisklasse mutet in setUp.
     func testMutedSoundManagerPlayMethodsDoNotCrash() {

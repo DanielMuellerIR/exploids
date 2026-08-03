@@ -64,15 +64,25 @@ public final class SoundManager: @unchecked Sendable {
     private var headVoiceLP: Double = 0.0          // Tiefpass-Zustand (Vokal-Öffnung „m" -> „oo")
     private var headVoiceVibPhase: Double = 0.0    // Vibrato-Phase
 
-    /// Mute state of the synthesizer. Tests muessen bereits VOR dem ersten
-    /// Singleton-Zugriff stumm sein; `setUp()` waere zu spaet, weil `init()` die
-    /// Engine startet. Das entspricht dem bereits stummen MusicPlayer-Testpfad.
-    public var isMuted: Bool = {
+    /// Erkennt am laufenden Prozess, ob von Anfang an stumm gestartet werden muss:
+    /// im XCTest-Lauf und bei `--no-sound`.
+    ///
+    /// Bewusst eine eigene, oeffentlich pruefbare Eigenschaft und kein anonymer
+    /// Ausdruck im Initialwert von `isMuted`: Die Testbasisklasse setzt `isMuted`
+    /// in `setUp()` ohnehin auf `true`, sodass ein Blick auf `isMuted` eine
+    /// kaputte Erkennung nicht mehr auffallen liesse. Ein Test prueft deshalb
+    /// direkt diese Eigenschaft (siehe AudioSmokeTests).
+    public static var startsMutedForCurrentProcess: Bool {
         let environment = ProcessInfo.processInfo.environment
         return environment["XCTestConfigurationFilePath"] != nil
             || NSClassFromString("XCTestCase") != nil
             || CommandLine.arguments.contains("--no-sound")
-    }() {
+    }
+
+    /// Mute state of the synthesizer. Tests muessen bereits VOR dem ersten
+    /// Singleton-Zugriff stumm sein; `setUp()` waere zu spaet, weil `init()` die
+    /// Engine startet. Das entspricht dem bereits stummen MusicPlayer-Testpfad.
+    public var isMuted: Bool = SoundManager.startsMutedForCurrentProcess {
         didSet {
             if isMuted && !oldValue {
                 stop()
