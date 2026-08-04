@@ -71,5 +71,19 @@ cat > Exploids.app/Contents/Info.plist << EOF
 </plist>
 EOF
 
+# Debug-Symbole entfernen. `swift build -c release` legt eine Debug-Map in die
+# Binärdatei: für jede übersetzte Quelldatei einen Eintrag mit dem vollen Pfad
+# ihrer .o-Datei auf DIESEM Mac (14 Stück, gefunden am 2026-08-04 in der
+# ausgelieferten App). Das Spiel braucht das nicht, es verrät nur Benutzernamen
+# und Projektaufbau. `strip -S` nimmt genau diese Debug-Symbole und lässt die
+# normale Symboltabelle stehen, damit Absturzberichte lesbar bleiben. Xcode tut
+# das bei Release-Builds von sich aus (STRIP_STYLE=debugging), SwiftPM nicht.
+#
+# Hier und nicht erst beim Signieren: strip macht eine vorhandene Signatur
+# ungültig, und der Linker signiert auf Apple Silicon schon ad-hoc.
+echo "=== Debug-Symbole entfernen ==="
+strip -S Exploids.app/Contents/MacOS/exploids
+codesign --force --sign - Exploids.app
+
 echo "=== App Bundle Created Successfully: Exploids.app ==="
 echo "You can now double-click Exploids.app in Finder to run the game!"
