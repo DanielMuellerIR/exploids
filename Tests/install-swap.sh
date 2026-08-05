@@ -54,8 +54,10 @@ setup_case() {
 # Fuehrt den herausgeschnittenen Abschnitt mit Attrappen aus.
 # $1 = Fall-Verzeichnis, $2 = Pfadmuster, bei dem die Pruefung fehlschlagen soll
 #      ("" = alles gruen; "install-" = Vorabpruefung rot; "apps/Exploids.app" = Ziel rot)
+# $3 = optional das einzige Werkzeug, das rot werden soll: "xcrun" oder "spctl".
+#      Leer = beide Attrappen reagieren auf das Muster.
 run_step() {
-    local case_dir="$1" fail_pattern="$2"
+    local case_dir="$1" fail_pattern="$2" fail_tool="${3:-}"
     cat > "$case_dir/runner.sh" <<RUNNER
 set -euo pipefail
 cd "$case_dir/src"
@@ -64,21 +66,26 @@ APPS_DIR="$case_dir/apps"
 DESTINATION="\$APPS_DIR/\$APP"
 VERSION="0.0.0-test"
 FAIL_PATTERN="$fail_pattern"
+FAIL_TOOL="$fail_tool"
 
 # Attrappen: echte Signatur-/Gatekeeper-Werkzeuge sind hier weder noetig noch
 # moeglich. Shell-Funktionen gewinnen gegen den PATH, der Abschnitt ruft sie
 # unveraendert auf.
-xcrun() {   # erwartet: xcrun stapler validate <pfad>
+xcrun() {   # erwartet: xcrun stapler validate <pfad>  -> Pfad ist Argument 3
     local target="\${3:-}"
-    if [ -n "\$FAIL_PATTERN" ] && [[ "\$target" == *"\$FAIL_PATTERN"* ]]; then
+    if [ "\$FAIL_TOOL" != "spctl" ] && [ -n "\$FAIL_PATTERN" ] && [[ "\$target" == *"\$FAIL_PATTERN"* ]]; then
         echo "stapler: Ticket fehlt (Attrappe)" >&2
         return 1
     fi
     echo "stapler: gueltig (Attrappe)"
 }
-spctl() {   # erwartet: spctl -a -t exec -vv <pfad>
-    local target="\${4:-}"
-    if [ -n "\$FAIL_PATTERN" ] && [[ "\$target" == *"\$FAIL_PATTERN"* ]]; then
+# Der echte Aufruf lautet: spctl -a -t exec -vv <pfad>. Der Pfad ist damit
+# Argument 5, nicht 4 — Argument 4 ist immer "-vv". Solange die Attrappe \$4 las,
+# passte das Fehlermuster nie und alle roten Faelle kamen allein von der
+# xcrun-Attrappe; ein kaputter spctl-Pfad waere unbemerkt geblieben.
+spctl() {
+    local target="\${5:-}"
+    if [ "\$FAIL_TOOL" != "xcrun" ] && [ -n "\$FAIL_PATTERN" ] && [[ "\$target" == *"\$FAIL_PATTERN"* ]]; then
         echo "spctl: rejected (Attrappe)" >&2
         return 1
     fi
@@ -127,6 +134,23 @@ setup_case neuinstall_gruen ""
 run_step "$CASE_DIR" ""; rc=$?
 check "Exit-Code 0" 0 "$rc"
 check "Ziel traegt die neue App" "neu" "$(marker_of "$CASE_DIR/apps/Exploids.app")"
+check "keine Staging-/Backup-Reste" "0" "$(leftovers "$CASE_DIR/apps")"
+
+# Die beiden folgenden Faelle isolieren spctl: das Ticket (xcrun stapler) ist in
+# Ordnung, nur Gatekeeper lehnt ab. Genau diese Faelle liefen frueher gruen durch,
+# weil die spctl-Attrappe das falsche Argument las.
+echo "6. Nur spctl lehnt am Staging-Pfad ab -> Ziel unberuehrt"
+setup_case spctl_vorab alt
+run_step "$CASE_DIR" "install-" spctl; rc=$?
+check "Exit-Code 1" 1 "$rc"
+check "Ziel traegt unveraendert die alte App" "alt" "$(marker_of "$CASE_DIR/apps/Exploids.app")"
+check "keine Staging-/Backup-Reste" "0" "$(leftovers "$CASE_DIR/apps")"
+
+echo "7. Nur spctl lehnt am Ziel ab -> Rueckkehr zur alten App"
+setup_case spctl_ziel alt
+run_step "$CASE_DIR" "apps/Exploids.app" spctl; rc=$?
+check "Exit-Code 1" 1 "$rc"
+check "Ziel traegt wieder die alte App" "alt" "$(marker_of "$CASE_DIR/apps/Exploids.app")"
 check "keine Staging-/Backup-Reste" "0" "$(leftovers "$CASE_DIR/apps")"
 
 echo

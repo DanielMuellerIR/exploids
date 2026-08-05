@@ -16,7 +16,15 @@
    Build-Schalter (Richtung `-Xswiftc -file-prefix-map`) ihn entfernt, ohne das
    Ressourcen-Bundle zu brechen; danach die Pfad-Prüfung in
    `Tests/cli-version.sh` auf den ganzen Repo-Pfad ausweiten.
-9. `--version` der nackten SwiftPM-Binary meldet außerhalb eines Checkouts
+9. Die Binärprobe aus `Tests/fleet-rules.sh` (Abschnitt 2, „gebautes Binary
+   enthält keine Pfade aus dem Heimatverzeichnis") läuft in CI nie:
+   `.github/workflows/tests.yml` ruft nur `swift test` und
+   `Tests/run-shell-tests.sh` und baut kein App-Bundle. Ohne `Exploids.app`
+   meldet der Test „übersprungen" und bleibt grün. Entweder im Workflow vor den
+   Shell-Tests `bash build-app.sh` ausführen (kostet einen Release-Build je Lauf)
+   oder die Probe zusätzlich gegen `.build/release/exploids` fahren. Bis dahin
+   ist die Regel nur lokal nach einem Bundle-Bau abgesichert.
+10. `--version` der nackten SwiftPM-Binary meldet außerhalb eines Checkouts
    ehrlich `unknown`. Wer das ändern will, muss die Version beim Bauen einbetten
    (erzeugte Konstante oder SwiftPM-Plugin); das App-Bundle ist über die
    Info.plist bereits abgedeckt. Nur angehen, wenn die nackte Binary wirklich

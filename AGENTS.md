@@ -113,10 +113,19 @@ bash build-app.sh
 `swift test` deckt nur den in `Package.swift` registrierten Target
 `Tests/GameCoreTests` ab. Alles daneben — CLI-Versionspfad, Austauschlogik von
 `install.sh`, Aufräumen in `notarize-lib.sh`, die beiden Fleet-Regeln in
-`Tests/fleet-rules.sh` — läuft über `Tests/run-shell-tests.sh`; dort gehört jeder
-neue Shell-Test eingetragen, sonst hat er keinen Aufrufer. Die Shell-Tests
-arbeiten mit Attrappen in Temp-Verzeichnissen: kein Signieren, kein Notarisieren,
-kein Schreiben nach `/Applications`.
+`Tests/fleet-rules.sh`, die Release-Vorbedingungen in `Tests/release-guards.sh` —
+läuft über `Tests/run-shell-tests.sh`; dort gehört jeder neue Shell-Test
+eingetragen, sonst hat er keinen Aufrufer. Die Shell-Tests arbeiten mit Attrappen
+in Temp-Verzeichnissen: kein Signieren, kein Notarisieren, kein Schreiben nach
+`/Applications`.
+
+Wer in einem Test eine Zeichenkette in einer Binärdatei sucht, nimmt `strings -`
+und **nie** `strings -a`: Auf macOS heißt `-a` „alle Sektionen der Objektdatei"
+und lässt die Symboltabelle in `__LINKEDIT` aus — genau dort standen die
+Heimatpfade. Am ungestrippten Release-Binary gemessen (2026-08-05): `-a` fand 0
+Treffer, `-` fand 64. Merksatz: `grep` braucht `-a` für Binärdateien, `strings`
+darf es nicht haben. Beide Proben prüfen deshalb zuerst am Kontrollfund
+`dyld_stub_binder`, ob sie überhaupt sehen.
 
 Ressourcen aus `Sources/GameCore` (Art, Fonts, Music, SFX) immer über
 `GameCoreResources.bundle` laden, nie über `Bundle.module`: SwiftPM baut in den

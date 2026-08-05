@@ -45,6 +45,22 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
   machine path may reach the shipped bundle. It reads sources only; it never builds, signs,
   notarizes or touches `/Applications`, because a test that had to run the real install path to
   prove the guard would itself be the hazard.
+- Fix: the binary probes that look for build machine paths were blind. On macOS, `strings -a` means
+  "all sections of the object file", which excludes the symbol table in `__LINKEDIT` — exactly where
+  the leaked paths were. Measured on the unstripped release binary: `strings -a` found none,
+  `strings -` found 64. Both probes now use `strings -` and first prove they can see at all by
+  looking for a symbol that every Mach-O binary carries.
+- Fix: `./release.sh --publish` requires a clean working tree before the build, records the commit
+  it builds from, and re-checks both before publishing. It also resolves the tag on the remote and
+  compares it with that commit instead of trusting a local tag of the same name: a missing remote
+  tag is pushed without force, a diverging one aborts the release. The Gatekeeper verdict on the
+  finished DMG is no longer discarded, so a rejected image cannot be published.
+- Fix: the writable DMG is detached by an exit handler if anything fails between mounting it and
+  ejecting it, instead of being left mounted.
+- Tests: the Gatekeeper stub in the install swap test read the wrong argument and therefore never
+  fired; two cases now cover a rejection at the staging and at the destination path. New
+  `Tests/release-guards.sh` covers the release preconditions, and the CLI version test cleans up
+  its temporary copy even when it aborts.
 
 ## [0.14.6] — 2026-07-22
 

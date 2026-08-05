@@ -96,6 +96,76 @@ require_tag_matches_head() {
   return 0
 }
 
+# Gebaut wird immer der Zustand auf der Platte, veröffentlicht aber unter einem
+# Tag, der einen Commit bezeichnet. Ist der Arbeitsbaum nicht sauber, enthält das
+# DMG Änderungen, die in keinem Commit stehen — niemand könnte das Artefakt je
+# wieder aus dem Tag nachbauen. `require_tag_matches_head` hilft dagegen nicht:
+# Ohne vorhandenen Tag läuft es auf `return 0` und prüft den Arbeitsbaum ohnehin
+# nie. `git status --porcelain` zählt auch unversionierte Dateien mit; Build- und
+# Bundle-Artefakte stehen in .gitignore und stören deshalb nicht.
+require_clean_worktree() {
+  local dirty
+  # Wie oben: Die Funktion wird als linke Seite von `||` aufgerufen, `set -e` gilt
+  # darin nicht. Jeder Fehlerfall muss ausdrücklich `return 1` liefern.
+  if ! dirty="$(git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null)"; then
+    echo "FEHLER: git status in $PROJECT_ROOT nicht ausführbar — Release abgebrochen." >&2
+    return 1
+  fi
+  if [ -n "$dirty" ]; then
+    echo "FEHLER: Arbeitsbaum nicht sauber. Ein Release muss genau dem Commit entsprechen," >&2
+    echo "  den der Tag bezeichnet. Offene Änderungen:" >&2
+    printf '%s\n' "$dirty" | sed 's/^/    /' >&2
+    return 1
+  fi
+  return 0
+}
+
+# Zwischen Startprüfung und Veröffentlichung liegen Bau und Notarisierung, also
+# Minuten. Wandert HEAD in dieser Zeit, stammt das DMG aus dem alten Stand.
+require_head_unchanged() {   # $1 = die vor dem Bau festgehaltene Commit-SHA
+  local built="$1" now
+  if ! now="$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null)" || [ -z "$now" ]; then
+    echo "FEHLER: HEAD in $PROJECT_ROOT nicht auflösbar — Release abgebrochen." >&2
+    return 1
+  fi
+  if [ "$now" != "$built" ]; then
+    echo "FEHLER: HEAD ist seit dem Bau von ${built:0:12} auf ${now:0:12} gewandert." >&2
+    echo "  Das DMG stammt aus dem alten Stand. Release abgebrochen." >&2
+    return 1
+  fi
+  return 0
+}
+
+# Löst den Tag auf dem GitHub-Remote zum COMMIT auf.
+#
+# `gh release create/upload` kennt nur den Tag-NAMEN und hängt das DMG an das, was
+# unter diesem Namen bei GitHub steht. Ein lokal vorhandener Tag sagt darüber
+# nichts: Er kann nie gepusht worden sein, oder der Remote-Tag kann von einem
+# anderen Rechner stammen und auf fremden Quellcode zeigen.
+#
+# Bei einem annotierten Tag (`git tag -a`) enthält die Zeile "refs/tags/<tag>" nur
+# das Tag-OBJEKT; der Commit steht in der zusätzlichen Zeile "refs/tags/<tag>^{}".
+# Ein leichtgewichtiger Tag hat nur die erste Zeile und zeigt direkt auf den
+# Commit. Deshalb beide Muster abfragen und die aufgelöste Zeile bevorzugen.
+#
+# Ausgabe: die Commit-SHA, oder leer, wenn es den Tag am Remote nicht gibt.
+# Rückgabe 1 nur, wenn der Remote gar nicht abfragbar war.
+remote_tag_commit() {   # $1 = Tagname
+  local tag="$1" lines peeled plain
+  if ! lines="$(git -C "$PROJECT_ROOT" ls-remote --tags github \
+                    "refs/tags/$tag" "refs/tags/$tag^{}" 2>/dev/null)"; then
+    return 1
+  fi
+  peeled="$(printf '%s\n' "$lines" | awk -v t="refs/tags/$tag^{}" '$2 == t { print $1; exit }')"
+  plain="$( printf '%s\n' "$lines" | awk -v t="refs/tags/$tag"     '$2 == t { print $1; exit }')"
+  if [ -n "$peeled" ]; then
+    printf '%s\n' "$peeled"
+  else
+    printf '%s\n' "$plain"
+  fi
+  return 0
+}
+
 # ---------- Sanity-Checks ----------
 # Profilermittlung und die eigentliche App-Notarisierung liegen in
 # notarize-lib.sh, damit install.sh denselben Weg geht.
@@ -107,8 +177,14 @@ if ! security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
   exit 1
 fi
 # Schon hier prüfen, nicht erst nach dem minutenlangen Notarisieren.
+BUILD_SHA=""
 if [ "$PUBLISH" = "1" ]; then
+  require_clean_worktree || exit 1
   require_tag_matches_head "v${APP_VERSION}" || exit 1
+  # Den Commit festhalten, aus dem gleich gebaut wird. Vor dem Veröffentlichen
+  # wird gegen genau diesen Wert geprüft.
+  BUILD_SHA="$(git -C "$PROJECT_ROOT" rev-parse HEAD)"
+  echo "    Release-Basis: ${BUILD_SHA:0:12} (sauberer Arbeitsbaum)"
 fi
 # Der Hintergrund wird ausschließlich vom AppleScript-Layout verwendet; ohne
 # --no-finder-layout ist er Pflicht, mit --no-finder-layout wird er weder
@@ -144,8 +220,43 @@ SIZE=$(( $(du -sm "$APP_BUNDLE" | cut -f1) + 40 ))
 hdiutil create -srcfolder "$APP_BUNDLE" -volname "$VOLNAME" -fs HFS+ \
   -fsargs "-c c=64,a=16,e=16" -format UDRW -size "${SIZE}m" "$RW_DMG_PATH"
 
+# Trennt das von attach_dmg eingehängte Gerät, falls es noch hängt. Wird als
+# EXIT-Trap aufgerufen und darf deshalb nie selbst fehlschlagen.
+detach_attached_dmg() {
+  [ -n "${ATTACHED_DEV:-}" ] || return 0
+  hdiutil detach "$ATTACHED_DEV" -force >/dev/null 2>&1 || true
+  ATTACHED_DEV=""
+}
+
+# Hängt das beschreibbare Image ein und rüstet sofort einen EXIT-Trap, der genau
+# dieses Gerät wieder trennt. Ohne den Trap blieb das Image nach jedem Fehler
+# zwischen Einhängen und Auswerfen (Symlink, Hintergrundbild, AppleScript-Layout)
+# dauerhaft unter /Volumes stehen; der nächste Lauf trennt es zwar erzwungen, bis
+# dahin liegt es aber offen herum.
+#
+# Der Mountpoint MUSS /Volumes/$VOLNAME bleiben: Das Finder-AppleScript spricht das
+# Volume über `tell disk "$VOLNAME"` an. Ein eigener Mountpoint außerhalb /Volumes
+# würde das Layout brechen.
+#
+# Setzt ATTACHED_DEV auf die Gerätekennung.
+attach_dmg() {   # $1 = Image, $2 = Mountpoint
+  local out
+  out="$(hdiutil attach "$1" -mountpoint "$2" -nobrowse -noverify -noautoopen)"
+  printf '%s\n' "$out"
+  # hdiutil listet je Partition eine Zeile "/dev/diskNsM <Typ> <Mountpoint>".
+  # Die erste /dev/-Zeile ist das Gerät als Ganzes — genau das wird getrennt.
+  ATTACHED_DEV="$(printf '%s\n' "$out" | awk '/^\/dev\// { print $1; exit }')"
+  if [ -z "$ATTACHED_DEV" ]; then
+    echo "FEHLER: Gerätekennung aus der hdiutil-Ausgabe nicht lesbar." >&2
+    return 1
+  fi
+  trap detach_attached_dmg EXIT
+  return 0
+}
+
 MOUNT_DIR="/Volumes/$VOLNAME"
-hdiutil attach "$RW_DMG_PATH" -mountpoint "$MOUNT_DIR" -nobrowse -noverify -noautoopen
+ATTACHED_DEV=""
+attach_dmg "$RW_DMG_PATH" "$MOUNT_DIR"
 
 ln -s /Applications "$MOUNT_DIR/Applications"
 
@@ -189,6 +300,10 @@ fi
 
 sync; sleep 2                       # Race: DS_Store-Schreibpuffer vs. detach
 hdiutil detach "$MOUNT_DIR" -force
+# Erst nach dem erfolgreichen Trennen entwaffnen: Scheitert das Detach oben,
+# beendet `set -e` das Skript und der Trap räumt noch auf.
+trap - EXIT
+ATTACHED_DEV=""
 
 echo "==> Konvertiere zu komprimiertem read-only DMG"
 hdiutil convert "$RW_DMG_PATH" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH"
@@ -204,7 +319,10 @@ xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
 echo "==> Stapele Ticket"
 xcrun stapler staple "$DMG_PATH"
 xcrun stapler validate "$DMG_PATH"
-spctl --assess --type open --context context:primary-signature -v "$DMG_PATH" || true
+# Ohne `|| true`: Das ist die letzte Prüfung vor dem optionalen Veröffentlichen.
+# Verwirft man ihr Ergebnis, läuft der --publish-Block darunter auch dann weiter,
+# wenn Gatekeeper das DMG ablehnt — und genau das soll er nicht.
+spctl --assess --type open --context context:primary-signature -v "$DMG_PATH"
 
 # ---------- 6. (optional) GitHub-Release veröffentlichen ----------
 # Nur mit --publish (oben ausgewertet). Setzt Tag vX.Y.Z, erstellt das Release,
@@ -225,20 +343,42 @@ if [ "$PUBLISH" = "1" ]; then
   ' "$PROJECT_ROOT/CHANGELOG.md" > "$NOTES_FILE"
   [ -s "$NOTES_FILE" ] || echo "Exploids $TAG" > "$NOTES_FILE"
 
-  # git-Tag setzen (idempotent) und zum github-Remote pushen. Die Vorbedingung von
-  # oben hier direkt vor dem Push erneut prüfen: Zwischen Start und diesem Punkt
-  # liegen Bau und Notarisierung, HEAD kann sich in der Zeit bewegt haben.
+  # Die Vorbedingungen von oben hier direkt vor dem Push erneut prüfen: Zwischen
+  # Start und diesem Punkt liegen Bau und Notarisierung, in der Zeit können sich
+  # Arbeitsbaum und HEAD bewegt haben.
+  require_clean_worktree || exit 1
+  require_head_unchanged "$BUILD_SHA" || exit 1
   require_tag_matches_head "$TAG" || exit 1
-  if ! git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-    git -C "$PROJECT_ROOT" tag -a "$TAG" -m "Exploids $TAG"
-    git -C "$PROJECT_ROOT" push github "$TAG"
+
+  # Maßgeblich ist der Tag bei GitHub, nicht der lokale. Vorher wurde beides
+  # übersprungen, sobald der Tag lokal existierte — ob er jemals gepusht wurde und
+  # worauf er dort zeigt, prüfte niemand. `gh release` arbeitet danach nur noch mit
+  # dem Tag-NAMEN und hängte das DMG im schlimmsten Fall an fremden Quellstand.
+  if ! REMOTE_TAG_SHA="$(remote_tag_commit "$TAG")"; then
+    echo "FEHLER: Tag $TAG am Remote 'github' nicht abfragbar." >&2
+    exit 1
+  fi
+  if [ -z "$REMOTE_TAG_SHA" ]; then
+    # Tag fehlt bei GitHub: lokal anlegen, falls nötig, und ohne --force pushen.
+    # Ohne Force scheitert der Push, falls dort doch etwas anderes steht.
+    git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
+      || git -C "$PROJECT_ROOT" tag -a "$TAG" -m "Exploids $TAG"
+    git -C "$PROJECT_ROOT" push github "refs/tags/$TAG"
+  elif [ "$REMOTE_TAG_SHA" != "$BUILD_SHA" ]; then
+    echo "FEHLER: Tag $TAG zeigt bei GitHub auf ${REMOTE_TAG_SHA:0:12}," >&2
+    echo "  gebaut wurde aber ${BUILD_SHA:0:12}. Ein Upload hängte das DMG an" >&2
+    echo "  fremden Quellstand. Release abgebrochen." >&2
+    exit 1
   fi
 
   # Release anlegen — oder, falls es schon existiert, nur das Asset aktualisieren.
+  # `--verify-tag` lässt gh das Release nur für einen Tag anlegen, den es am Remote
+  # wirklich gibt, statt ihn stillschweigend aus dem Default-Branch zu erzeugen.
   if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
     gh release upload "$TAG" "$DMG_PATH" -R "$REPO" --clobber
   else
     gh release create "$TAG" "$DMG_PATH" -R "$REPO" \
+      --verify-tag \
       --title "Exploids $TAG" \
       --notes-file "$NOTES_FILE"
   fi

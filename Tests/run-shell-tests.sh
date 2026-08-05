@@ -13,7 +13,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-tests="Tests/cli-version.sh Tests/install-swap.sh Tests/notarize-cleanup.sh Tests/fleet-rules.sh"
+tests="Tests/cli-version.sh Tests/install-swap.sh Tests/notarize-cleanup.sh Tests/fleet-rules.sh Tests/release-guards.sh"
 
 failed=""
 count=0
