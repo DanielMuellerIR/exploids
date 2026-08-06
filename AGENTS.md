@@ -180,6 +180,8 @@ gehören in Changelog/Releases, nicht hierher.
 
 - Replayplan und Format: [`docs/replay-system-plan.md`](docs/replay-system-plan.md).
 - Voice-Sample-Workflow: [`turrican-like-powerup-tts.md`](turrican-like-powerup-tts.md).
+- Webapp-Machbarkeit, offene Entscheidung ohne Auftrag:
+  [`docs/webapp-portierung-machbarkeit.md`](docs/webapp-portierung-machbarkeit.md).
 - Release: Wrapper und öffentliche README.
 - Implementierte Features/Buggeschichte: Changelog und Git-Historie.
 
@@ -199,5 +201,6 @@ Anweisung.
 - `build-app.sh`: App-Build.
 - [`backlog.md`](backlog.md): verifizierte offene Arbeit.
 - [`docs/replay-system-plan.md`](docs/replay-system-plan.md): Replayvertrag und Format.
+- [`docs/webapp-portierung-machbarkeit.md`](docs/webapp-portierung-machbarkeit.md): Analyse zur Webversion.
 - [`turrican-like-powerup-tts.md`](turrican-like-powerup-tts.md): Voice-Sample-Workflow.
 - [`docs/archive/agent-context-legacy-2026-07-14.md`](docs/archive/agent-context-legacy-2026-07-14.md): frühere Chronik, nicht autoritativ.
