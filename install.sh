@@ -28,7 +28,7 @@ APP="Exploids.app"
 # im normalen Betrieb wird sie nie gesetzt.
 APPS_DIR="${EXPLOIDS_APPS_DIR:-/Applications}"
 DESTINATION="$APPS_DIR/$APP"
-VERSION="$(tr -d ' \n' < VERSION)"
+VERSION="$(tr -d '[:space:]' < VERSION)"
 
 echo "=== 1/4 App bauen ==="
 bash build-app.sh

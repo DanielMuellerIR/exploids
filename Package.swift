@@ -26,14 +26,16 @@ let package = Package(
             name: "GameCore",
             path: "Sources/GameCore",
             resources: [
-                // Hintergrundmusik (mp3) – über Bundle.module zur Laufzeit geladen.
+                // Hintergrundmusik (mp3) – zur Laufzeit über GameCoreResources.bundle geladen;
+                // ResourceBundle.swift hält den bundle-relativen Suchweg zentral fest.
                 .copy("Music"),
                 // Generierte Retro-Soundeffekte (AAC/.m4a) – optionaler Sample-Modus im SoundManager.
                 .copy("SFX"),
                 // Retro-Pixel-Font (Press Start 2P, OFL) – beim Start registriert.
                 .copy("Fonts"),
-                // Vektorisierte Boss-Grafiken (PNG, getracte Konturen) – über Bundle.module als
-                // Textur geladen: `space_cat.png` (Weltraumkatze), `zardoz_head.png` (Kopf-Boss).
+                // Vektorisierte Boss-Grafiken (PNG, nachgezeichnete Konturen) – über
+                // GameCoreResources.bundle als Textur geladen: `space_cat.png`
+                // (Weltraumkatze), `zardoz_head.png` (Kopf-Boss).
                 .copy("Art")
             ]
         ),

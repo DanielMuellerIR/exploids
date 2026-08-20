@@ -6,17 +6,19 @@ neu erarbeitet werden muss.
 
 ## Kurzfassung
 
-Machbar, aber nicht als Portierung. `GameCore` ist zwar frei von AppKit, hängt jedoch
-vollständig an SpriteKit — die Spielobjekte *sind* Szenengraph-Knoten und der Spielzustand
-liegt in ihnen. Es gibt deshalb keinen Simulationskern, den man herauslösen und unter einem
-anderen Renderer weiterbetreiben könnte. Eine Webversion liefe auf eine Neuimplementierung
-der Spiellogik hinaus. Der günstigere Zeitpunkt läge nach der in `backlog.md` unter Punkt 2
-geplanten Entzerrung von `stepSimulation`.
+Machbar, aber nicht als Portierung. `GameCore` enthält für macOS eine bedingt kompilierte
+AppKit-Tastaturbrücke und hängt darüber hinaus vollständig an SpriteKit — die Spielobjekte
+*sind* Szenengraph-Knoten und der Spielzustand liegt in ihnen. Es gibt deshalb keinen
+Simulationskern, den man herauslösen und unter einem anderen Renderer weiterbetreiben
+könnte. Eine Webversion liefe auf eine Neuimplementierung der Spiellogik hinaus. Der
+günstigere Zeitpunkt läge nach der in `backlog.md` unter Punkt 2 geplanten Entzerrung von
+`stepSimulation`.
 
 ## Befund: Der Kern ist nicht plattformunabhängig
 
-`CLAUDE.md` beschreibt `Sources/GameCore/` als „plattformunabhängige Simulation". Das trifft
-auf AppKit zu, auf SpriteKit nicht.
+`CLAUDE.md` beschreibt `Sources/GameCore/` als „plattformunabhängige Simulation". AppKit
+steckt dort nur in der per `canImport(AppKit)` abgegrenzten macOS-Tastaturbrücke; für eine
+Webversion fällt aber auch sie weg. Die wesentlich breitere Abhängigkeit ist SpriteKit.
 
 **Alle Spielobjekte erben von SpriteKit-Klassen.** `Ship`, `Asteroid`, `UFO`, `PowerUp`,
 `Laser`, `GravityWell` und `OptionDrone` sind `SKShapeNode`-Unterklassen, `SpaceCat` und
@@ -24,13 +26,13 @@ auf AppKit zu, auf SpriteKit nicht.
 ([GameScene.swift:92](../Sources/GameCore/GameScene.swift#L92)).
 
 **Der Spielzustand liegt im Szenengraph, nicht daneben.** In `GameCore` stehen 242 Zugriffe
-auf `.position`, davon 123 allein in `GameScene.swift`. Die Simulation liest und schreibt
+auf `.position`, davon 144 allein in `GameScene.swift`. Die Simulation liest und schreibt
 Knoteneigenschaften direkt: die Gravitationsrechnung greift auf `ship.position` und
 `well.position` zu ([GameScene.swift:1201](../Sources/GameCore/GameScene.swift#L1201)),
 Positionen werden per `option.position.x += …` fortgeschrieben. Die Kollisionsprüfung
 arbeitet auf Weltkoordinaten, die aus Knotentransformationen entstehen.
 
-**Zeitverhalten liegt teils außerhalb des Fixed Timestep.** 51 `SKAction`-Aufrufe steuern
+**Zeitverhalten liegt teils außerhalb des Fixed Timestep.** 52 `SKAction`-Aufrufe steuern
 Effekte über SpriteKits eigene Zeitachse statt über `stepSimulation`.
 
 Tatsächlich portabel ist nur ein kleiner Teil: `Collision.swift`, `GameRandom.swift`,
@@ -51,8 +53,10 @@ Dazu kommt die WebAssembly-Laufzeit im Download, was dem Ziel Mobilgerät entgeg
 
 Der technisch passendere Weg. Drei Dinge sprechen dafür:
 
-- Die C64-Vektorgrafik besteht aus `SKShapeNode`-Pfaden. Die lassen sich auf Canvas2D nahezu
-  eins zu eins abbilden; es gibt keine aufwendigen Shader oder Texturebenen zu ersetzen.
+- Die C64-Vektorgrafik besteht überwiegend aus `SKShapeNode`-Pfaden. Die lassen sich auf
+  Canvas2D nahezu eins zu eins abbilden. Shader gibt es nicht; die zwei PNG-Bossgrafiken
+  `space_cat.png` und `zardoz_head.png` werden jedoch als `SKTexture` geladen und müssten
+  ebenfalls übernommen werden.
 - Das prozedurale Audio hat bereits die richtige Form. `SoundManager` berechnet die Samples
   in einem Callback von `AVAudioSourceNode`
   ([SoundManager.swift:242](../Sources/GameCore/SoundManager.swift#L242)) — das entspricht

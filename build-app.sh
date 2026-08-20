@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+cd "$(dirname "$0")"
 
 echo "=== Building Exploids in Release Mode ==="
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build -c release
@@ -13,8 +14,8 @@ echo "=== Copying Executable Binary ==="
 cp .build/release/exploids Exploids.app/Contents/MacOS/exploids
 
 echo "=== Copying Resource Bundle (music) ==="
-# Das SwiftPM-Resource-Bundle (Bundle.module) ins .app legen, damit die Musik auch in der
-# doppelklickbaren App gefunden wird.
+# Das von SwiftPM erzeugte GameCore-Ressourcenbundle ins .app legen, damit
+# GameCoreResources.bundle Musik, Grafik, Schrift und SFX dort findet.
 if [ -d .build/release/exploids_GameCore.bundle ]; then
     cp -R .build/release/exploids_GameCore.bundle Exploids.app/Contents/Resources/
 fi
@@ -42,7 +43,7 @@ echo "=== Writing Info.plist ==="
 # codieren — vorher driftete die Info.plist-Version bei jedem Release, wenn man das
 # Skript vergaß. Die Build-Nummer (CFBundleVersion) muss nur monoton wachsen; die
 # Commit-Anzahl des Repos leistet das automatisch (ersetzt das manuelle Hochzählen).
-VERSION="$(cat VERSION)"
+VERSION="$(tr -d '[:space:]' < VERSION)"
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 cat > Exploids.app/Contents/Info.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -79,8 +80,9 @@ EOF
 # normale Symboltabelle stehen, damit Absturzberichte lesbar bleiben. Xcode tut
 # das bei Release-Builds von sich aus (STRIP_STYLE=debugging), SwiftPM nicht.
 #
-# Hier und nicht erst beim Signieren: strip macht eine vorhandene Signatur
-# ungültig, und der Linker signiert auf Apple Silicon schon ad-hoc.
+# Danach wird das gesamte Bundle signiert. Die Linker-Signatur deckt nur die
+# einzelne Binary ab; erst die Bundle-Signatur legt Contents/_CodeSignature/
+# CodeResources an und verwendet den Bundle-Identifier aus der Info.plist.
 echo "=== Debug-Symbole entfernen ==="
 strip -S Exploids.app/Contents/MacOS/exploids
 codesign --force --sign - Exploids.app

@@ -6,6 +6,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+source Tests/shell-test-lib.sh
 
 # Xcode-Toolchain nur setzen, wenn es sie an dieser Stelle gibt; auf einem
 # CI-Runner ohne /Applications/Xcode.app gilt die Toolchain aus dem PATH.
@@ -28,19 +29,8 @@ fi
 # wieder an #filePath geknuepft, stuende der absolute Quellpfad des Build-Rechners
 # als Zeichenkette im verteilten Binary (2026-08-03 im Release-Bundle belegt).
 #
-# `strings -` und ausdruecklich NICHT `strings -a`: Auf macOS bedeutet `-a` „alle
-# Sektionen der Objektdatei". Die Symboltabelle liegt im Bereich __LINKEDIT und
-# ist keine solche Sektion — genau dort standen die Pfade. Am ungestrippten
-# Release-Binary gemessen (2026-08-05): `strings -a` 0 Treffer auf "$HOME/",
-# `strings -` 64. Nur `-` liest wirklich jedes Byte der Datei.
-# Merksatz: `grep` braucht `-a` fuer Binaerdateien, `strings` darf es nicht haben.
-#
-# Das Ergebnis wird eingesammelt und danach geprueft: ein `grep -q` am Ende der
-# Pipeline schliesst die Leitung beim ersten Treffer, `strings` stirbt an SIGPIPE
-# und `pipefail` machte daraus faelschlich einen Fehlschlag.
-binary_hits() {   # $1 = Datei, $2 = gesuchter fester Text
-    strings - "$1" 2>/dev/null | grep -F "$2"
-}
+# `binary_hits` aus shell-test-lib.sh nutzt `strings -`, damit die Probe auch
+# __LINKEDIT und damit die frueher ausgelieferten Build-Mac-Pfade sieht.
 
 # Geprueft wird eine gestrippte Kopie, nicht die frisch gebaute Datei selbst.
 # Grund: `swift build` legt in jede Binary eine Debug-Map — je uebersetzter
@@ -54,17 +44,14 @@ binary_hits() {   # $1 = Datei, $2 = gesuchter fester Text
 probe="$(mktemp -d)"
 trap 'rm -rf "$probe"' EXIT
 cp "$bin_dir/exploids" "$probe/exploids"
-# `strip` warnt zuverlaessig, dass es die (ad-hoc-)Signatur ungueltig macht. Die
-# Kopie wird nie ausgefuehrt; nur die Warnung wird unterdrueckt, ein echter
-# Fehler schlaegt weiter ueber den Exit-Code durch.
+# Die Kopie wird nie ausgefuehrt. Diagnostik auf stderr wird unterdrueckt, ein
+# echter `strip`-Fehler schlaegt weiter ueber den Exit-Code durch.
 strip -S "$probe/exploids" 2>/dev/null
 
-# Gegenprobe zuerst: `dyld_stub_binder` steht in der Symboltabelle jeder
-# Mach-O-Binary, also in genau dem Bereich, den die fruehere `strings -a`-Fassung
-# uebersprang. Sieht die Probe diesen Kontrollfund nicht, ist sie blind und der
-# folgende Freispruch waere wertlos.
-if [ -z "$(binary_hits "$probe/exploids" "dyld_stub_binder")" ]; then
-    echo "FEHLER: Die Binaerprobe findet nicht einmal dyld_stub_binder — sie ist blind." >&2
+# Gegenprobe zuerst: __mh_execute_header bleibt auch bei Chained Fixups und nach
+# `strip -S` erhalten. Sieht die Probe es nicht, waere jeder Freispruch wertlos.
+if ! binary_probe_is_visible "$probe/exploids"; then
+    echo "FEHLER: Die Binaerprobe findet nicht einmal $MACHO_PROBE_SYMBOL — sie ist blind." >&2
     exit 1
 fi
 if [ -n "$(binary_hits "$probe/exploids" "$PWD/Sources")" ]; then

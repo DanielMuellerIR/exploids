@@ -14,15 +14,21 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
-INSTALL_SH="$PWD/install.sh"
+source Tests/shell-test-lib.sh
+INSTALL_SH="${EXPLOIDS_INSTALL_SCRIPT:-$PWD/install.sh}"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# Den Abschnitt ab "=== 4/4 Installieren ===" bis Dateiende herausschneiden.
+# Die Zielpfad-Zuweisungen und den Abschnitt ab "=== 4/4 Installieren ==="
+# getrennt herausschneiden. Der Runner prueft den Zielpfad, bevor der Abschnitt
+# irgendetwas schreibt; ein Tippfehler bei EXPLOIDS_APPS_DIR kann deshalb nie
+# versehentlich /Applications erreichen.
+PATHS_SECTION="$WORK/install-paths.sh"
 SECTION="$WORK/install-step.sh"
-sed -n '/^echo "=== 4\/4 Installieren ===/,$p' "$INSTALL_SH" > "$SECTION"
-if ! grep -q 'swap_app' "$SECTION"; then
+extract_block "$INSTALL_SH" '^APPS_DIR=' '^DESTINATION=' > "$PATHS_SECTION"
+extract_from "$INSTALL_SH" '^echo "=== 4/4 Installieren ==="' > "$SECTION"
+if [ ! -s "$PATHS_SECTION" ] || ! grep -q 'swap_app' "$SECTION"; then
     echo "FEHLER: Austauschabschnitt in install.sh nicht gefunden — Test veraltet." >&2
     exit 1
 fi
@@ -62,8 +68,12 @@ run_step() {
 set -euo pipefail
 cd "$case_dir/src"
 APP="Exploids.app"
-APPS_DIR="$case_dir/apps"
-DESTINATION="\$APPS_DIR/\$APP"
+EXPLOIDS_APPS_DIR="$case_dir/apps"
+source "$PATHS_SECTION"
+if [ "\$APPS_DIR" != "\$EXPLOIDS_APPS_DIR" ] || [ "\$DESTINATION" != "\$EXPLOIDS_APPS_DIR/\$APP" ]; then
+    echo "FEHLER: install.sh hat EXPLOIDS_APPS_DIR nicht als Ziel uebernommen." >&2
+    exit 90
+fi
 VERSION="0.0.0-test"
 FAIL_PATTERN="$fail_pattern"
 FAIL_TOOL="$fail_tool"

@@ -34,6 +34,7 @@ IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: Daniel Mueller ($TEAM_I
 APP_NAME="Exploids"               # Bundle-/Anzeigename
 VOLNAME="Exploids"                # DMG-Volume-Name (= /Volumes/<name>)
 REPO="DanielMuellerIR/exploids"   # GitHub-Repo für --publish
+GITHUB_REMOTE_URL="https://github.com/$REPO.git"
 
 # ---------- Optionen ----------
 # Früh auswerten und unbekannte Flags sofort ablehnen: Ein Tippfehler soll nicht
@@ -58,7 +59,7 @@ APP_BUNDLE="$PROJECT_ROOT/$APP_NAME.app"    # build-app.sh legt das Bundle im Re
 BACKGROUND_SRC="$PROJECT_ROOT/assets/dmg-background.png"
 
 # Version = einzige Quelle in der Datei VERSION.
-APP_VERSION="$(tr -d ' \n' < "$PROJECT_ROOT/VERSION")"
+APP_VERSION="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION")"
 DMG_PATH="$BUILD_DIR/Exploids-${APP_VERSION}.dmg"
 RW_DMG_PATH="$BUILD_DIR/Exploids-${APP_VERSION}-rw.dmg"
 
@@ -136,6 +137,18 @@ require_head_unchanged() {   # $1 = die vor dem Bau festgehaltene Commit-SHA
   return 0
 }
 
+# Hält die lokale Release-Basis in einer festen, testbaren Reihenfolge fest. Vor
+# dem Bau gibt es noch keine BUILD_SHA; direkt vor der Veröffentlichung prüft
+# dieselbe Kette zusätzlich, dass HEAD seit dem Bau nicht weitergewandert ist.
+require_release_preconditions() {   # $1 = Tagname, $2 = BUILD_SHA oder leer
+  local tag="$1" built="${2:-}"
+  require_clean_worktree || return 1
+  if [ -n "$built" ]; then
+    require_head_unchanged "$built" || return 1
+  fi
+  require_tag_matches_head "$tag" || return 1
+}
+
 # Löst den Tag auf dem GitHub-Remote zum COMMIT auf.
 #
 # `gh release create/upload` kennt nur den Tag-NAMEN und hängt das DMG an das, was
@@ -152,7 +165,7 @@ require_head_unchanged() {   # $1 = die vor dem Bau festgehaltene Commit-SHA
 # Rückgabe 1 nur, wenn der Remote gar nicht abfragbar war.
 remote_tag_commit() {   # $1 = Tagname
   local tag="$1" lines peeled plain
-  if ! lines="$(git -C "$PROJECT_ROOT" ls-remote --tags github \
+  if ! lines="$(git -C "$PROJECT_ROOT" ls-remote --tags "$GITHUB_REMOTE_URL" \
                     "refs/tags/$tag" "refs/tags/$tag^{}" 2>/dev/null)"; then
     return 1
   fi
@@ -162,6 +175,21 @@ remote_tag_commit() {   # $1 = Tagname
     printf '%s\n' "$peeled"
   else
     printf '%s\n' "$plain"
+  fi
+  return 0
+}
+
+# Werkzeuge und Ziel schon vor Bau und Notarisierung prüfen. Der kanonische URL
+# kommt aus derselben REPO-Konstante wie die späteren gh-Aufrufe; ein lokaler
+# Remote namens "github" kann daher nicht unbemerkt auf einen Fork zeigen.
+require_publish_environment() {
+  if ! command -v gh >/dev/null; then
+    echo "FEHLER: gh CLI fehlt (brew install gh)" >&2
+    return 1
+  fi
+  if ! git -C "$PROJECT_ROOT" ls-remote "$GITHUB_REMOTE_URL" HEAD >/dev/null 2>&1; then
+    echo "FEHLER: GitHub-Repo nicht erreichbar: $GITHUB_REMOTE_URL" >&2
+    return 1
   fi
   return 0
 }
@@ -179,8 +207,8 @@ fi
 # Schon hier prüfen, nicht erst nach dem minutenlangen Notarisieren.
 BUILD_SHA=""
 if [ "$PUBLISH" = "1" ]; then
-  require_clean_worktree || exit 1
-  require_tag_matches_head "v${APP_VERSION}" || exit 1
+  require_publish_environment || exit 1
+  require_release_preconditions "v${APP_VERSION}" "" || exit 1
   # Den Commit festhalten, aus dem gleich gebaut wird. Vor dem Veröffentlichen
   # wird gegen genau diesen Wert geprüft.
   BUILD_SHA="$(git -C "$PROJECT_ROOT" rev-parse HEAD)"
@@ -223,9 +251,9 @@ hdiutil create -srcfolder "$APP_BUNDLE" -volname "$VOLNAME" -fs HFS+ \
 # Trennt das von attach_dmg eingehängte Gerät, falls es noch hängt. Wird als
 # EXIT-Trap aufgerufen und darf deshalb nie selbst fehlschlagen.
 detach_attached_dmg() {
-  [ -n "${ATTACHED_DEV:-}" ] || return 0
-  hdiutil detach "$ATTACHED_DEV" -force >/dev/null 2>&1 || true
-  ATTACHED_DEV=""
+  local target="${ATTACHED_DEV:-${ATTACHED_MOUNT:-}}"
+  [ -n "$target" ] || return 0
+  hdiutil detach "$target" -force >/dev/null 2>&1 || true
 }
 
 # Hängt das beschreibbare Image ein und rüstet sofort einen EXIT-Trap, der genau
@@ -238,10 +266,17 @@ detach_attached_dmg() {
 # Volume über `tell disk "$VOLNAME"` an. Ein eigener Mountpoint außerhalb /Volumes
 # würde das Layout brechen.
 #
-# Setzt ATTACHED_DEV auf die Gerätekennung.
+# Setzt ATTACHED_MOUNT sofort nach erfolgreichem Einhängen und ATTACHED_DEV,
+# sobald sich die Gerätekennung aus der Ausgabe lesen lässt. Der Mountpoint ist
+# der Rückfall, falls hdiutil erfolgreich einhängt, aber sein Ausgabeformat sich
+# ändert und keine /dev/-Zeile mehr erkannt wird.
 attach_dmg() {   # $1 = Image, $2 = Mountpoint
   local out
-  out="$(hdiutil attach "$1" -mountpoint "$2" -nobrowse -noverify -noautoopen)"
+  if ! out="$(hdiutil attach "$1" -mountpoint "$2" -nobrowse -noverify -noautoopen)"; then
+    return 1
+  fi
+  ATTACHED_MOUNT="$2"
+  trap detach_attached_dmg EXIT
   printf '%s\n' "$out"
   # hdiutil listet je Partition eine Zeile "/dev/diskNsM <Typ> <Mountpoint>".
   # Die erste /dev/-Zeile ist das Gerät als Ganzes — genau das wird getrennt.
@@ -250,12 +285,12 @@ attach_dmg() {   # $1 = Image, $2 = Mountpoint
     echo "FEHLER: Gerätekennung aus der hdiutil-Ausgabe nicht lesbar." >&2
     return 1
   fi
-  trap detach_attached_dmg EXIT
   return 0
 }
 
 MOUNT_DIR="/Volumes/$VOLNAME"
 ATTACHED_DEV=""
+ATTACHED_MOUNT=""
 attach_dmg "$RW_DMG_PATH" "$MOUNT_DIR"
 
 ln -s /Applications "$MOUNT_DIR/Applications"
@@ -303,7 +338,6 @@ hdiutil detach "$MOUNT_DIR" -force
 # Erst nach dem erfolgreichen Trennen entwaffnen: Scheitert das Detach oben,
 # beendet `set -e` das Skript und der Trap räumt noch auf.
 trap - EXIT
-ATTACHED_DEV=""
 
 echo "==> Konvertiere zu komprimiertem read-only DMG"
 hdiutil convert "$RW_DMG_PATH" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH"
@@ -332,7 +366,6 @@ spctl --assess --type open --context context:primary-signature -v "$DMG_PATH"
 if [ "$PUBLISH" = "1" ]; then
   TAG="v${APP_VERSION}"
   echo "==> Veröffentliche GitHub-Release $TAG"
-  command -v gh >/dev/null || { echo "FEHLER: gh CLI fehlt (brew install gh)" >&2; exit 1; }
 
   # Release-Notes aus CHANGELOG.md ziehen: Zeilen ab "## [VERSION]" bis zum nächsten "## [".
   NOTES_FILE="$BUILD_DIR/release-notes-${APP_VERSION}.md"
@@ -343,12 +376,10 @@ if [ "$PUBLISH" = "1" ]; then
   ' "$PROJECT_ROOT/CHANGELOG.md" > "$NOTES_FILE"
   [ -s "$NOTES_FILE" ] || echo "Exploids $TAG" > "$NOTES_FILE"
 
-  # Die Vorbedingungen von oben hier direkt vor dem Push erneut prüfen: Zwischen
-  # Start und diesem Punkt liegen Bau und Notarisierung, in der Zeit können sich
-  # Arbeitsbaum und HEAD bewegt haben.
-  require_clean_worktree || exit 1
-  require_head_unchanged "$BUILD_SHA" || exit 1
-  require_tag_matches_head "$TAG" || exit 1
+  # Dieselbe lokale Vorbedingungskette wie oben direkt vor dem Push wiederholen.
+  # Zwischen Start und diesem Punkt liegen Bau und Notarisierung; jetzt muss sie
+  # zusätzlich HEAD gegen den vor dem Bau festgehaltenen Commit prüfen.
+  require_release_preconditions "$TAG" "$BUILD_SHA" || exit 1
 
   # Maßgeblich ist der Tag bei GitHub, nicht der lokale. Vorher wurde beides
   # übersprungen, sobald der Tag lokal existierte — ob er jemals gepusht wurde und
@@ -363,7 +394,7 @@ if [ "$PUBLISH" = "1" ]; then
     # Ohne Force scheitert der Push, falls dort doch etwas anderes steht.
     git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
       || git -C "$PROJECT_ROOT" tag -a "$TAG" -m "Exploids $TAG"
-    git -C "$PROJECT_ROOT" push github "refs/tags/$TAG"
+    git -C "$PROJECT_ROOT" push "$GITHUB_REMOTE_URL" "refs/tags/$TAG"
   elif [ "$REMOTE_TAG_SHA" != "$BUILD_SHA" ]; then
     echo "FEHLER: Tag $TAG zeigt bei GitHub auf ${REMOTE_TAG_SHA:0:12}," >&2
     echo "  gebaut wurde aber ${BUILD_SHA:0:12}. Ein Upload hängte das DMG an" >&2

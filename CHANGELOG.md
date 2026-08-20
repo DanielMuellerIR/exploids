@@ -2,6 +2,22 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.8] — 2026-08-20
+
+- Fix: the DMG cleanup handler is armed immediately after `hdiutil` mounts an image and falls
+  back to the mount point when the device line cannot be parsed, so every post-mount failure
+  can detach the image.
+- Fix: `./release.sh --publish` now checks `gh` and the canonical GitHub repository before the
+  build and notarization. Remote tag inspection and pushing use that same repository instead of
+  trusting a mutable local remote named `github`.
+- Build: `build-app.sh` changes to its own directory before touching relative paths and trims
+  whitespace from `VERSION`, keeping direct and wrapper-driven builds on the same source files.
+- Tests: release guards now exercise local-tag matching, early publish prerequisites, failed and
+  unparsable DMG mounts, abort cleanup order, and the exact Gatekeeper and `gh release create`
+  calls. Shared shell helpers keep source extraction and binary probes consistent across tests.
+- Docs: the web-port analysis now records the conditional AppKit keyboard bridge, uses consistent
+  SpriteKit occurrence counts, and includes the two PNG boss textures in the porting estimate.
+
 ## [0.14.7] — 2026-08-03
 
 - Release: 0.14.6 is deliberately left untouched. Its tag `v0.14.6` and the published DMG both
@@ -49,7 +65,9 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
   "all sections of the object file", which excludes the symbol table in `__LINKEDIT` — exactly where
   the leaked paths were. Measured on the unstripped release binary: `strings -a` found none,
   `strings -` found 64. Both probes now use `strings -` and first prove they can see at all by
-  looking for a symbol that every Mach-O binary carries.
+  looking for `__mh_execute_header`, which also remains present with Chained Fixups.
+- Build: release bundles remove SwiftPM's debug map with `strip -S`, so paths to source and object
+  files on the build Mac are not shipped in the executable.
 - Fix: `./release.sh --publish` requires a clean working tree before the build, records the commit
   it builds from, and re-checks both before publishing. It also resolves the tag on the remote and
   compares it with that commit instead of trusting a local tag of the same name: a missing remote

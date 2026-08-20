@@ -125,7 +125,8 @@ und lässt die Symboltabelle in `__LINKEDIT` aus — genau dort standen die
 Heimatpfade. Am ungestrippten Release-Binary gemessen (2026-08-05): `-a` fand 0
 Treffer, `-` fand 64. Merksatz: `grep` braucht `-a` für Binärdateien, `strings`
 darf es nicht haben. Beide Proben prüfen deshalb zuerst am Kontrollfund
-`dyld_stub_binder`, ob sie überhaupt sehen.
+`__mh_execute_header`, ob sie überhaupt sehen; `dyld_stub_binder` verschwindet
+bei neueren Deployment-Targets mit Chained Fixups.
 
 Ressourcen aus `Sources/GameCore` (Art, Fonts, Music, SFX) immer über
 `GameCoreResources.bundle` laden, nie über `Bundle.module`: SwiftPM baut in den
