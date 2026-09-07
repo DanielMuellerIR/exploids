@@ -2,6 +2,18 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.9] — 2026-09-07
+
+- Fix: high-score playback uses the recorded simulation size, independently of
+  the current window. Resizing scales the presentation while preserving spawn
+  positions and wrap boundaries. The start screen restores the prior sizing mode.
+- Fix: recording freezes whole-number simulation dimensions at the start of each
+  run, so resizing and fractional window sizes cannot invalidate its replay.
+- Replay logic version remains 3: simulation at the same recorded dimensions is
+  unchanged. Explicit CLI and renderer simulation-size overrides remain supported.
+- Tests cover different recording/playback sizes, bit-identical state and random
+  generator state, recording resize, and return to the responsive start screen.
+
 ## [0.14.8] — 2026-08-20
 
 - Fix: the DMG cleanup handler is armed immediately after `hdiutil` mounts an image and falls

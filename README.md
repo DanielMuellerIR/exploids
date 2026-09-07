@@ -105,6 +105,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 
 The simulation is **deterministic**: every run is recorded as just its seed plus your key presses, so it can be reproduced bit‑for‑bit. Two things fall out of that:
 
+- During recording and replay, resizing scales the view while the simulation keeps its starting dimensions. The title screen fits the window again.
 - **Watch high‑score runs again** — on the title screen press `1`–`5` to replay that entry exactly as it was played; `Esc` exits.
 - **Render promo GIFs headlessly** — turn a replay into a clean, cursor‑free animated GIF straight from the command line, no window needed:
 

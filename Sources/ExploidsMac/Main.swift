@@ -448,7 +448,7 @@ struct Main {
             view.presentScene(scene)
             if arguments.contains("--auto-fire") { scene.replayAutoFireOverride = true }
             if arguments.contains("--no-auto-fire") { scene.replayAutoFireOverride = false }
-            guard scene.startReplay(replay) else {
+            guard scene.startReplay(replay, simulationSize: CGSize(width: w, height: h)) else {
                 FileHandle.standardError.write(Data("Fehler: Replay inkompatibel.\n".utf8)); exit(3)
             }
             print("Replay: seed=\(replay.seed) frames=\(replay.frameCount) startLevel=\(replay.startLevel) recSize=\(replay.width)x\(replay.height) simSize=\(w)x\(h)")

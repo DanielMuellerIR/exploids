@@ -8,6 +8,51 @@ import SpriteKit
 @MainActor
 final class ReplayDeterminismTests: GameCoreTestCase {
 
+    func testReplayUsesRecordedSizeAcrossWindowSizes() throws {
+        for seed: UInt64 in [1234, 5678] {
+            let recorded = GameScene(size: CGSize(width: 1000, height: 800))
+            let sourceView = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+            sourceView.presentScene(recorded)
+            recorded.startNewGameForTesting(seed: seed, startLevel: 1)
+            driveNoThrustScript(recorded, frames: 120, base: 1000)
+            let replay = try XCTUnwrap(recorded.currentReplayForTesting())
+            let playback = GameScene(size: CGSize(width: 640, height: 480))
+            playback.scaleMode = .resizeFill
+            let destinationView = SKView(frame: CGRect(x: 0, y: 0, width: 640, height: 480))
+            destinationView.presentScene(playback)
+            // Derselbe Einstiegspunkt, den die Highscore-Liste benutzt.
+            let suite = "exploids-replay-size-" + UUID().uuidString
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            playback.highScoreStore = HighScoreStore(userDefaults: defaults)
+            playback.highScoreStore.save([HighScore(initials: "TST", score: 1, date: Date(), replayData: try replay.encoded())])
+            playback.loadHighScores()
+            XCTAssertTrue(playback.watchHighScoreReplay(at: 0))
+            XCTAssertEqual(playback.size, CGSize(width: 1000, height: 800))
+            for _ in 0..<replay.frameCount { playback.advanceOneStep() }
+            XCTAssertEqual(stateSnapshot(playback), stateSnapshot(recorded))
+            var a = recorded.rng, b = playback.rng
+            XCTAssertEqual(a.next(), b.next())
+        }
+    }
+
+    func testRecordingKeepsSimulationSizeWhenWindowChanges() throws {
+        let scene = GameScene(size: CGSize(width: 1000.5, height: 800.5))
+        scene.scaleMode = .resizeFill
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000.5, height: 800.5))
+        view.presentScene(scene)
+        scene.startNewGameForTesting(seed: 42, startLevel: 1)
+        let recorded = try XCTUnwrap(scene.currentReplayForTesting())
+        XCTAssertEqual(scene.scaleMode, .aspectFit)
+        XCTAssertEqual(scene.size, CGSize(width: recorded.width, height: recorded.height))
+        view.frame = CGRect(x: 0, y: 0, width: 640, height: 480)
+        scene.size = CGSize(width: 640, height: 480)
+        XCTAssertEqual(scene.size, CGSize(width: recorded.width, height: recorded.height))
+        scene.transitionTo(.startScreen)
+        XCTAssertEqual(scene.scaleMode, .resizeFill)
+        XCTAssertEqual(scene.size, view.bounds.size)
+    }
+
     // MARK: - GameRandom (deterministischer PRNG, Phase 1.1)
 
     /// Gleicher Seed muss IMMER dieselbe Sequenz liefern — das Fundament fürs Replay.

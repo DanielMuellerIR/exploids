@@ -85,7 +85,7 @@ enum ReplayRenderer {
         view.presentScene(scene)
         if options.hideHUD { scene.setHUDHiddenForRender(true) }
         scene.replayAutoFireOverride = options.autoFireOverride
-        guard scene.startReplay(replay) else { throw RenderError.noFramesRendered }
+        guard scene.startReplay(replay, simulationSize: CGSize(width: simW, height: simH)) else { throw RenderError.noFramesRendered }
 
         // Offscreen-Renderer + Ziel-Textur (Apple Silicon: .shared erlaubt direktes getBytes).
         let renderer = SKRenderer(device: device)
@@ -154,7 +154,7 @@ enum ReplayRenderer {
         view.presentScene(scene)
         if options.hideHUD { scene.setHUDHiddenForRender(true) }
         scene.replayAutoFireOverride = options.autoFireOverride
-        guard scene.startReplay(replay) else { throw RenderError.noFramesRendered }
+        guard scene.startReplay(replay, simulationSize: CGSize(width: simW, height: simH)) else { throw RenderError.noFramesRendered }
 
         let renderer = SKRenderer(device: device)
         renderer.scene = scene

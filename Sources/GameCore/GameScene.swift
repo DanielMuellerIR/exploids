@@ -2471,14 +2471,44 @@ public final class GameScene: SKScene {
         transitionTo(.playing)
     }
 
+    /// Fenstergröße und Spielfeld sind während eines Laufs getrennt. Das
+    /// Replayformat speichert nur eine Anfangsgröße, keine Resize-Ereignisse.
+    private var fixedSimulationSize: CGSize?
+    private var priorScaleMode: SKSceneScaleMode?
+    private var priorSceneSize: CGSize?
+
+    private func lockSimulationSize(_ dimensions: CGSize) {
+        if fixedSimulationSize == nil {
+            priorScaleMode = scaleMode
+            priorSceneSize = size
+        }
+        fixedSimulationSize = dimensions
+        scaleMode = .aspectFit
+        size = dimensions
+    }
+
+    private func unlockSimulationSize() {
+        guard let oldMode = priorScaleMode, let oldSize = priorSceneSize else { return }
+        fixedSimulationSize = nil
+        priorScaleMode = nil
+        priorSceneSize = nil
+        scaleMode = oldMode
+        size = oldMode == .resizeFill ? (view?.bounds.size ?? oldSize) : oldSize
+    }
+
     // MARK: - Replay-Wiedergabe (Phase 2.3)
 
     /// Startet die Wiedergabe einer Aufnahme: frisches Spiel mit deren Seed/Level/Modus, danach
     /// treibt der `replayPlayer` die Szene Frame für Frame (siehe update()). Inkompatible Aufnahmen
     /// (fremdes Logik-Tag) werden abgelehnt; Rückgabe `false`.
+    /// Ohne expliziten CLI-/Renderer-Override gilt immer die aufgezeichnete Größe.
     @discardableResult
-    public func startReplay(_ replay: Replay) -> Bool {
+    public func startReplay(_ replay: Replay, simulationSize: CGSize? = nil) -> Bool {
         guard replay.isCompatible else { return false }
+        let dimensions = simulationSize ?? CGSize(width: replay.width, height: replay.height)
+        guard dimensions.width.isFinite, dimensions.height.isFinite,
+              dimensions.width > 0, dimensions.height > 0 else { return false }
+        lockSimulationSize(dimensions)
         replayPlayer = ReplayPlayer(replay: replay)
         // Anfangsbedingungen der Aufnahme übernehmen und frisch starten. Da `replayPlayer` gesetzt
         // ist, legt der Fresh-Game-Pfad KEINEN Recorder an (wir zeichnen die Wiedergabe nicht auf).
@@ -2617,6 +2647,7 @@ public final class GameScene: SKScene {
         
         switch newState {
         case .startScreen:
+            unlockSimulationSize()
             ship.isHidden = true
             ship.position = .zero
             ship.velocity = .zero
@@ -2691,6 +2722,13 @@ public final class GameScene: SKScene {
                 activeKeys.removeAll()
             } else {
                 // Fresh game session
+                if replayPlayer == nil {
+                    unlockSimulationSize()
+                    // Das Format speichert ganze Maße. Aufnahme und Simulation
+                    // müssen schon vor dem ersten Spawn dieselben Werte nutzen.
+                    lockSimulationSize(CGSize(width: max(1, floor(size.width)),
+                                              height: max(1, floor(size.height))))
+                }
 
                 // Jedes frische Spiel ohne „geerbte" gedrückte Tasten starten. Wichtig nach einer
                 // per Touch abgebrochenen Demo: der Autopilot lässt sonst Dreh-/Schub-Codes in
@@ -3213,6 +3251,12 @@ public final class GameScene: SKScene {
     }
 
     public override func didChangeSize(_ oldSize: CGSize) {
+        // Auch ein direkter Größenwechsel (z. B. iOS-Rotation) darf einen
+        // laufenden Replay-/Aufnahmekoordinatenraum nicht verändern.
+        if let fixedSimulationSize, size != fixedSimulationSize {
+            size = fixedSimulationSize
+            return
+        }
         super.didChangeSize(oldSize)
         let halfWidth = size.width / 2
         let halfHeight = size.height / 2
