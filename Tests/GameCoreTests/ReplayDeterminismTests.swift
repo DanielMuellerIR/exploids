@@ -8,6 +8,27 @@ import SpriteKit
 @MainActor
 final class ReplayDeterminismTests: GameCoreTestCase {
 
+    func testReplayResizeKeepsHUDAtSceneEdgesAndRestoresStartScreen() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        scene.scaleMode = .resizeFill
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+        let replay = Replay(seed: 42, startLevel: 1, gameMode: .ancientAsteroids,
+                            events: [], frameCount: 120, width: 800, height: 600)
+        XCTAssertTrue(scene.startReplay(replay))
+        XCTAssertEqual(scene.size, CGSize(width: 800, height: 600))
+        XCTAssertEqual(scene.scoreLabel.position, CGPoint(x: -380, y: 260))
+        XCTAssertEqual(scene.hiScoreLabel.position, CGPoint(x: 380, y: 260))
+        XCTAssertEqual(scene.timerLabel.position, CGPoint(x: 0, y: 260))
+        XCTAssertEqual(scene.levelLabel.position, CGPoint(x: -380, y: 235))
+        XCTAssertEqual(scene.livesLabel.position, CGPoint(x: -380, y: 210))
+        scene.transitionTo(.startScreen)
+        XCTAssertEqual(scene.size, CGSize(width: 1024, height: 768))
+        XCTAssertEqual(scene.timerLabel.position, CGPoint(x: 0, y: 344))
+        XCTAssertEqual(scene.levelLabel.position, CGPoint(x: -492, y: 319))
+        XCTAssertEqual(scene.livesLabel.position, CGPoint(x: -492, y: 294))
+    }
+
     func testReplayUsesRecordedSizeAcrossWindowSizes() throws {
         for seed: UInt64 in [1234, 5678] {
             let recorded = GameScene(size: CGSize(width: 1000, height: 800))

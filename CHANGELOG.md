@@ -2,6 +2,11 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.10] — 2026-09-08
+
+- Fix: replay size changes keep time, level, and lives at the scene edges,
+  including restoration of the start-screen dimensions.
+
 ## [0.14.9] — 2026-09-07
 
 - Fix: high-score playback uses the recorded simulation size, independently of

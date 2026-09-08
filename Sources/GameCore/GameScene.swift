@@ -3262,6 +3262,11 @@ public final class GameScene: SKScene {
         let halfHeight = size.height / 2
         scoreLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 40)
         hiScoreLabel.position = CGPoint(x: halfWidth - 20, y: halfHeight - 40)
+        // Replaygrößen können von der Fenstergröße abweichen. Auch Zeit, Level
+        // und Leben müssen deshalb wieder an den aktuellen Szenenrand rücken.
+        timerLabel.position = CGPoint(x: 0, y: halfHeight - 40)
+        levelLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 65)
+        livesLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 90)
         // iOS-Breitformat: kompaktes Menü-Layout nach Größenänderung neu setzen.
         refreshCompactLayoutForCurrentState()
     }
