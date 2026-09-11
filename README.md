@@ -38,7 +38,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # run the 
 Three entry points, deliberately separated:
 
 ```bash
-./build-app.sh                    # build only, stays in the project directory
+./build.sh                        # build only, stays in the project directory (wrapper for build-app.sh)
 ./install.sh                      # build, notarize, install into /Applications
 ./release.sh                      # build, notarize, package the DMG — never installs
 ./release.sh --publish            # also tags + uploads the DMG to GitHub Releases

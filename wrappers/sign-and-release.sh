@@ -55,7 +55,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_ROOT/build"
-APP_BUNDLE="$PROJECT_ROOT/$APP_NAME.app"    # build-app.sh legt das Bundle im Repo-Root ab
+APP_BUNDLE="$PROJECT_ROOT/$APP_NAME.app"    # build.sh (Unterbau build-app.sh) legt das Bundle im Repo-Root ab
 BACKGROUND_SRC="$PROJECT_ROOT/assets/dmg-background.png"
 
 # Version = einzige Quelle in der Datei VERSION.
@@ -225,7 +225,7 @@ fi
 
 # ---------- 1. Bauen ----------
 echo "==> Baue App-Bundle"
-bash "$PROJECT_ROOT/build-app.sh"
+bash "$PROJECT_ROOT/build.sh"
 
 # ---------- 2. Signieren ----------
 echo "==> Signiere App-Bundle"

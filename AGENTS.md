@@ -92,8 +92,9 @@ Enginecode wegen dieses Debuggerartefakts umbauen.
 - Öffentliche Dokumente/Artefakte auf private Pfade, interne Hosts, Kontakte und
   Assistentenformulierungen prüfen.
 
-Drei Einstiegspunkte: `build-app.sh` baut nur, `./install.sh` installiert
-notarisiert nach `/Applications`, `./release.sh` packt das DMG (installiert nie).
+Drei Einstiegspunkte: `./build.sh` baut nur (dünner Wrapper auf `build-app.sh`,
+Schlusszeile `BUILD OK: <pfad>`), `./install.sh` installiert notarisiert nach
+`/Applications`, `./release.sh` packt das DMG (installiert nie).
 Beide heften zuerst der App selbst ein Ticket an. Profilname aus `NOTARY_PROFILE`
 oder `git config exploids.notaryProfile`.
 
@@ -199,7 +200,7 @@ Anweisung.
 - [`README.md`](README.md) / [`README.de.md`](README.de.md): Nutzer- und Projektüberblick.
 - `Package.swift`: Targets, Plattformen und Abhängigkeiten.
 - [`CHANGELOG.md`](CHANGELOG.md): veröffentlichte Änderungen.
-- `build-app.sh`: App-Build.
+- `build.sh`: App-Build (Wrapper); `build-app.sh`: der eigentliche Bauschritt.
 - [`backlog.md`](backlog.md): verifizierte offene Arbeit.
 - [`docs/replay-system-plan.md`](docs/replay-system-plan.md): Replayvertrag und Format.
 - [`docs/webapp-portierung-machbarkeit.md`](docs/webapp-portierung-machbarkeit.md): Analyse zur Webversion.

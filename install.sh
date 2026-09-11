@@ -2,7 +2,7 @@
 # install.sh — Exploids notarisiert nach /Applications installieren.
 #
 # Die drei Einstiegspunkte des Projekts trennen bewusst:
-#   bash build-app.sh   baut die App im Projektverzeichnis, mehr nicht
+#   ./build.sh          baut die App im Projektverzeichnis, mehr nicht (Unterbau: build-app.sh)
 #   ./install.sh        baut, signiert, notarisiert und installiert nach /Applications
 #   ./release.sh        baut, signiert, notarisiert und packt das DMG — installiert nie
 #
@@ -31,7 +31,7 @@ DESTINATION="$APPS_DIR/$APP"
 VERSION="$(tr -d '[:space:]' < VERSION)"
 
 echo "=== 1/4 App bauen ==="
-bash build-app.sh
+bash build.sh
 
 echo "=== 2/4 Signieren ==="
 sign_app "$APP"

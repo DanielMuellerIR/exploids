@@ -40,7 +40,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test   # die Unit
 Drei Einstiegspunkte, bewusst getrennt:
 
 ```bash
-./build-app.sh                    # baut nur, bleibt im Projektverzeichnis
+./build.sh                        # baut nur, bleibt im Projektverzeichnis (Wrapper auf build-app.sh)
 ./install.sh                      # baut, notarisiert, installiert nach /Applications
 ./release.sh                      # baut, notarisiert, packt das DMG — installiert nie
 ./release.sh --publish            # setzt zusätzlich Tag + lädt das DMG zu GitHub Releases

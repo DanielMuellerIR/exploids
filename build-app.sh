@@ -89,3 +89,6 @@ codesign --force --sign - Exploids.app
 
 echo "=== App Bundle Created Successfully: Exploids.app ==="
 echo "You can now double-click Exploids.app in Finder to run the game!"
+# Maschinenlesbare Schlusszeile: Aufrufer (./build.sh, Agenten, CI) lesen den
+# Ergebnispfad aus der letzten Zeile statt aus dem Log.
+echo "BUILD OK: $PWD/Exploids.app"

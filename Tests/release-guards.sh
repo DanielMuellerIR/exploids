@@ -150,7 +150,7 @@ check "GitHub-Ziel nicht erreichbar -> frueher Abbruch 1" 1 "$rc"
 PATH="$ORIGINAL_PATH"
 
 preflight_line="$(grep -nF 'require_publish_environment || exit 1' "$SCRIPT" | head -1 | cut -d: -f1)"
-build_line="$(grep -nF 'bash "$PROJECT_ROOT/build-app.sh"' "$SCRIPT" | head -1 | cut -d: -f1)"
+build_line="$(grep -nF 'bash "$PROJECT_ROOT/build.sh"' "$SCRIPT" | head -1 | cut -d: -f1)"
 if [ -n "$preflight_line" ] && [ -n "$build_line" ] && [ "$preflight_line" -lt "$build_line" ]; then
     check "Publish-Umgebung wird vor dem Bau geprueft" ja ja
 else

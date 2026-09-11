@@ -3,7 +3,7 @@
 # und notarisieren.
 #
 # Die drei Einstiegspunkte des Projekts trennen bewusst:
-#   bash build-app.sh   baut die App im Projektverzeichnis, mehr nicht
+#   ./build.sh          baut die App im Projektverzeichnis, mehr nicht (Unterbau: build-app.sh)
 #   ./install.sh        baut, signiert, notarisiert und installiert nach /Applications
 #   ./release.sh        baut, signiert, notarisiert und packt das DMG — installiert NIE
 #
