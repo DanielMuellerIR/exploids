@@ -3267,6 +3267,7 @@ public final class GameScene: SKScene {
         timerLabel.position = CGPoint(x: 0, y: halfHeight - 40)
         levelLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 65)
         livesLabel.position = CGPoint(x: -halfWidth + 20, y: halfHeight - 90)
+        applyReplayOverlayLayout()
         // iOS-Breitformat: kompaktes Menü-Layout nach Größenänderung neu setzen.
         refreshCompactLayoutForCurrentState()
     }

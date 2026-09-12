@@ -2,6 +2,13 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.11] — 2026-09-12
+
+- Fix: replay overlays stay inside small recorded scenes and the compact iPhone
+  layout; resize and replay restoration reposition them with the other HUD labels.
+- Tests: the root build wrapper now has an isolated integration test for its
+  working directory, argument forwarding, success line and exit code.
+
 ## [0.14.10] — 2026-09-08
 
 - Fix: replay size changes keep time, level, and lives at the scene edges,

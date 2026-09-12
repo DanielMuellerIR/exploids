@@ -22,11 +22,38 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         XCTAssertEqual(scene.timerLabel.position, CGPoint(x: 0, y: 260))
         XCTAssertEqual(scene.levelLabel.position, CGPoint(x: -380, y: 235))
         XCTAssertEqual(scene.livesLabel.position, CGPoint(x: -380, y: 210))
+        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 230))
         scene.transitionTo(.startScreen)
         XCTAssertEqual(scene.size, CGSize(width: 1024, height: 768))
         XCTAssertEqual(scene.timerLabel.position, CGPoint(x: 0, y: 344))
         XCTAssertEqual(scene.levelLabel.position, CGPoint(x: -492, y: 319))
         XCTAssertEqual(scene.livesLabel.position, CGPoint(x: -492, y: 294))
+        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 314))
+    }
+
+    func testReplayOverlayStaysVisibleAtSmallAndCompactSizes() {
+        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        scene.scaleMode = .resizeFill
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+        view.presentScene(scene)
+
+        let smallReplay = Replay(seed: 42, startLevel: 1, gameMode: .ancientAsteroids,
+                                 events: [], frameCount: 120, width: 480, height: 360)
+        XCTAssertTrue(scene.startReplay(smallReplay))
+        XCTAssertFalse(scene.replayOverlayLabel.isHidden)
+        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 110))
+        XCTAssertLessThanOrEqual(scene.replayOverlayLabel.frame.maxY, scene.size.height / 2)
+
+        scene.transitionTo(.startScreen)
+        scene.isCompactLayout = true
+        let compactReplay = Replay(seed: 43, startLevel: 1, gameMode: .ancientAsteroids,
+                                   events: [], frameCount: 120, width: 874, height: 402)
+        XCTAssertTrue(scene.startReplay(compactReplay))
+        XCTAssertFalse(scene.replayOverlayLabel.isHidden)
+        XCTAssertEqual(scene.replayOverlayLabel.fontSize, 12)
+        XCTAssertEqual(scene.replayOverlayLabel.position.x, 0)
+        XCTAssertEqual(scene.replayOverlayLabel.position.y, 92.46, accuracy: 0.01)
+        XCTAssertLessThanOrEqual(scene.replayOverlayLabel.frame.maxY, scene.size.height / 2)
     }
 
     func testReplayUsesRecordedSizeAcrossWindowSizes() throws {

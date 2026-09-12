@@ -212,7 +212,7 @@ extension GameScene {
         replayOverlayLabel.fontName = RetroFont.pixel
         replayOverlayLabel.fontSize = 16
         replayOverlayLabel.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
-        replayOverlayLabel.position = CGPoint(x: 0, y: 250)
+        applyReplayOverlayLayout()
         replayOverlayLabel.zPosition = 200
         replayOverlayLabel.isHidden = true
         self.addChild(replayOverlayLabel)
@@ -392,6 +392,19 @@ extension GameScene {
         }
     }
 
+    /// Hält den Replay-Hinweis innerhalb der aktuellen Szenenhöhe. Im kompakten
+    /// iPhone-Layout sitzt er unter der Level-/Zeitzeile und über dem Spielfeld.
+    func applyReplayOverlayLayout() {
+        let halfHeight = size.height / 2
+        if isCompactLayout {
+            replayOverlayLabel.fontSize = 12
+            replayOverlayLabel.position = CGPoint(x: 0, y: halfHeight - size.height * 0.27)
+        } else {
+            replayOverlayLabel.fontSize = 16
+            replayOverlayLabel.position = CGPoint(x: 0, y: halfHeight - 70)
+        }
+    }
+
     /// iOS-Spiel-HUD (nur Kompaktlayout): platzsparend, damit möglichst viel Bildfläche fürs
     /// Spielfeld bleibt. Score klein oben links, Hi-Score im Spiel ausgeblendet, und Level/Zeit/Demo
     /// als eine mittig zentrierte Zeile knapp unter dem ESC-Knopf – gleiche Schriftgröße wie der
@@ -400,6 +413,7 @@ extension GameScene {
     func applyCompactPlayingLayout() {
         let halfWidth = size.width / 2
         let halfHeight = size.height / 2
+        applyReplayOverlayLayout()
         // Score ~30 % kleiner als der macOS-Default (20 → 14) und kompakt oben links.
         let hudFontSize: CGFloat = 14
         scoreLabel.fontSize = hudFontSize
