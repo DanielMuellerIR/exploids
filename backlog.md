@@ -1,10 +1,6 @@
 # Aktiver Backlog
 
-## Geräteabnahme
-
-Touch-hold/release, gleichzeitige Aktionen, App-Lifecycle und Steuergefühl auf
-einem echten iPhone prüfen. Icon und Asset-Catalog sind vorhanden; der
-Launch-Screen wird generiert. Simulator-Builds ersetzen diese Abnahme nicht.
+Aktuell gibt es keine beauftragte offene Umsetzung oder Geräteabnahme.
 
 ## Zurückgestellte Arbeiten
 

@@ -12,6 +12,9 @@ All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
   paths. The standalone CLI path scan now checks the whole repository path in a
   stripped Release binary.
 
+- Device check: touch controls, simultaneous input, background/resume, audio and
+  display confirmed working on an iPhone.
+
 ## [0.14.11] — 2026-09-12
 
 - Fix: replay overlays stay inside small recorded scenes and the compact iPhone
