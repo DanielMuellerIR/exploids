@@ -1189,9 +1189,8 @@ public final class GameScene: SKScene {
                 fireLaser()
             }
             
-            // Unverwundbarkeit (z.B. nach Extra-Life-Revive) gilt für ALLE Todesarten,
-            // also schon vor der Gravity-Well-Prüfung bestimmen.
-            let isInvincible = currentTime < invincibilityEndTime
+            // Jeder Treffer kann sofort Schutz auslösen. Deshalb vor jedem weiteren Kontakt
+            // die aktuelle Frist prüfen, auch innerhalb der Loch- und Laser-Schleifen.
 
             // Apply Gravity Well attraction forces
             var wellsToCollapse: [GravityWell] = []
@@ -1203,7 +1202,7 @@ public final class GameScene: SKScene {
                     ship.velocity.y += pull.y * dt
 
                     let dist = distanceBetween(well.position, ship.position)
-                    if !isInvincible && dist <= well.eventHorizonRadius {
+                    if currentTime >= invincibilityEndTime && dist <= well.eventHorizonRadius {
                         // Über damageShip(), damit ein Extra-Leben auch hier den Tod abfängt.
                         lastDeathCause = .gravityWell
                         damageShip()
@@ -1258,7 +1257,7 @@ public final class GameScene: SKScene {
             }
 
             // Collision detection: Ship vs. Asteroids
-            if !ship.isHidden && !isInvincible {
+            if !ship.isHidden && currentTime >= invincibilityEndTime {
                 let shipPoly = ship.getWorldVertices()
                 for asteroid in activeAsteroids {
                     let astPoly = asteroid.getWorldVertices()
@@ -1279,7 +1278,7 @@ public final class GameScene: SKScene {
             }
             
             // Collision detection: Ship vs. UFOs
-            if !ship.isHidden && !isInvincible {
+            if !ship.isHidden && currentTime >= invincibilityEndTime {
                 let shipPoly = ship.getWorldVertices()
                 for ufo in activeUFOs {
                     let ufoPoly = ufo.getWorldVertices()
@@ -1295,7 +1294,7 @@ public final class GameScene: SKScene {
             }
 
             // Collision detection: Ship vs. Kopf-Boss (Kontakt = Tod)
-            if let head = activeHead, !ship.isHidden && !isInvincible {
+            if let head = activeHead, !ship.isHidden && currentTime >= invincibilityEndTime {
                 if distanceBetween(ship.position, head.position) <= head.collisionRadius {
                     lastDeathCause = .bossHead
                     damageShip()
@@ -1304,7 +1303,7 @@ public final class GameScene: SKScene {
 
             // Collision detection: Ship vs. Weltraumkatzen (Kontakt = Tod). Die Katze überlebt das
             // (Miniboss) – nur das Schiff nimmt Schaden. Kleiner Radius-Zuschlag für faires Rammen.
-            if !ship.isHidden && !isInvincible {
+            if !ship.isHidden && currentTime >= invincibilityEndTime {
                 for cat in activeCats {
                     if distanceBetween(ship.position, cat.position) <= cat.collisionRadius + 8.0 {
                         lastDeathCause = .spaceCat
@@ -1597,11 +1596,11 @@ public final class GameScene: SKScene {
             }
 
             // Collision detection: Enemy Lasers vs. Ship (UFO-Schüsse UND Katzen-Augenlaser)
-            if !ship.isHidden && !isInvincible {
+            if !ship.isHidden && currentTime >= invincibilityEndTime {
                 let shipPoly = ship.getWorldVertices()
                 var remainingLasers3: [Laser] = []
                 for laser in remainingLasers {
-                    if laser.type != .normal {
+                    if !ship.isHidden && currentTime >= invincibilityEndTime && laser.type != .normal {
                         let (start, end) = laser.getWorldSegment()
                         if CollisionHelper.isPointInPolygon(start, polygon: shipPoly) || CollisionHelper.isPointInPolygon(end, polygon: shipPoly) {
                             laser.removeFromParent()

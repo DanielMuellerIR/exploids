@@ -1,30 +1,15 @@
 # Aktiver Backlog
 
-1. `isInvincible`-Cross-Type-Doppelschaden mit zwei Treffern im selben Frame
-   reproduzieren; nur bei Beleg pro Kollisionsblock frisch auswerten.
-2. `stepSimulation`/Kollision nur als separaten Hochrisiko-Refactor aufteilen; nach
+1. `stepSimulation`/Kollision nur als separaten Hochrisiko-Refactor aufteilen; nach
    jedem Schnitt Golden Replay bitgenau verifizieren.
-3. iOS-Port: Touch-/GameController-Gefühl auf Gerät, App-Icon/Launch-Screen/
+2. iOS-Port: Touch-/GameController-Gefühl auf Gerät, App-Icon/Launch-Screen/
    Asset-Catalog und Lifecycle polieren.
-4. Vor App-Store- oder kommerzieller Distribution die zwei Free-Plan-Musiktracks
+3. Vor App-Store- oder kommerzieller Distribution die zwei Free-Plan-Musiktracks
    durch rechtlich saubere eigene/CC0/lizenzierte Musik ersetzen.
-5. Balance und möglichen Fixed-Timestep-Mikroruckler erst reproduzierbar messen.
-6. Kuratiertes Promo-GIF aus einem guten Replay auswählen/rendern.
-7. Scroll-Modus später als eigenständigen dritten Modus planen.
-8. Der von SwiftPM erzeugte `Bundle.module`-Zugriff trägt den absoluten
-   `.build`-Pfad des Build-Rechners als Zeichenkette ins Binary. Prüfen, ob ein
-   Build-Schalter (Richtung `-Xswiftc -file-prefix-map`) ihn entfernt, ohne das
-   Ressourcen-Bundle zu brechen; danach die Pfad-Prüfung in
-   `Tests/cli-version.sh` auf den ganzen Repo-Pfad ausweiten.
-9. Die Binärprobe aus `Tests/fleet-rules.sh` (Abschnitt 2, „gebautes Binary
-   enthält keine Pfade aus dem Heimatverzeichnis") läuft in CI nie:
-   `.github/workflows/tests.yml` ruft nur `swift test` und
-   `Tests/run-shell-tests.sh` und baut kein App-Bundle. Ohne `Exploids.app`
-   meldet der Test „übersprungen" und bleibt grün. Entweder im Workflow vor den
-   Shell-Tests `bash build-app.sh` ausführen (kostet einen Release-Build je Lauf)
-   oder die Probe zusätzlich gegen `.build/release/exploids` fahren. Bis dahin
-   ist die Regel nur lokal nach einem Bundle-Bau abgesichert.
-10. `--version` der nackten SwiftPM-Binary meldet außerhalb eines Checkouts
+4. Balance und möglichen Fixed-Timestep-Mikroruckler erst reproduzierbar messen.
+5. Kuratiertes Promo-GIF aus einem guten Replay auswählen/rendern.
+6. Scroll-Modus später als eigenständigen dritten Modus planen.
+7. `--version` der nackten SwiftPM-Binary meldet außerhalb eines Checkouts
    ehrlich `unknown`. Wer das ändern will, muss die Version beim Bauen einbetten
    (erzeugte Konstante oder SwiftPM-Plugin); das App-Bundle ist über die
    Info.plist bereits abgedeckt. Nur angehen, wenn die nackte Binary wirklich
@@ -32,3 +17,19 @@
 
 Veraltete Versions-/Push-Todos und bereits veröffentlichte Replay-/Demo-Arbeit nicht
 als offen übernehmen; vor jedem Release den aktuellen Git-/Versionsstand neu prüfen.
+
+## Abgleich 2026-10-01
+
+- Separat geplant: Simulationsextraktion nur mit unabhängigem
+  Golden Replay und einem konkreten Refactor-Auftrag. Für den Kollisionsfix war
+  keine Extraktion notwendig.
+- Geräteabhängig offen: Touch-hold/release, gleichzeitige Aktionen und Lifecycle
+  auf einem iPhone abnehmen. Icon und Asset-Catalog sind vorhanden; der
+  Launch-Screen wird generiert. GameController ist im iOS-Host noch nicht
+  implementiert und braucht einen eigenen bestätigten Umfang.
+- Entscheidung offen: konkrete rechtlich saubere Ersatzmusik, Auswahl des
+  Promo-Replays und Beauftragung eines dritten Scroll-Modus.
+- Beobachtung: Balance/120-Hz-Gefühl und Mikroruckler brauchen einen
+  reproduzierbaren Bericht; ohne diesen bleibt der Fixed-Timestep unverändert.
+- Optional: Versionseinbettung für die nackte Binary nur bei geplanter Verteilung
+  dieses Artefakts; das App-Bundle trägt die Version bereits in der Info.plist.

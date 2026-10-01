@@ -42,6 +42,62 @@ final class GameSceneStateTests: GameCoreTestCase {
         XCTAssertEqual(scene.activeAsteroids.count, 3)
     }
     
+    func testShieldProtectsAgainstAsteroidAndUFOInSameStep() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.startNewGameForTesting(seed: 42, startLevel: 1)
+        scene.clearAllEntitiesForTesting()
+        scene.collectPowerUpForTesting(type: .shield)
+        let asteroid = Asteroid(sizeClass: .large)
+        asteroid.position = scene.ship.position
+        scene.addAsteroidForTesting(asteroid)
+        let ufo = scene.addUFOForTesting(at: scene.ship.position)
+
+        scene.advanceOneStep()
+
+        XCTAssertEqual(scene.ship.shieldLevel, 0)
+        XCTAssertEqual(scene.gameState, .playing)
+        XCTAssertFalse(scene.ship.isHidden)
+        XCTAssertTrue(scene.activeUFOs.contains { $0 === ufo }, "Unverwundbarer Kontakt darf das UFO nicht zerstören")
+    }
+
+    func testShieldProtectsAgainstMultipleEnemyLasersInSameStep() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.startNewGameForTesting(seed: 42, startLevel: 1)
+        scene.clearAllEntitiesForTesting()
+        scene.collectPowerUpForTesting(type: .shield)
+        for _ in 0..<2 {
+            scene.addLaserForTesting(Laser(position: scene.ship.position, angle: 0, type: .enemy))
+        }
+
+        scene.advanceOneStep()
+
+        XCTAssertEqual(scene.ship.shieldLevel, 0)
+        XCTAssertEqual(scene.gameState, .playing)
+        XCTAssertEqual(scene.activeLasers.count, 1, "Nur der erste Treffer verbraucht einen Laser")
+    }
+
+    func testReviveProtectsAgainstTwoGravityWellsInSameStep() {
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        scene.startNewGameForTesting(seed: 42, startLevel: 1)
+        scene.clearAllEntitiesForTesting()
+        scene.collectPowerUpForTesting(type: .extraLife)
+        scene.spawnGravityWellForTesting(position: .zero)
+        scene.spawnGravityWellForTesting(position: .zero)
+
+        scene.advanceOneStep()
+
+        XCTAssertEqual(scene.extraLivesForTesting, 0)
+        XCTAssertEqual(scene.gameState, .playing)
+        XCTAssertFalse(scene.ship.isHidden)
+        XCTAssertEqual(scene.activeGravityWells.count, 1)
+    }
+
     func testLaserAsteroidCollision() {
         let asteroid = Asteroid(sizeClass: .large)
         asteroid.position = .zero

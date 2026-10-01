@@ -2,6 +2,16 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.12] — 2026-10-01
+
+- Fix: shield and extra-life protection applies immediately to further collisions
+  in the same simulation step, including multiple gravity wells and enemy lasers.
+- Replay logic version is now 4. Version 3 recordings still decode, but playback
+  rejects them because their collision outcomes can differ.
+- Tests: CI builds the app bundle before scanning its binary for build-machine
+  paths. The standalone CLI path scan now checks the whole repository path in a
+  stripped Release binary.
+
 ## [0.14.11] — 2026-09-12
 
 - Fix: replay overlays stay inside small recorded scenes and the compact iPhone

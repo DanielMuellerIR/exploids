@@ -303,3 +303,11 @@ Pro Fundstelle entscheiden: **G** = gameplay-relevant (muss geseedet werden) · 
 | UFO.swift | 3 | **G** (Spawn/Schuss) |
 | SpaceCat.swift | 2 | **G** (Seite/Ausweichen) |
 | FloatingHead.swift | 1 | **G** (Lauer-Dauer) |
+
+## Kollisionsschutz ab Logikversion 4 (2026-10-01)
+
+Schildtreffer und Extra-Life-Revive schützen sofort vor weiteren Kontakten im
+selben Simulationsschritt, auch innerhalb der Gravity-Well- und Laser-Schleifen.
+Die Datenstruktur bleibt gleich; die geänderten Ergebnisse erfordern Logikversion 4.
+Version-3-Aufnahmen bleiben lesbar, werden bei der Wiedergabe aber abgelehnt.
+Highscores und gespeicherte Aufnahmebytes werden dadurch nicht gelöscht.

@@ -16,8 +16,8 @@ if [ -d "$default_dev_dir" ]; then
 fi
 
 expected="$(tr -d '[:space:]' < VERSION)"
-swift build --product exploids
-bin_dir="$(swift build --show-bin-path)"
+swift build -c release --product exploids
+bin_dir="$(swift build -c release --show-bin-path)"
 actual="$("$bin_dir/exploids" --version)"
 
 if [[ "$actual" != "Exploids version $expected" ]]; then
@@ -32,7 +32,8 @@ fi
 # `binary_hits` aus shell-test-lib.sh nutzt `strings -`, damit die Probe auch
 # __LINKEDIT und damit die frueher ausgelieferten Build-Mac-Pfade sieht.
 
-# Geprueft wird eine gestrippte Kopie, nicht die frisch gebaute Datei selbst.
+# Geprueft wird eine gestrippte Release-Kopie, nicht die frisch gebaute Datei selbst.
+# Release entfernt auch den unbenutzten SwiftPM-Bundle-Zugriff samt festem Build-Pfad.
 # Grund: `swift build` legt in jede Binary eine Debug-Map — je uebersetzter
 # Quelldatei einen Eintrag mit deren Verzeichnis und dem Pfad ihrer .o-Datei auf
 # DIESEM Mac. Die gehoert zum Bauen, nicht zum Ausliefern; build-app.sh nimmt sie
@@ -54,9 +55,9 @@ if ! binary_probe_is_visible "$probe/exploids"; then
     echo "FEHLER: Die Binaerprobe findet nicht einmal $MACHO_PROBE_SYMBOL — sie ist blind." >&2
     exit 1
 fi
-if [ -n "$(binary_hits "$probe/exploids" "$PWD/Sources")" ]; then
-    echo "FEHLER: Der Quellpfad $PWD/Sources steht als Zeichenkette im Binary." >&2
-    binary_hits "$probe/exploids" "$PWD/Sources" | sed 's/^/    /' >&2
+if [ -n "$(binary_hits "$probe/exploids" "$PWD")" ]; then
+    echo "FEHLER: Der Repo-Pfad $PWD steht als Zeichenkette im Binary." >&2
+    binary_hits "$probe/exploids" "$PWD" | sed 's/^/    /' >&2
     exit 1
 fi
 rm -rf "$probe"

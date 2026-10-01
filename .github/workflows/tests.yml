@@ -23,5 +23,8 @@ jobs:
       # Shell-Integrationstests: CLI-Versionspfad und die Fehlerpfade der
       # Build-Skripte. Sie arbeiten mit Attrappen in Temp-Verzeichnissen und
       # brauchen weder Zertifikat noch Notar-Profil.
+      # Die Pfadprobe braucht das gestrippte Auslieferungs-Binary im Bundle.
+      - name: App-Bundle für die Binärprobe bauen
+        run: bash build-app.sh
       - name: Shell-Tests
         run: bash Tests/run-shell-tests.sh

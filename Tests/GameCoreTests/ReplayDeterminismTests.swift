@@ -436,6 +436,19 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         XCTAssertFalse(scene.isReplaying)
     }
 
+    func testPreviousCollisionLogicReplayDecodesButCannotPlay() throws {
+        let old = Replay(version: 3, seed: 42, startLevel: 1,
+                         gameMode: .ancientAsteroids, events: [], frameCount: 120)
+        let decoded = try Replay(data: old.encoded())
+        XCTAssertEqual(decoded, old)
+        XCTAssertFalse(decoded.isCompatible)
+        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(scene)
+        XCTAssertFalse(scene.startReplay(decoded))
+        XCTAssertFalse(scene.isReplaying)
+    }
+
     // MARK: - Replay an Highscore persistieren (Phase 2.4)
 
     /// End-to-End: Ein Lauf, der als Highscore endet, hängt seine Aufnahme an den Eintrag.

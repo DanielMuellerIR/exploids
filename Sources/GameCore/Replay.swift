@@ -37,7 +37,9 @@ public struct Replay: Codable, Equatable, Sendable {
     ///     hängt ein Lauf nur noch an (Seed + Eingaben) – die `dt`-Folge entfällt; gespeichert wird
     ///     nur die Anzahl der Simulationsschritte (`frameCount`). v2-Aufnahmen (variabler Zeitschritt)
     ///     sind damit inkompatibel und werden beim Abspielen abgelehnt.
-    public static let currentLogicVersion: Int = 3
+    /// v4: Schutz nach Schildtreffer/Revive gilt auch für weitere Treffer im selben Schritt.
+    ///     v3-Aufnahmen werden abgelehnt, da deren Kollisionsfolge abweichen kann.
+    public static let currentLogicVersion: Int = 4
 
     public let version: Int
     public let seed: UInt64
@@ -81,7 +83,7 @@ public struct Replay: Codable, Equatable, Sendable {
 
     // `dtSequence` bleibt nur als Legacy-Decodier-Schlüssel: alte v2-Aufnahmen tragen statt
     // `frameCount` noch die dt-Folge. Daraus leiten wir die Schrittzahl ab, damit das Dekodieren
-    // nicht wirft – die Aufnahme wird dann ohnehin über `isCompatible` (v3) abgelehnt.
+    // nicht wirft – die Aufnahme wird dann ohnehin über `isCompatible` abgelehnt.
     private enum CodingKeys: String, CodingKey {
         case version, seed, startLevel, gameMode, events, frameCount, autoFire, width, height, dtSequence
     }
@@ -105,7 +107,7 @@ public struct Replay: Codable, Equatable, Sendable {
         self.height = try c.decodeIfPresent(Int.self, forKey: .height) ?? 768
     }
 
-    /// Schreibt die kompakte v3-Form (ohne dt-Folge, mit Aufnahme-Größe).
+    /// Schreibt die kompakte Form ab v3 (ohne dt-Folge, mit Aufnahme-Größe).
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(version, forKey: .version)
