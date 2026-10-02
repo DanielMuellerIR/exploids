@@ -277,7 +277,7 @@ check "Tag-Push nutzt dasselbe kanonische GitHub-Ziel" \
       '    git -C "$PROJECT_ROOT" push --no-follow-tags "$GITHUB_REMOTE_URL" "refs/tags/${TAG}:refs/tags/${TAG}"' \
       "$PUSH_LINE"
 
-MOUNT_GUARD="$(extract_block "$SCRIPT" '^if \[ -e "/Volumes/' '^fi$')"
+MOUNT_GUARD="$(extract_block "$SCRIPT" '^if [[] -e "/Volumes/' '^fi$')"
 mkdir -p "$WORK/occupied-volume"
 printf 'unveraendert\n' > "$WORK/occupied-volume/datei"
 # Der reale Guard wird mit einem vorhandenen Temp-Pfad statt einem echten
