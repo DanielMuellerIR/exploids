@@ -1025,6 +1025,7 @@ public final class GameScene: SKScene {
                     
                     levelClearedLabel.isHidden = true
                     prepareNextLevelLabel.isHidden = true
+                    replayOverlayLabel.isHidden = !isReplaying
                     
                     lastSpawnTime = currentTime
                     lastUFOSpawnTime = currentTime
@@ -1066,6 +1067,8 @@ public final class GameScene: SKScene {
                         prepareNextLevelLabel.text = "PREPARE FOR LEVEL \(currentLevel + 1)"
                         levelClearedLabel.isHidden = false
                         prepareNextLevelLabel.isHidden = false
+                        // In kleinen Szenen liegen Replay-Hinweis und Levelmeldung übereinander.
+                        replayOverlayLabel.isHidden = true
                         
                         SoundManager.shared.playLevelComplete()
                         

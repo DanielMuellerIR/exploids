@@ -2,6 +2,11 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.14] — 2026-10-02
+
+- Der Replay-Hinweis wird während der Levelblende ausgeblendet, damit die
+  Abschlussmeldung auch in kleinen Szenen lesbar bleibt; danach kehrt er zurück.
+
 ## [0.14.13] — 2026-10-02
 
 - Wackelasteroidenexplosionen respektieren die Schutzfrist nach Schildtreffer und Revive.

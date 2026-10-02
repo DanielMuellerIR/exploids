@@ -35,11 +35,16 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     func testReplayOverlayStaysVisibleAtSmallAndCompactSizes() {
         let scene = GameScene(size: CGSize(width: 1024, height: 768))
         scene.scaleMode = .resizeFill
+        scene.externalStepDriving = true
+        let suite = "exploids-replay-overlay-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        scene.highScoreStore = HighScoreStore(userDefaults: defaults)
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
 
         let smallReplay = Replay(seed: 42, startLevel: 1, gameMode: .ancientAsteroids,
-                                 events: [], frameCount: 120, width: 480, height: 360)
+                                 events: [], frameCount: 600, width: 480, height: 360)
         XCTAssertTrue(scene.startReplay(smallReplay))
         XCTAssertFalse(scene.replayOverlayLabel.isHidden)
         XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 60))
@@ -48,12 +53,25 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         for label in [scene.scoreLabel, scene.timerLabel, scene.levelLabel, scene.livesLabel] {
             XCTAssertFalse(scene.replayOverlayLabel.frame.intersects(label.frame), "Replay überlappt \(label.text ?? "HUD")")
         }
+        scene.setLevelTimeRemainingForTesting(0)
+        scene.advanceOneStep()
+        XCTAssertTrue(scene.isLevelClearing)
+        XCTAssertFalse(scene.levelClearedLabel.isHidden)
+        XCTAssertFalse(scene.prepareNextLevelLabel.isHidden)
+        XCTAssertTrue(scene.replayOverlayLabel.isHidden, "Replay-Hinweis muss der Levelmeldung Platz lassen")
         if let path = ProcessInfo.processInfo.environment["EXPLOIDS_REVIEW_SCREENSHOT"],
            let texture = view.texture(from: scene) {
             let image = texture.cgImage()
             let representation = NSBitmapImageRep(cgImage: image)
             try? representation.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
         }
+        for _ in 0..<430 { scene.advanceOneStep() }
+        XCTAssertTrue(scene.isReplaying)
+        XCTAssertFalse(scene.isLevelClearing)
+        XCTAssertEqual(scene.currentLevel, 2)
+        XCTAssertTrue(scene.levelClearedLabel.isHidden)
+        XCTAssertTrue(scene.prepareNextLevelLabel.isHidden)
+        XCTAssertFalse(scene.replayOverlayLabel.isHidden, "Replay-Hinweis muss nach der Levelblende zurückkehren")
         scene.transitionTo(.startScreen)
         scene.isCompactLayout = true
         let compactReplay = Replay(seed: 43, startLevel: 1, gameMode: .ancientAsteroids,
@@ -72,7 +90,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
             let sourceView = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
             sourceView.presentScene(recorded)
             recorded.startNewGameForTesting(seed: seed, startLevel: 1)
-            driveNoThrustScript(recorded, frames: 120, base: 1000)
+            driveNoThrustScript(recorded, frames: 120)
             let replay = try XCTUnwrap(recorded.currentReplayForTesting())
             let playback = GameScene(size: CGSize(width: 640, height: 480))
             playback.scaleMode = .resizeFill
@@ -336,7 +354,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     /// KEIN Schub. So bleibt das Schiff in der Bildmitte und fliegt garantiert nicht in einen frisch
     /// gespawnten Asteroiden – der Lauf endet im Fenster nicht (sauberer Aufnahme/Wiedergabe-Vergleich).
     @MainActor
-    private func driveNoThrustScript(_ s: GameScene, frames: Int, base: TimeInterval) {
+    private func driveNoThrustScript(_ s: GameScene, frames: Int) {
         var fireDown = false
         for f in 0..<frames {
             if f == 30 { s.simulateKeyDown(keyCode: 0) }      // Drehung links an
@@ -345,7 +363,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
             if f == 150 { s.simulateKeyUp(keyCode: 2) }       // rechts aus
             if f % 7 == 0 { s.simulateKeyDown(keyCode: 49); fireDown = true }
             else if fireDown { s.simulateKeyUp(keyCode: 49); fireDown = false }
-            s.advanceOneStep()   // ein fester Sim-Schritt; `base` ist hier nicht mehr nötig
+            s.advanceOneStep()
         }
     }
 
@@ -360,7 +378,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewA.presentScene(a)
         a.startNewGameForTesting(seed: seed, startLevel: 1)
-        driveNoThrustScript(a, frames: frames, base: 1000.0)
+        driveNoThrustScript(a, frames: frames)
 
         XCTAssertEqual(a.gameState, .playing, "Aufnahme-Lauf darf im Testfenster nicht enden")
         let snapA = stateSnapshot(a)
@@ -473,7 +491,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         scene.startNewGameForTesting(seed: 0xA11CE, startLevel: 1)
 
         // Ein paar Frames spielen (Aufnahme läuft mit).
-        driveNoThrustScript(scene, frames: 50, base: 1000.0)
+        driveNoThrustScript(scene, frames: 50)
         // Score hochsetzen, damit der Lauf garantiert ein Highscore ist (unabhängig von vorhandenen).
         scene.addScoreForTesting(99999)
 
@@ -507,7 +525,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewA.presentScene(a)
         a.startNewGameForTesting(seed: 0xBEEF_F00D, startLevel: 1)
-        driveNoThrustScript(a, frames: 200, base: 1000.0)
+        driveNoThrustScript(a, frames: 200)
         let snapA = stateSnapshot(a)
         let replay = a.currentReplayForTesting()!
 
@@ -546,7 +564,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: seed, startLevel: 1)
-        driveNoThrustScript(scene, frames: frames, base: 1000.0)
+        driveNoThrustScript(scene, frames: frames)
         scene.addScoreForTesting(99999)
         var guardCount = 0
         while scene.gameState == .playing && guardCount < 5 {
@@ -614,7 +632,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         view.presentScene(scene)
         scene.replaySaveDirectory = tmp
         scene.startNewGameForTesting(seed: 0xAABB, startLevel: 1)
-        driveNoThrustScript(scene, frames: 40, base: 1000.0)
+        driveNoThrustScript(scene, frames: 40)
 
         // Game Over erzwingen (kein Schild/Extra-Leben → Game Over).
         var guardCount = 0
