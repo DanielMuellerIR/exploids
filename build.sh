@@ -1,6 +1,5 @@
 #!/bin/bash
-# build.sh — einheitlicher Einstieg zum Bauen (Daniels Regel vom 2026-09-11:
-# jedes Projekt hat build.sh, install.sh und release.sh an der Repo-Wurzel).
+# build.sh — einheitlicher Einstieg zum Bauen an der Repo-Wurzel.
 #
 # Baut nur: keine Signatur mit Developer ID, keine Notarisierung, keine
 # Installation. Die eigentliche Arbeit macht build-app.sh, das seinen Namen

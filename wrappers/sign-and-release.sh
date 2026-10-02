@@ -241,8 +241,11 @@ notarize_app "$APP_BUNDLE"
 
 # ---------- 4. DMG mit Installations-Layout ----------
 echo "==> Erzeuge DMG-Layout"
+if [ -e "/Volumes/$VOLNAME" ] || [ -L "/Volumes/$VOLNAME" ]; then
+  echo "FEHLER: Mountpoint /Volumes/$VOLNAME ist bereits belegt; vorhandenes Volume bleibt eingehängt." >&2
+  exit 1
+fi
 rm -f "$DMG_PATH" "$RW_DMG_PATH"
-[ -d "/Volumes/$VOLNAME" ] && hdiutil detach "/Volumes/$VOLNAME" -force >/dev/null 2>&1 || true
 
 SIZE=$(( $(du -sm "$APP_BUNDLE" | cut -f1) + 40 ))
 hdiutil create -srcfolder "$APP_BUNDLE" -volname "$VOLNAME" -fs HFS+ \
@@ -259,8 +262,7 @@ detach_attached_dmg() {
 # Hängt das beschreibbare Image ein und rüstet sofort einen EXIT-Trap, der genau
 # dieses Gerät wieder trennt. Ohne den Trap blieb das Image nach jedem Fehler
 # zwischen Einhängen und Auswerfen (Symlink, Hintergrundbild, AppleScript-Layout)
-# dauerhaft unter /Volumes stehen; der nächste Lauf trennt es zwar erzwungen, bis
-# dahin liegt es aber offen herum.
+# dauerhaft unter /Volumes stehen. Bereits belegte Mountpoints werden abgelehnt.
 #
 # Der Mountpoint MUSS /Volumes/$VOLNAME bleiben: Das Finder-AppleScript spricht das
 # Volume über `tell disk "$VOLNAME"` an. Ein eigener Mountpoint außerhalb /Volumes
@@ -394,7 +396,7 @@ if [ "$PUBLISH" = "1" ]; then
     # Ohne Force scheitert der Push, falls dort doch etwas anderes steht.
     git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
       || git -C "$PROJECT_ROOT" tag -a "$TAG" -m "Exploids $TAG"
-    git -C "$PROJECT_ROOT" push "$GITHUB_REMOTE_URL" "refs/tags/$TAG"
+    git -C "$PROJECT_ROOT" push --no-follow-tags "$GITHUB_REMOTE_URL" "refs/tags/${TAG}:refs/tags/${TAG}"
   elif [ "$REMOTE_TAG_SHA" != "$BUILD_SHA" ]; then
     echo "FEHLER: Tag $TAG zeigt bei GitHub auf ${REMOTE_TAG_SHA:0:12}," >&2
     echo "  gebaut wurde aber ${BUILD_SHA:0:12}. Ein Upload hängte das DMG an" >&2
