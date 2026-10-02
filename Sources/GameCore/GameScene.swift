@@ -1916,7 +1916,8 @@ public final class GameScene: SKScene {
         createImplosionExplosion(at: ast.position)
         shakeCamera(amplitude: 8.0, numberOfShakes: 8, durationPerShake: 0.04)
         
-        if !ship.isHidden && distanceBetween(ast.position, ship.position) < 150.0 {
+        if !ship.isHidden && gameTime >= invincibilityEndTime
+            && distanceBetween(ast.position, ship.position) < 150.0 {
             lastDeathCause = .wobblingAsteroid
             damageShip()
         }

@@ -2,6 +2,13 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.14.13] — 2026-10-02
+
+- Wackelasteroidenexplosionen respektieren die Schutzfrist nach Schildtreffer und Revive.
+- Der Replay-Hinweis liegt auch in kleinen Desktop-Szenen unter den HUD-Zeilen.
+- Replay-Logikversion 5 lehnt ältere Aufnahmen beim Abspielen ab, weil ihre
+  Kollisionsfolge abweichen kann; das Dekodieren bleibt möglich.
+
 ## [0.14.12] — 2026-10-01
 
 - Fix: shield and extra-life protection applies immediately to further collisions

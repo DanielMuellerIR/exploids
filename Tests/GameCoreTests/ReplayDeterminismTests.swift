@@ -3,6 +3,7 @@
 
 import XCTest
 import SpriteKit
+import AppKit
 @testable import GameCore
 
 @MainActor
@@ -22,13 +23,13 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         XCTAssertEqual(scene.timerLabel.position, CGPoint(x: 0, y: 260))
         XCTAssertEqual(scene.levelLabel.position, CGPoint(x: -380, y: 235))
         XCTAssertEqual(scene.livesLabel.position, CGPoint(x: -380, y: 210))
-        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 230))
+        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 180))
         scene.transitionTo(.startScreen)
         XCTAssertEqual(scene.size, CGSize(width: 1024, height: 768))
         XCTAssertEqual(scene.timerLabel.position, CGPoint(x: 0, y: 344))
         XCTAssertEqual(scene.levelLabel.position, CGPoint(x: -492, y: 319))
         XCTAssertEqual(scene.livesLabel.position, CGPoint(x: -492, y: 294))
-        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 314))
+        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 264))
     }
 
     func testReplayOverlayStaysVisibleAtSmallAndCompactSizes() {
@@ -41,9 +42,18 @@ final class ReplayDeterminismTests: GameCoreTestCase {
                                  events: [], frameCount: 120, width: 480, height: 360)
         XCTAssertTrue(scene.startReplay(smallReplay))
         XCTAssertFalse(scene.replayOverlayLabel.isHidden)
-        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 110))
+        XCTAssertEqual(scene.replayOverlayLabel.position, CGPoint(x: 0, y: 60))
         XCTAssertLessThanOrEqual(scene.replayOverlayLabel.frame.maxY, scene.size.height / 2)
 
+        for label in [scene.scoreLabel, scene.timerLabel, scene.levelLabel, scene.livesLabel] {
+            XCTAssertFalse(scene.replayOverlayLabel.frame.intersects(label.frame), "Replay überlappt \(label.text ?? "HUD")")
+        }
+        if let path = ProcessInfo.processInfo.environment["EXPLOIDS_REVIEW_SCREENSHOT"],
+           let texture = view.texture(from: scene) {
+            let image = texture.cgImage()
+            let representation = NSBitmapImageRep(cgImage: image)
+            try? representation.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        }
         scene.transitionTo(.startScreen)
         scene.isCompactLayout = true
         let compactReplay = Replay(seed: 43, startLevel: 1, gameMode: .ancientAsteroids,
@@ -454,6 +464,10 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     /// End-to-End: Ein Lauf, der als Highscore endet, hängt seine Aufnahme an den Eintrag.
     func testHighScoreEntryGetsReplayAttached() {
         let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let suite = "exploids-review-score-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        scene.useUserDefaultsForTesting(defaults)
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: 0xA11CE, startLevel: 1)
@@ -525,6 +539,10 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     @MainActor
     private func makeSceneWithRecordedHighScore(seed: UInt64, frames: Int) -> GameScene {
         let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let suite = "exploids-review-score-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        scene.useUserDefaultsForTesting(defaults)
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: seed, startLevel: 1)

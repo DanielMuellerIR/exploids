@@ -304,6 +304,32 @@ final class ModeTests: GameCoreTestCase {
         }
     }
     
+    func testWobblingExplosionRespectsShieldAndReviveProtection() {
+        for shield in [true, false] {
+            let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+            let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
+            view.presentScene(scene)
+            scene.transitionTo(.playing)
+            scene.isSpawningEnabled = false
+            scene.clearAllEntitiesForTesting()
+            scene.ship.shieldLevel = shield ? 2 : 0
+            scene.extraLives = shield ? 0 : 2
+            scene.damageShipForTesting()
+            let shields = scene.ship.shieldLevel, lives = scene.extraLives
+            let asteroid = Asteroid(sizeClass: .large, isWobblingType: true)
+            asteroid.position = CGPoint(x: 100, y: 0)
+            asteroid.velocity = .zero
+            asteroid.wobblePhase = 2
+            asteroid.timeInCurrentPhase = 6
+            scene.addAsteroidForTesting(asteroid)
+            scene.advanceOneStep()
+            XCTAssertNil(asteroid.parent)
+            XCTAssertEqual(scene.ship.shieldLevel, shields)
+            XCTAssertEqual(scene.extraLives, lives)
+            XCTAssertEqual(scene.gameState, .playing)
+        }
+    }
+
     func testWobblingAsteroidDefusal() {
         let scene = GameScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))

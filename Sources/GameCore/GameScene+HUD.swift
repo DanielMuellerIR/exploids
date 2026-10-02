@@ -393,7 +393,7 @@ extension GameScene {
     }
 
     /// Hält den Replay-Hinweis innerhalb der aktuellen Szenenhöhe. Im kompakten
-    /// iPhone-Layout sitzt er unter der Level-/Zeitzeile und über dem Spielfeld.
+    /// iPhone-Layout sitzt er unter der Level-/Zeitzeile, am Desktop unter allen HUD-Zeilen.
     func applyReplayOverlayLayout() {
         let halfHeight = size.height / 2
         if isCompactLayout {
@@ -401,7 +401,7 @@ extension GameScene {
             replayOverlayLabel.position = CGPoint(x: 0, y: halfHeight - size.height * 0.27)
         } else {
             replayOverlayLabel.fontSize = 16
-            replayOverlayLabel.position = CGPoint(x: 0, y: halfHeight - 70)
+            replayOverlayLabel.position = CGPoint(x: 0, y: halfHeight - 120)
         }
     }
 

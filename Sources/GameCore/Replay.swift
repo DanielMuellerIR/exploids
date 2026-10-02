@@ -39,7 +39,8 @@ public struct Replay: Codable, Equatable, Sendable {
     ///     sind damit inkompatibel und werden beim Abspielen abgelehnt.
     /// v4: Schutz nach Schildtreffer/Revive gilt auch für weitere Treffer im selben Schritt.
     ///     v3-Aufnahmen werden abgelehnt, da deren Kollisionsfolge abweichen kann.
-    public static let currentLogicVersion: Int = 4
+    /// v5: Auch Wackelasteroidenexplosionen respektieren die Schutzfrist.
+    public static let currentLogicVersion: Int = 5
 
     public let version: Int
     public let seed: UInt64
