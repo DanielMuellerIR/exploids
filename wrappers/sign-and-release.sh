@@ -309,6 +309,12 @@ if [ "$FINDER_LAYOUT" = "1" ]; then
 mkdir -p "$MOUNT_DIR/.background"
 cp "$BACKGROUND_SRC" "$MOUNT_DIR/.background/background.png"
 chflags hidden "$MOUNT_DIR/.background"
+# Finder übernimmt frisch eingehängte Volumes verzögert in sein Objektmodell.
+for attempt in {1..20}; do
+  osascript -e "tell application \"Finder\" to get name of disk \"$VOLNAME\"" \
+    >/dev/null 2>&1 && break
+  sleep 0.5
+done
 osascript <<APPLESCRIPT
 tell application "Finder"
   tell disk "$VOLNAME"
