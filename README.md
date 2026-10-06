@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids app icon"></p>
 
-A native macOS Asteroids-style arcade shooter (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and every sound effect is synthesized in real time; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Two game modes, nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
+A native Asteroids-style arcade shooter for macOS and iOS (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and every sound effect is synthesized in real time; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Two game modes, nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
 
 ## Download
 
@@ -24,7 +24,7 @@ Prefer to build from source? See [Build & run](#build--run-cli--headless-friendl
 
 ## Build & run (CLI / headless‑friendly)
 
-No Xcode project — a Swift Package Manager executable compiled into a `.app` bundle. The whole toolchain is scriptable (handy for automation and AI agents):
+The macOS build uses Swift Package Manager and compiles into a `.app` bundle; the iOS port has its own Xcode project under `ios/`. The whole toolchain is scriptable (handy for automation and AI agents):
 
 ```bash
 ./build-app.sh                                   # build -> Exploids.app (double-clickable)
@@ -128,7 +128,7 @@ Exploids is a hobby clone, not a product. For honest context, with the weak spot
 - **Mechanics:** the rotating Mad Meteoroids mode, gravity wells and imploding asteroids are specific to Exploids.
 - **Stack:** native Swift 6 / SpriteKit / AppKit on Apple Silicon, versus a C/SDL port.
 
-**Where Maelstrom is plainly ahead:** it has single- *and* multiplayer (cooperative and competitive), game-controller and touch support, runs on more platforms, and carries 30 years of refinement and community. Exploids is single-player, primarily keyboard and macOS-desktop (an iOS touch target is an early work in progress), and young. It also ships non-commercial music (see below), a restriction Maelstrom's CC-licensed assets don't impose.
+**Where Maelstrom is plainly ahead:** it has single- *and* multiplayer (cooperative and competitive), game-controller and touch support, runs on more platforms, and carries 30 years of refinement and community. Exploids offers single-player gameplay with keyboard controls on macOS and touch controls on iOS. It also ships non-commercial music (see below), a restriction Maelstrom's CC-licensed assets don't impose.
 
 ## Licensing
 
@@ -136,9 +136,11 @@ Exploids is a hobby clone, not a product. For honest context, with the weak spot
 - **Heading font** `Sources/GameCore/Fonts/PressStart2P-Regular.ttf` (Press Start 2P): **SIL Open Font License 1.1** (`Sources/GameCore/Fonts/OFL.txt`) — free for any use, including commercial.
 - **⚠️ Music** `Sources/GameCore/Music/*.mp3` (two chiptune tracks): generated with **[musely.ai](https://musely.ai)** on its Free Plan — **personal, non‑commercial use only**. These tracks are **not** covered by the MIT code license and keep musely.ai's separate terms. Before any commercial use, replace them with your own / CC0 / commercially‑licensed music. All other audio is synthesized at runtime (no third‑party rights).
 
-## iOS target (work in progress)
+## iOS port
 
-The repo also contains an iOS app target under `ios/` (SpriteKit + on‑screen touch controls) that links the same `GameCore` engine as the macOS build. It is a young work in progress and not yet released.
+The iOS port under `ios/` uses SpriteKit, on-screen touch controls and the same `GameCore` engine as the macOS build. It supports iPhone and iPad running iOS 17 or later in landscape orientation. Touch controls, simultaneous input, release, background/resume, audio and display passed an iPhone device check on 2026-10-01.
+
+The app icon and asset catalog are present; Xcode generates the launch screen. `bash ios/generate.sh` creates the Xcode project and copies its version from `VERSION`. GameController support is not implemented yet. An App Store release is currently not planned.
 
 ## Requirements
 

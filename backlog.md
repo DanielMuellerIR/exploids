@@ -1,6 +1,8 @@
 # Aktiver Backlog
 
 Aktuell gibt es keine beauftragte offene Umsetzung oder Geräteabnahme.
+Die iOS-App mit Touch-Steuerung ist vorhanden; die erfolgreiche iPhone-Abnahme
+vom 2026-10-01 ist in `CHANGELOG.md` unter 0.14.12 dokumentiert.
 
 ## Zurückgestellte Arbeiten
 

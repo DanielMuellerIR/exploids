@@ -6,7 +6,7 @@ let package = Package(
     platforms: [
         // GameCore ist plattformunabhängig (SpriteKit/AVFoundation) und gegen das iOS-SDK
         // verifiziert kompilierbar. Die App-Shell ExploidsMac ist weiterhin macOS-only; ein
-        // iOS-App-Target (Xcode) wird die GameCore-Library als Abhängigkeit einbinden.
+        // iOS-App-Target unter ios/ (Xcode) bindet die GameCore-Library als Abhängigkeit ein.
         // macOS 11 ist die echte API-Untergrenze (UTType.gif im GIF-Export);
         // alles andere (AVAudioSourceNode, Concurrency) liegt darunter.
         .macOS(.v11),
@@ -15,13 +15,13 @@ let package = Package(
     products: [
         // Produktname bleibt "exploids", damit build-app.sh die Binary unverändert findet.
         .executable(name: "exploids", targets: ["ExploidsMac"]),
-        // GameCore zusätzlich als Library-Produkt: So kann das iOS-App-Target (Xcode)
-        // dieses Package als lokale Abhängigkeit einbinden und GameCore linken.
+        // GameCore zusätzlich als Library-Produkt: Das iOS-App-Target (Xcode)
+        // bindet dieses Package als lokale Abhängigkeit ein und linkt GameCore.
         .library(name: "GameCore", targets: ["GameCore"])
     ],
     targets: [
-        // Plattformunabhängige Spiel-Engine als Library – kann später auch von einem
-        // iOS-App-Target (Xcode) als Package-Abhängigkeit eingebunden werden.
+        // Plattformunabhängige Spiel-Engine als Library, die von beiden App-Shells
+        // eingebunden wird (SwiftPM auf macOS, Xcode-Package-Abhängigkeit auf iOS).
         .target(
             name: "GameCore",
             path: "Sources/GameCore",

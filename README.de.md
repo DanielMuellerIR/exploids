@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids App-Icon"></p>
 
-Ein nativer macOS-Arcade-Shooter im Asteroids-Stil (Swift 6 · SpriteKit) mit einem an den Commodore 64 angelehnten Vektor-Look — in moderner hoher Auflösung und butterweicher Bildrate (Apple Silicon, ProMotion 120 Hz). Fast jede Grafik ist prozedurale Vektor-Geometrie — nur die beiden Bosse nutzen getracte Vektor-Konturen als Texturen — und jeder Soundeffekt wird in Echtzeit synthetisiert; mitgeliefert sind zwei Chiptune-Musikstücke, die Boss-Texturen und ein optionales Paket aufgenommener Soundeffekte. Zwei Spielmodi, neun Power-Ups, Gravitationsfelder, gegnerische UFOs, zwei Bosse, ein Pixel-Font-HUD und ein deterministisches Replay-System, das Promo-GIFs headless rendern kann.
+Ein nativer Arcade-Shooter für macOS und iOS im Asteroids-Stil (Swift 6 · SpriteKit) mit einem an den Commodore 64 angelehnten Vektor-Look — in moderner hoher Auflösung und butterweicher Bildrate (Apple Silicon, ProMotion 120 Hz). Fast jede Grafik ist prozedurale Vektor-Geometrie — nur die beiden Bosse nutzen getracte Vektor-Konturen als Texturen — und jeder Soundeffekt wird in Echtzeit synthetisiert; mitgeliefert sind zwei Chiptune-Musikstücke, die Boss-Texturen und ein optionales Paket aufgenommener Soundeffekte. Zwei Spielmodi, neun Power-Ups, Gravitationsfelder, gegnerische UFOs, zwei Bosse, ein Pixel-Font-HUD und ein deterministisches Replay-System, das Promo-GIFs headless rendern kann.
 
 > Der Text im Spiel ist auf Englisch.
 
@@ -26,7 +26,7 @@ Lieber selbst aus dem Quellcode bauen? Siehe [Bauen & starten](#bauen--starten-k
 
 ## Bauen & starten (Kommandozeile / headless-tauglich)
 
-Kein Xcode-Projekt — ein Swift-Package-Manager-Executable, das zu einem `.app`-Bundle kompiliert wird. Die gesamte Toolchain ist skriptbar (praktisch für Automatisierung und KI-Agenten):
+Der macOS-Build verwendet Swift Package Manager und wird zu einem `.app`-Bundle kompiliert; der iOS-Port hat ein eigenes Xcode-Projekt unter `ios/`. Die gesamte Toolchain ist skriptbar (praktisch für Automatisierung und KI-Agenten):
 
 ```bash
 ./build-app.sh                                   # baut -> Exploids.app (doppelklickbar)
@@ -129,7 +129,7 @@ Exploids ist ein Hobby-Klon, kein Produkt. Zur ehrlichen Einordnung, Schwachstel
 - **Mechaniken:** der rotierende Mad-Meteoroids-Modus, Gravitationsfelder und imploding-Asteroiden sind Exploids-spezifisch.
 - **Stack:** nativ Swift 6 / SpriteKit / AppKit auf Apple Silicon statt eines C/SDL-Ports.
 
-**Wo Maelstrom klar vorn liegt:** Ein- *und* Mehrspieler (kooperativ und kompetitiv), Gamepad- und Touch-Steuerung, läuft auf mehr Plattformen und trägt 30 Jahre Feinschliff und Community. Exploids ist Einzelspieler, vorrangig Tastatur und macOS-Desktop (ein iOS-Touch-Target ist ein frühes Work in Progress) und jung. Außerdem bringt es nicht-kommerzielle Musik mit (siehe unten) — eine Einschränkung, die Maelstroms CC-lizenzierte Assets nicht haben.
+**Wo Maelstrom klar vorn liegt:** Ein- *und* Mehrspieler (kooperativ und kompetitiv), Gamepad- und Touch-Steuerung, läuft auf mehr Plattformen und trägt 30 Jahre Feinschliff und Community. Exploids bietet Einzelspieler mit Tastatur auf macOS und Touch-Steuerung auf iOS. Außerdem bringt es nicht-kommerzielle Musik mit (siehe unten) — eine Einschränkung, die Maelstroms CC-lizenzierte Assets nicht haben.
 
 ## Lizenzen
 
@@ -137,9 +137,11 @@ Exploids ist ein Hobby-Klon, kein Produkt. Zur ehrlichen Einordnung, Schwachstel
 - **Überschriften-Font** `Sources/GameCore/Fonts/PressStart2P-Regular.ttf` (Press Start 2P): **SIL Open Font License 1.1** (`Sources/GameCore/Fonts/OFL.txt`) — frei für jede Nutzung, auch kommerziell.
 - **⚠️ Musik** `Sources/GameCore/Music/*.mp3` (zwei Chiptune-Stücke): erzeugt mit **[musely.ai](https://musely.ai)** im Free Plan — **nur persönliche, nicht-kommerzielle Nutzung**. Diese Stücke fallen **nicht** unter die MIT-Code-Lizenz und behalten die separaten Bedingungen von musely.ai. Vor jeder kommerziellen Nutzung durch eigene / CC0 / kommerziell lizenzierte Musik ersetzen. Alle anderen Klänge werden zur Laufzeit synthetisiert (keine Drittrechte).
 
-## iOS-Target (Work in Progress)
+## iOS-Port
 
-Das Repo enthält außerdem ein iOS-App-Target unter `ios/` (SpriteKit + Touch-Steuerung auf dem Bildschirm), das dieselbe `GameCore`-Engine wie der macOS-Build einbindet. Es ist ein junges Work in Progress und noch nicht veröffentlicht.
+Der iOS-Port unter `ios/` verwendet SpriteKit, Touch-Steuerung auf dem Bildschirm und dieselbe `GameCore`-Engine wie der macOS-Build. Er unterstützt iPhone und iPad ab iOS 17 im Querformat. Touch-Steuerung, gleichzeitige Eingaben, Loslassen, Hintergrund/Rückkehr, Audio und Darstellung wurden am 2026-10-01 auf einem iPhone erfolgreich abgenommen.
+
+App-Icon und Asset-Catalog sind vorhanden; Xcode generiert den Launch-Screen. `bash ios/generate.sh` erzeugt das Xcode-Projekt und übernimmt die Version aus `VERSION`. GameController-Unterstützung ist noch nicht implementiert. Eine App-Store-Veröffentlichung ist derzeit nicht geplant.
 
 ## Voraussetzungen
 

@@ -1,7 +1,7 @@
 # Exploids — dauerhafte Projektregeln
 
-Stand: 2026-07-14. Nativer Asteroids-Klon mit C64-inspirierter Vektorgrafik für
-macOS und einen frühen iOS-Port. Swift 6, SpriteKit, AVFoundation, SwiftPM.
+Stand: 2026-10-06. Nativer Asteroids-Klon mit C64-inspirierter Vektorgrafik für
+macOS und iOS. Swift 6, SpriteKit, AVFoundation, SwiftPM.
 
 ## Zweck und Architektur
 
@@ -10,7 +10,8 @@ Das SwiftPM-Workspace trennt:
 - `Sources/GameCore/`: plattformunabhängige Simulation, Entities, Kollision,
   Audio, deterministischer Zufall, Replay und Persistenz.
 - `Sources/ExploidsMac/`: dünne AppKit-Shell und headless Replay-/GIF-Renderer.
-- `ios/`: frühe Xcode/iOS-App, bindet `GameCore` ein; noch kein Release.
+- `ios/`: vorhandene Xcode/iOS-App mit Touch-Steuerung, bindet `GameCore` ein;
+  noch keine App-Store-Veröffentlichung.
 - `Tests/GameCoreTests/`: Tests nach Physik, Waffen, Bosse, Modi, Replay,
   Autopilot, Szenenzustand und Audio.
 - `Tests/*.sh`: Shell-Integrationstests neben `swift test`, gesammelt und
@@ -58,8 +59,9 @@ gespeicherte Größe nutzen, weil Spawn-/Wrap-/Gegnerlogik davon abhängt.
   verlieren. Die vorhandene Tracking-Invariante in Tests erhalten.
 - Fixed-Timestep nicht aufgrund eines einzelnen subjektiven Rucklerberichts ändern.
   Erst reproduzieren und messen; 120→240 ist eine Simulationsänderung mit Replaygate.
-- Der mögliche `isInvincible`-Doppelschaden ist ein offener Befund: Test mit zwei
-  Kollisionsarten im selben Frame erstellen, dann nur bei Beleg reparieren.
+- Schutzfristen nach Schildtreffer und Revive müssen sofort für weitere Kollisionen
+  im selben Schritt gelten. Die Regressionen in `GameSceneStateTests` und `ModeTests`
+  erhalten; der frühere Doppelschaden-Befund ist behoben.
 - Beam-/Waffenwirkung gegen UFO, Katze und Boss ist Matrixverhalten; Änderungen immer
   über Waffen×Gegner-Regressionstests absichern.
 
@@ -172,10 +174,13 @@ Testschritt. Testanzahlen nicht in dauerhafte Doku schreiben.
 
 ## Aktiver Backlog
 
-Kanonisch in `backlog.md`: `isInvincible`-Befund testgetrieben klären; Hochrisiko-
-Simulationsextraktion nur mit Golden Replay; iOS-Steuergefühl/Assets/Releasefähigkeit;
-Musik vor App Store ersetzen; Balance/Fixed-Timestep beobachten; Promo-GIF auswählen;
-Scroll-Modus später. Veraltete Versions-/Publish-Todos und erledigte Featurechronik
+Kanonisch in `backlog.md`: derzeit keine beauftragte offene Umsetzung oder
+Geräteabnahme. Der iOS-Port ist vorhanden; die iPhone-Abnahme ist im Changelog
+0.14.12 dokumentiert. Simulationsextraktion, iOS-GameController-Unterstützung,
+Scroll-Modus und Versionseinbettung für die separat verteilte SwiftPM-Binary sind
+zurückgestellt. Balance/Fixed-Timestep nur bei reproduzierbarem Bericht untersuchen.
+Vor einer App-Store-/kommerziellen Distribution die Musik ersetzen; aktuell bleiben
+Musik und Promo-GIF. Veraltete Versions-/Publish-Todos und erledigte Featurechronik
 gehören in Changelog/Releases, nicht hierher.
 
 ## Progressive Details und Scope
