@@ -3,7 +3,7 @@
 #
 # `swift test` fuehrt nur den in Package.swift registrierten Test-Target
 # Tests/GameCoreTests aus. Die Skripte hier pruefen, was daneben liegt: den
-# CLI-Versionspfad und die Austausch- bzw. Aufraeumlogik der Build-Skripte.
+# CLI-Version, stumme Replay-Exporte und die Austausch- bzw. Aufraeumlogik der Build-Skripte.
 # Ohne diesen Sammel-Aufruf hatte Tests/cli-version.sh gar keinen Aufrufer und
 # lief bei keinem normalen Testlauf mit.
 #
@@ -13,7 +13,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-tests="Tests/cli-version.sh Tests/build-wrapper.sh Tests/install-swap.sh Tests/notarize-cleanup.sh Tests/fleet-rules.sh Tests/release-guards.sh"
+tests="Tests/cli-version.sh Tests/replay-cli.sh Tests/build-wrapper.sh Tests/install-swap.sh Tests/notarize-cleanup.sh Tests/fleet-rules.sh Tests/release-guards.sh"
 
 failed=""
 count=0

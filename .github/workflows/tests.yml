@@ -1,6 +1,6 @@
 # CI: baut das SwiftPM-Paket und führt die GameCore-Testsuite aus.
-# Die Tests sind vollständig headless (SoundManager wird im setUp gemutet, kein GUI,
-# kein Code-Signing nötig) und deterministisch (feste Seeds, kein Wall-Clock-Timing) —
+# Die Tests sind headless (SoundManager erkennt Tests vor dem Engine-Start, kein GUI,
+# kein Code-Signing nötig). Simulationstests verwenden feste Seeds und Schritte —
 # sie laufen deshalb ohne Zusatz-Setup auf einem GitHub-macOS-Runner.
 # Releases bleiben bewusst manuell (wrappers/sign-and-release.sh) — dieser Workflow
 # testet nur, er veröffentlicht nichts.
@@ -20,9 +20,9 @@ jobs:
         run: swift --version
       - name: Bauen und testen
         run: swift test
-      # Shell-Integrationstests: CLI-Versionspfad und die Fehlerpfade der
-      # Build-Skripte. Sie arbeiten mit Attrappen in Temp-Verzeichnissen und
-      # brauchen weder Zertifikat noch Notar-Profil.
+      # Shell-Integrationstests: CLI-Version, stumme Replay-Exporte und Fehlerpfade
+      # der Build-Skripte. Renderprüfungen benötigen Metal und melden andernfalls
+      # einen ausdrücklichen Skip; Zertifikat und Notar-Profil sind nicht nötig.
       # Die Pfadprobe braucht das gestrippte Auslieferungs-Binary im Bundle.
       - name: App-Bundle für die Binärprobe bauen
         run: bash build-app.sh

@@ -2,6 +2,26 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.15.1] — 2026-10-06
+
+- Pausen stoppen alle Spielzeitfristen; losgelassene Feuertasten bleiben nach dem
+  Fortsetzen nicht aktiv. Replays erfassen Fortsetzen, Auto-Feuer und Extra-Life-Taste.
+- Gegnerlaser treffen auch beim Durchqueren des Schiffsrumpfs. Ein absorbierter
+  Asteroid vergrößert nur einen Imploder; gleichzeitige Implosionen bleiben deterministisch.
+- Event Horizon berücksichtigt das sichtbare Asteroiden-Drahtgitter beim Austritt
+  und hält das Schiff auch beim Ablauf von Compress vollständig innerhalb der Grenzen.
+- Replay-Logikversion 6 lehnt frühere Aufnahmen bei der Wiedergabe ab; Highscores
+  und gespeicherte Aufnahmebytes bleiben erhalten.
+- Der prozedurale Audio-Renderpfad verwendet vorallokierte Stimmen und wartet nicht
+  auf Steuer-Locks. iOS-Musik kann nach einem Engine-Reset bei ausgeschalteter Musik
+  wieder eingeplant werden; verworfene Track-Completions verändern die Playlist nicht.
+- GIF-/Video-Exporte halten auch bei 25 FPS das Echtzeittempo; unterstützt sind
+  1–120 FPS. Der headless Test startet ein Spiel, ausgeblendetes HUD bleibt verborgen,
+  und Testszenen verwenden eigene Fortschritts-/Highscore-Speicher.
+- Dokumentation und Medienübersicht wurden mit dem Code und den vorhandenen
+  Herkunftsbelegen abgeglichen. Event Horizon bleibt bis zur positiven Mac-Abnahme
+  auf iOS gesperrt.
+
 ## [0.15.0] — 2026-10-06
 
 - Neuer macOS-Spielmodus Event Horizon: bewegliche Spielobjekte verschwinden nach

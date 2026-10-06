@@ -1,8 +1,9 @@
 # Machbarkeit: Exploids als Webapp für Mobilgeräte
 
-Stand: 2026-08-06, gemessen an Commit `8bfcdfc`. **Status: reine Analyse, nichts beauftragt,
+Historische Messung: 2026-08-06, gemessen an Commit `8bfcdfc`. **Status: reine Analyse, nichts beauftragt,
 nichts umgesetzt.** Das Dokument hält den Befund fest, damit die Entscheidung später nicht
-neu erarbeitet werden muss.
+neu erarbeitet werden muss. Zahlen und damalige Zeilenbezüge sind historische Messwerte;
+bei einer späteren Beauftragung müssen Technik und Umfang erneut geprüft werden.
 
 ## Kurzfassung
 
@@ -10,15 +11,14 @@ Machbar, aber nicht als Portierung. `GameCore` enthält für macOS eine bedingt 
 AppKit-Tastaturbrücke und hängt darüber hinaus vollständig an SpriteKit — die Spielobjekte
 *sind* Szenengraph-Knoten und der Spielzustand liegt in ihnen. Es gibt deshalb keinen
 Simulationskern, den man herauslösen und unter einem anderen Renderer weiterbetreiben
-könnte. Eine Webversion liefe auf eine Neuimplementierung der Spiellogik hinaus. Der
-günstigere Zeitpunkt läge nach der in `backlog.md` unter Punkt 2 geplanten Entzerrung von
-`stepSimulation`.
+könnte. Eine Webversion liefe auf eine Neuimplementierung der Spiellogik hinaus. Eine reine Aufteilung von `stepSimulation` in Methoden löst diese Abhängigkeit nicht.
+Ein SpriteKit-freier Simulationskern wäre ein eigener, derzeit nicht beauftragter Umbau.
 
-## Befund: Der Kern ist nicht plattformunabhängig
+## Befund: Der Kern ist nicht rendererunabhängig
 
-`CLAUDE.md` beschreibt `Sources/GameCore/` als „plattformunabhängige Simulation". AppKit
-steckt dort nur in der per `canImport(AppKit)` abgegrenzten macOS-Tastaturbrücke; für eine
-Webversion fällt aber auch sie weg. Die wesentlich breitere Abhängigkeit ist SpriteKit.
+`GameCore` wird von macOS und iOS gemeinsam verwendet. AppKit steckt dort nur in der
+per `canImport(AppKit)` abgegrenzten macOS-Tastaturbrücke; für eine Webversion fällt
+auch sie weg. Die wesentlich breitere Abhängigkeit ist SpriteKit.
 
 **Alle Spielobjekte erben von SpriteKit-Klassen.** `Ship`, `Asteroid`, `UFO`, `PowerUp`,
 `Laser`, `GravityWell` und `OptionDrone` sind `SKShapeNode`-Unterklassen, `SpaceCat` und
@@ -35,10 +35,11 @@ arbeitet auf Weltkoordinaten, die aus Knotentransformationen entstehen.
 **Zeitverhalten liegt teils außerhalb des Fixed Timestep.** 52 `SKAction`-Aufrufe steuern
 Effekte über SpriteKits eigene Zeitachse statt über `stepSimulation`.
 
-Tatsächlich portabel ist nur ein kleiner Teil: `Collision.swift`, `GameRandom.swift`,
-`VectorMath.swift` und `Replay.swift` — zusammen rund 350 der etwa 9.100 Zeilen in
-`GameCore`. Diese vier Dateien wären in jeder Zielsprache fast unverändert nachbaubar; der
-Rest nicht.
+Leicht übertragbar sind die Rechenoperationen in `Collision.swift` und
+`VectorMath.swift`, der PRNG in `GameRandom.swift` und das Datenformat in `Replay.swift`.
+Die vier Dateien umfassen im damaligen Stand zusammen rund 350 der etwa 9.100 Zeilen
+in `GameCore`. `Collision.swift` enthält allerdings auch SpriteKit-/Entity-Wrapper und
+ist deshalb selbst kein unabhängig kompilierbarer Web-Kern.
 
 ## Bewertung der zwei Wege
 
@@ -61,8 +62,8 @@ Der technisch passendere Weg. Drei Dinge sprechen dafür:
   in einem Callback von `AVAudioSourceNode`
   ([SoundManager.swift:242](../Sources/GameCore/SoundManager.swift#L242)) — das entspricht
   direkt einem `AudioWorkletProcessor` im Web-Audio-System.
-- Der Fixed Timestep von 1/120 s bleibt erhalten, indem pro Bildschirmaktualisierung zwei
-  Simulationsschritte laufen. Da der Timestep schon von der Bildrate entkoppelt ist, ist das
+- Der Fixed Timestep von 1/120 s bleibt erhalten, indem ein Zeitakkumulator pro Bildschirmaktualisierung die nötigen
+  Simulationsschritte ausführt (bei 60 Hz gewöhnlich zwei, bei 120 Hz einen). Da der Timestep schon von der Bildrate entkoppelt ist, ist das
   kein Sonderfall, sondern der vorgesehene Mechanismus.
 
 Dagegen steht der Umfang: rund 9.000 Zeilen Spiellogik plus die zugehörigen Tests wären neu
@@ -78,14 +79,14 @@ libm-Implementierung unter Swift und einer JavaScript-Laufzeit geringfügig vers
 Werte. Über die Zehntausenden Schritte eines Laufs driftet das auseinander.
 
 Bestehende Replaydateien liefen in einer Webversion also anders ab. Da Replay laut
-`CLAUDE.md` ein Kernvertrag des Projekts ist und nicht bloß eine Zusatzfunktion, ist das eine
+`AGENTS.md` ein Kernvertrag des Projekts ist und nicht bloß eine Zusatzfunktion, ist das eine
 bewusste Entscheidung, keine Nebensache: Die Webversion bekäme faktisch einen eigenen
 Replay-Raum. Ein plattformübergreifend bitgenaues Replay wäre nur mit eigener
 Festkomma-Arithmetik oder eigenen Winkelfunktionen zu haben — beides ein Vorhaben für sich.
 
 ### Die Musiklizenz wird vom Zukunfts- zum Sofortproblem
 
-`backlog.md` verschiebt unter Punkt 4 den Austausch der beiden Free-Plan-Musiktracks auf den
+`backlog.md` verschiebt den Austausch der beiden Free-Plan-Musiktracks auf den
 Zeitpunkt „vor App-Store- oder kommerzieller Distribution". Für eine Webapp greift diese
 Reihenfolge nicht: Eine öffentlich erreichbare Seite liefert `neon-vectors.mp3` und
 `asteroid-storm.mp3` als Datei an jeden Besucher aus. Das ist Weiterverbreitung der
@@ -108,8 +109,9 @@ Anbieters ist daher **vor** dem ersten öffentlichen Deploy zu prüfen, nicht da
 
 ## Empfohlenes Vorgehen, falls das Thema aufgegriffen wird
 
-1. Zuerst `backlog.md` Punkt 2 abschließen. Ist die Simulation einmal sauber vom Szenengraph
-   getrennt, schrumpft eine Webversion von „alles neu" auf „Renderer und Audio neu".
+1. Den aktuellen Stand und den Umfang erneut bewerten. Der zurückgestellte Methoden-Split
+   trennt die Simulation nicht vom Szenengraph. Ein SpriteKit-freier Kern müsste separat
+   beauftragt und gegen Replays geprüft werden.
 2. Danach ein kleiner Prototyp: Schiff, Asteroiden, Kollision und Touch-Steuerung auf
    Canvas2D, um Steuergefühl und Bildrate auf einem echten Mobilgerät zu messen, bevor
    Aufwand in die Breite geht.

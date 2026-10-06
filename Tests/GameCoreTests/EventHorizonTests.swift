@@ -314,4 +314,46 @@ final class EventHorizonTests: GameCoreTestCase {
             }
         }
     }
+    func testCompressExpiryCannotLeaveEnlargedHullOutside() {
+        let (scene, view) = makeScene(); _ = view
+        scene.collectPowerUpForTesting(type: .compress)
+        scene.ship.position = CGPoint(x: 400, y: 300)
+        while scene.gameTime < 24 - GameScene.simStep / 2 { scene.advanceOneStep() }
+        scene.ship.position = CGPoint(x: 493, y: 300)
+        scene.ship.velocity = CGPoint(x: -1, y: 0)
+        scene.advanceOneStep()
+        XCTAssertEqual(scene.ship.xScale, 1)
+        XCTAssertLessThan(scene.ship.velocity.x, 0)
+        XCTAssertTrue(scene.eventHorizonScreenBounds.insetBy(dx: -0.001, dy: -0.001)
+            .contains(scene.eventHorizonBounds(scene.ship.getWorldVertices(), padding: scene.ship.lineWidth / 2)))
+    }
+
+    func testVisibleAsteroidWireframeRemainsAfterSilhouetteExit() throws {
+        let (scene, view) = makeScene(); _ = view
+        var candidate: Asteroid?
+        var visibleMinX: CGFloat = 0
+        for seed: UInt64 in 1...100 {
+            var rng = GameRandom(seed: seed)
+            let asteroid = Asteroid(sizeClass: .medium, using: &rng)
+            asteroid.pitch = 0.4; asteroid.yaw = 0.8
+            asteroid.refreshWireframe()
+            let wire = try XCTUnwrap(asteroid.children.compactMap { $0 as? SKShapeNode }.first)
+            let visible = try XCTUnwrap(wire.path).boundingBoxOfPath
+            let silhouette = scene.eventHorizonBounds(asteroid.getWorldVertices(), padding: asteroid.lineWidth / 2)
+            if visible.minX < silhouette.minX - 2 {
+                candidate = asteroid; visibleMinX = visible.minX - wire.lineWidth / 2; break
+            }
+        }
+        let asteroid = try XCTUnwrap(candidate, "Es muss einen Drahtgitterüberstand geben")
+        asteroid.hasEnteredScreen = true
+        asteroid.position = CGPoint(x: 500 - visibleMinX - 1, y: 250)
+        scene.addAsteroidForTesting(asteroid)
+        XCTAssertGreaterThan(scene.eventHorizonBounds(asteroid.getWorldVertices(), padding: asteroid.lineWidth / 2).minX, 500)
+        scene.removeExitedEventHorizonEntities()
+        XCTAssertNotNil(asteroid.parent, "Sichtbares Drahtgitter darf nicht vorzeitig entfernt werden")
+        asteroid.position.x += 4
+        scene.removeExitedEventHorizonEntities()
+        XCTAssertNil(asteroid.parent)
+    }
+
 }

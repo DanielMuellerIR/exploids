@@ -42,7 +42,7 @@ extension GameScene {
     /// Die Grenzen stammen aus fester Geometrie, niemals aus SKActions oder dem Renderzeitpunkt.
     func removeExitedEventHorizonEntities() {
         activeAsteroids.removeAll { asteroid in
-            let bounds = eventHorizonBounds(asteroid.getWorldVertices(), padding: asteroid.lineWidth / 2)
+            let bounds = eventHorizonBounds(asteroid.getWorldBoundaryVertices(), padding: asteroid.lineWidth / 2)
             if bounds.intersects(eventHorizonScreenBounds) { asteroid.hasEnteredScreen = true }
             return removeIfExited(asteroid, bounds: bounds, canEnter: !asteroid.hasEnteredScreen)
         }

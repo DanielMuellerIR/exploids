@@ -295,7 +295,7 @@ struct Main {
                                        [--from F] [--max-frames N] [--auto-fire] [--show-hud]
                             Headlessly render a replay file to an animated GIF (no window). The sim runs
                             at the recorded scene size by default (--sim-scale overrides); --scale sets the
-                            GIF output size. Default output 480x360, fps 30, stride auto (real-time), HUD
+                            GIF output size. FPS range 1–120 (default 30); output 480x360, stride auto (real-time), HUD
                             hidden. --from picks a start frame (segment of a long run).
               --render-last-replay --out <gif> [same options as --render-replay]
                             Render the newest archived replay (the last game played) to a GIF. Replays
@@ -361,6 +361,7 @@ struct Main {
             let scene = GameScene(size: CGSize(width: 1024, height: 768))
             view.presentScene(scene)
             
+            scene.startNewGame(seed: 42)
             print("Starting headless simulation...")
             scene.simulateKeyDown(keyCode: 13) // W key (Thrust)
             scene.simulateKeyDown(keyCode: 0)  // A key (Rotate CCW)
@@ -578,7 +579,7 @@ struct Main {
         if let s = argValue(arguments, "--sim-scale"), let sim = Int(s), sim > 0 {
             options.simWidth = sim; options.simHeight = sim * 3 / 4
         }
-        if let f = argValue(arguments, "--fps"), let fps = Int(f), fps > 0 { options.fps = fps }
+        if let f = argValue(arguments, "--fps"), let fps = Int(f) { options.fps = fps }
         if let st = argValue(arguments, "--stride"), let stride = Int(st), stride > 0 { options.frameStride = stride }
         if let fr = argValue(arguments, "--from"), let from = Int(fr), from >= 0 { options.startFrame = from }
         if let mx = argValue(arguments, "--max-frames"), let mx2 = Int(mx), mx2 >= 0 { options.maxFrames = mx2 }
@@ -629,7 +630,7 @@ struct Main {
             if let s = argValue(arguments, "--sim-scale"), let sim = Int(s), sim > 0 {
                 options.simWidth = sim; options.simHeight = sim * 3 / 4
             }
-            if let f = argValue(arguments, "--fps"), let fps = Int(f), fps > 0 { options.fps = fps }
+            if let f = argValue(arguments, "--fps"), let fps = Int(f) { options.fps = fps }
             if let fr = argValue(arguments, "--from"), let from = Int(fr), from >= 0 { options.startFrame = from }
             if let mx = argValue(arguments, "--max-frames"), let mx2 = Int(mx), mx2 >= 0 { options.maxFrames = mx2 }
             if arguments.contains("--hide-hud") { options.hideHUD = true }

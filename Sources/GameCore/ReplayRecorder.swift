@@ -34,8 +34,8 @@ public final class ReplayRecorder {
     public var nextFrameIndex: UInt32 { steps }
 
     /// Hält ein Tastenereignis fest (mit dem aktuellen Schritt-Index).
-    public func recordEvent(keyCode: UInt16, isDown: Bool) {
-        events.append(InputEvent(frameIndex: nextFrameIndex, keyCode: keyCode, isDown: isDown))
+    public func recordEvent(keyCode: UInt16, isDown: Bool, characters: String? = nil) {
+        events.append(InputEvent(frameIndex: nextFrameIndex, keyCode: keyCode, isDown: isDown, characters: characters))
     }
 
     /// Zählt einen ausgeführten Simulationsschritt mit.

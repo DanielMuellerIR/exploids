@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids App-Icon"></p>
 
-Ein nativer Arcade-Shooter für macOS und iOS im Asteroids-Stil (Swift 6 · SpriteKit) mit einem an den Commodore 64 angelehnten Vektor-Look — in moderner hoher Auflösung und butterweicher Bildrate (Apple Silicon, ProMotion 120 Hz). Fast jede Grafik ist prozedurale Vektor-Geometrie — nur die beiden Bosse nutzen getracte Vektor-Konturen als Texturen — und jeder Soundeffekt wird in Echtzeit synthetisiert; mitgeliefert sind zwei Chiptune-Musikstücke, die Boss-Texturen und ein optionales Paket aufgenommener Soundeffekte. Drei Spielmodi auf macOS (zwei auf iOS), neun Power-Ups, Gravitationsfelder, gegnerische UFOs, zwei Bosse, ein Pixel-Font-HUD und ein deterministisches Replay-System, das Promo-GIFs headless rendern kann.
+Ein nativer Arcade-Shooter für macOS und iOS im Asteroids-Stil (Swift 6 · SpriteKit) mit einem an den Commodore 64 angelehnten Vektor-Look — in moderner hoher Auflösung und butterweicher Bildrate (Apple Silicon, ProMotion 120 Hz). Fast jede Grafik ist prozedurale Vektor-Geometrie — nur die beiden Bosse nutzen getracte Vektor-Konturen als Texturen — und die Soundeffekte stammen aus Echtzeitsynthese oder optionalen gebündelten Aufnahmen; mitgeliefert sind zwei Chiptune-Musikstücke, die Boss-Texturen und ein optionales Paket aufgenommener Soundeffekte. Drei Spielmodi auf macOS (zwei auf iOS), neun Power-Ups, Gravitationsfelder, gegnerische UFOs, zwei Bosse, ein Pixel-Font-HUD und ein deterministisches Replay-System, das Promo-GIFs headless rendern kann.
 
 > Der Text im Spiel ist auf Englisch.
 
@@ -80,10 +80,10 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 | `R` | Schnellfeuer | Stark erhöhte Feuerrate |
 | `O` | Option | Eine Satelliten-Drohne feuert mit |
 | `B` | Bombe | Bildschirmräumende Explosion |
-| `L` | Laserstrahl | Halten für einen sweependen, randumlaufenden Strahl |
+| `L` | Laserstrahl | Halten für einen sweependen Strahl; endet in Event Horizon am Rand, läuft in den anderen Modi um |
 | `T` | Heck | Zusätzlicher Schuss nach hinten |
 | `C` | Kompress | Schrumpft das Schiff auf ~30 % (kleineres Ziel) |
-| `+` | Extra-Leben | Wiederbelebung mittig mit kurzer Unverwundbarkeit |
+| `+` | Extra-Leben | Wiederbelebung am Startpunkt mit kurzer Unverwundbarkeit |
 
 ## Gegner & Bosse
 
@@ -91,7 +91,7 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 
 - **Gegnerische UFOs** — ein großes grünes UFO, das in zufällige Richtungen feuert, und ein kleines pinkes, das gezielt auf das Schiff schießt. Beide gleiten mit leichtem Sog in Richtung Spieler herein.
 - **Gravitationsfelder** — Schwarze Löcher, die den Raum verzerren, alles nach innen ziehen und das Schiff bei Berührung zermalmen.
-- **Implodierende Asteroiden** — magenta umrandete Brocken, die beim Abschuss zu einem frischen Gravitationsfeld kollabieren.
+- **Implodierende Asteroiden** — magenta umrandete Brocken, die beim Abschuss zu einem frischen Gravitationsfeld kollabieren; in Event Horizon entstehen keine zusätzlichen Löcher.
 - **Wobble-Bomben** — rote Brocken, die pulsieren, in Stufen wachsen und dann in einen Fächer schneller Splitter detonieren.
 - **Weltraumkatze** — ein pirschender Boss, der hinter Asteroiden in Deckung geht, deine Bewegung vorhält und mit Zwillings-Augenstrahlen feuert; drei Treffer vertreiben sie.
 - **Das Idol** — ein großer schwebender Steinkopf, der hereingleitet, deinen Schüssen ausweicht und eine Armada UFOs aus dem Mund speit; zehn Treffer zerstören ihn.
@@ -99,7 +99,7 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 ## Steuerung
 
 - **Startbildschirm:** ▲/▼ Spielmodus wechseln · ◀/▶ Startlevel wählen · Leertaste/Enter starten · D (oder 30 s Leerlauf) eine Autopilot-Demo ansehen · I Glossar · 1–5 ein Highscore-Replay ansehen
-- **Im Spiel:** Pfeiltasten / WASD zum Fliegen · Leertaste zum Schießen (halten für Dauerfeuer; mit aktivem Laserstrahl-Power-up halten, um den Strahl zu schwenken) · M Musik an/aus · Esc Pause / Beenden
+- **Im Spiel:** Pfeiltasten / WASD zum Fliegen · Leertaste zum Schießen (halten für Dauerfeuer; mit aktivem Laserstrahl-Power-up halten, um den Strahl zu schwenken) · F Auto-Feuer umschalten · M Musik an/aus · N Synth-/Aufnahme-Effekte umschalten · Esc Pause / Beenden
 - **Replay-Ansicht:** Esc verlässt das Replay zurück zum Startbildschirm.
 - Highscores werden lokal gespeichert; bei einer Platzierung den Namen auf der Liste eintragen.
 - **Cheat:** Taste `#` gibt ein Extra‑Leben — praktisch zum Testen oder für einen entspannten Durchlauf ohne Herausforderung.
@@ -108,6 +108,8 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 
 Die Simulation ist **deterministisch**: Jeder Durchlauf wird allein als Seed plus deine Tastendrücke aufgezeichnet und lässt sich dadurch bit-genau reproduzieren. Daraus folgen zwei Dinge:
 
+- Während Aufnahme und Wiedergabe skaliert eine Größenänderung nur die Ansicht; die Simulation behält ihre Startgröße. Der Startbildschirm passt sich anschließend wieder ans Fenster an.
+- Die Wiedergabe benötigt die passende Simulations-Logikversion. Version 0.15.1 verwendet Logikversion 6 und lehnt ältere Aufnahmen ab; deren gespeicherte Bytes und Highscores bleiben erhalten.
 - **Highscore-Läufe erneut ansehen** — im Startbildschirm `1`–`5` drücken, um den Eintrag exakt so abzuspielen, wie er gespielt wurde; `Esc` verlässt ihn.
 - **Promo-GIFs headless rendern** — ein Replay direkt auf der Kommandozeile in ein sauberes, cursorfreies animiertes GIF verwandeln, ganz ohne Fenster:
 
@@ -121,12 +123,12 @@ exploids --render-replay run.replay --out run.gif --scale 480 --fps 30
 
 Exploids ist ein Hobby-Klon, kein Produkt. Zur ehrlichen Einordnung, Schwachstellen ausdrücklich eingeschlossen:
 
-**Gegenüber dem Original-Asteroids (1979)** — das Original ist monochrome Vektorgrafik mit splittenden Brocken, zwei Untertassen, Hyperspace und einem Extra-Leben bei 10.000 Punkten. Exploids behält diesen Kern und ergänzt einen zweiten, rotierenden Modus (Mad Meteoroids), neun Power-Ups, Gravitationsfelder, imploding- und wobbling-Spezialasteroiden, zwei Bosse, einen sweependen Laserstrahl, Farbe, Chiptune-Musik, ein In-Game-Glossar, lokale Highscore-Eingabe und deterministische Replays, die sich erneut ansehen oder als GIF exportieren lassen.
+**Gegenüber dem Original-Asteroids (1979)** — das Original ist monochrome Vektorgrafik mit splittenden Brocken, zwei Untertassen, Hyperspace und einem Extra-Leben bei 10.000 Punkten. Exploids behält diesen Kern und ergänzt Mad Meteoroids mit Rotation und Event Horizon mit reflektierenden Schiffsgrenzen, neun Power-Ups, Gravitationsfelder, imploding- und wobbling-Spezialasteroiden, zwei Bosse, einen sweependen Laserstrahl, Farbe, Chiptune-Musik, ein In-Game-Glossar, lokale Highscore-Eingabe und deterministische Replays, die sich erneut ansehen oder als GIF exportieren lassen.
 
-**Gegenüber Maelstrom** — [Maelstrom](https://github.com/libsdl-org/Maelstrom) (Ambrosia, 1992; seit 1995 GPL-SDL-Port, heute ein SDL2/SDL3-Build, der auf Apple Silicon läuft) ist der bekannteste noch gepflegte Open-Source-Asteroids-Klon für den Mac und der fairere Maßstab: Power-Ups, Bonus-Objekte und satten Sound hat er bereits. Worin sich Exploids tatsächlich unterscheidet:
+**Gegenüber Maelstrom** — [Maelstrom](https://github.com/libsdl-org/Maelstrom) (Ambrosia, 1992; seit 1995 GPL-SDL-Port, heute ein SDL3-Build, der auf Apple Silicon läuft) ist der bekannteste noch gepflegte Open-Source-Asteroids-Klon für den Mac und der fairere Maßstab: Power-Ups, Bonus-Objekte und satten Sound hat er bereits. Worin sich Exploids tatsächlich unterscheidet:
 
 - **Rendering:** Exploids ist prozedural gezeichnete Echtzeit-*Vektor*-Geometrie in hoher Auflösung und mit 120 Hz ProMotion; Maelstrom ist Bitmap-/Sprite-Rastergrafik.
-- **Audio:** Exploids synthetisiert die Soundeffekte live auf dem Audio-Thread (nur die zwei Musikstücke sind Dateien); Maelstrom spielt Samples ab.
+- **Audio:** Exploids synthetisiert die Soundeffekte live auf dem Audio-Thread und bietet optionale gebündelte Effektaufnahmen; Maelstrom spielt Samples ab.
 - **Mechaniken:** der rotierende Mad-Meteoroids-Modus, Gravitationsfelder und imploding-Asteroiden sind Exploids-spezifisch.
 - **Stack:** nativ Swift 6 / SpriteKit / AppKit auf Apple Silicon statt eines C/SDL-Ports.
 
@@ -136,7 +138,7 @@ Exploids ist ein Hobby-Klon, kein Produkt. Zur ehrlichen Einordnung, Schwachstel
 
 - **Code:** [MIT](LICENSE) — © 2026 Daniel Müller.
 - **Überschriften-Font** `Sources/GameCore/Fonts/PressStart2P-Regular.ttf` (Press Start 2P): **SIL Open Font License 1.1** (`Sources/GameCore/Fonts/OFL.txt`) — frei für jede Nutzung, auch kommerziell.
-- **⚠️ Musik** `Sources/GameCore/Music/*.mp3` (zwei Chiptune-Stücke): erzeugt mit **[musely.ai](https://musely.ai)** im Free Plan — **nur persönliche, nicht-kommerzielle Nutzung**. Diese Stücke fallen **nicht** unter die MIT-Code-Lizenz und behalten die separaten Bedingungen von musely.ai. Vor jeder kommerziellen Nutzung durch eigene / CC0 / kommerziell lizenzierte Musik ersetzen. Alle anderen Klänge werden zur Laufzeit synthetisiert (keine Drittrechte).
+- **⚠️ Musik** `Sources/GameCore/Music/*.mp3` (zwei Chiptune-Stücke): erzeugt mit **[musely.ai](https://musely.ai)** im Free Plan — **nur persönliche, nicht-kommerzielle Nutzung**. Diese Stücke fallen **nicht** unter die MIT-Code-Lizenz und behalten die separaten Bedingungen von musely.ai. Vor jeder kommerziellen Nutzung durch eigene / CC0 / kommerziell lizenzierte Musik ersetzen. Prozedurale Effekte entstehen im Code; die optionalen SFX-Aufnahmen haben eine eigene Herkunft. Siehe [gebündelte Assets](docs/assets.md).
 
 ## iOS-Port
 

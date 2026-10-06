@@ -300,7 +300,7 @@ final class PhysicsTests: GameCoreTestCase {
     /// Sichert ab, dass gespawnte Asteroiden auf einen Punkt im inneren Spielfeld zielen, ihre
     /// Bahn also das sichtbare Rechteck durchquert (kein Vorbeifliegen / Zähler-Leak).
     func testSpawnedAsteroidsAimIntoPlayfield() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.transitionTo(.playing)

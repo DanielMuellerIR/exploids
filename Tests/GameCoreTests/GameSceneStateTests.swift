@@ -11,7 +11,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     // MARK: - GameScene State Tests
     
     func testGameSceneCollisionAndRestart() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -43,7 +43,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
     
     func testShieldProtectsAgainstAsteroidAndUFOInSameStep() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: 42, startLevel: 1)
@@ -63,7 +63,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
 
     func testShieldProtectsAgainstMultipleEnemyLasersInSameStep() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: 42, startLevel: 1)
@@ -81,7 +81,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
 
     func testReviveProtectsAgainstTwoGravityWellsInSameStep() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: 42, startLevel: 1)
@@ -112,7 +112,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
     
     func testAsteroidDestructionAndScoring() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -146,7 +146,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
     
     func testGameSceneStateTransitions() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -174,11 +174,13 @@ final class GameSceneStateTests: GameCoreTestCase {
     
     func testInitialsEntryAndHighScoreRecording() {
         let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let suite = "exploids-initials-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        scene.useUserDefaultsForTesting(defaults)
+        addTeardownBlock { UserDefaults.standard.removePersistentDomain(forName: suite) }
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
-        // Clear user defaults first to ensure clean state
-        UserDefaults.standard.removeObject(forKey: "exploids_high_scores")
         scene.loadHighScores()
         scene.restartGame()
         
@@ -220,7 +222,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
     
     func testAsteroidSplitting() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -249,7 +251,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
     
     func testDifficultyScaling() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -273,7 +275,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     /// Feuertaste: Der erste Tastendruck feuert sofort genau einen normalen Laser.
     /// (Der frühere Auflade-Schuss wurde durch Dauerfeuer-beim-Halten ersetzt.)
     func testFirePressFiresOneNormalLaser() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
 
@@ -292,7 +294,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     
     /// Shield ist additiv bis Stufe 3 und jede Stufe absorbiert einen Treffer.
     func testShieldStacksToThreeAndAbsorbsHits() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -308,7 +310,7 @@ final class GameSceneStateTests: GameCoreTestCase {
 
     /// Die „F"-Taste schaltet Auto-Feuer um (Einstellungen / global).
     func testAutoFireToggle() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
 
@@ -321,7 +323,7 @@ final class GameSceneStateTests: GameCoreTestCase {
 
     /// Beim Revive (Extra Life) gehen alle aktiven Power-ups verloren.
     func testReviveLosesAllPowerUps() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -339,7 +341,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
 
     func testPowerUpCollection() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -363,7 +365,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
     
     func testUfoShooting() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -393,7 +395,7 @@ final class GameSceneStateTests: GameCoreTestCase {
     }
     
     func testGravityWellPull() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         

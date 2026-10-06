@@ -12,7 +12,7 @@ final class PowerUpWeaponTests: GameCoreTestCase {
 
     /// Compress verkleinert das Schiff (Skalierung 0.3) und damit auch die Kollisionsfläche.
     func testCompressPowerUpShrinksShip() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -34,7 +34,7 @@ final class PowerUpWeaponTests: GameCoreTestCase {
     /// kleine Asteroiden verschwinden, große splitten (Original weg, Kinder da), implodierende
     /// wachsen beim ersten Treffer statt zu verschwinden.
     func testScreenBombHitsEveryAsteroidOnceLikeAShot() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -72,7 +72,7 @@ final class PowerUpWeaponTests: GameCoreTestCase {
 
     /// Rear Laser feuert zusätzlich nach hinten.
     func testRearLaserFiresBackward() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -91,7 +91,7 @@ final class PowerUpWeaponTests: GameCoreTestCase {
 
     /// Extra Life: tödlicher Treffer führt nicht zum Game Over, sondern zum Revive in der Mitte.
     func testExtraLifeRevivesInsteadOfGameOver() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -115,7 +115,7 @@ final class PowerUpWeaponTests: GameCoreTestCase {
     /// Regression: Ein Extra-Leben muss auch den Tod durch ein Gravity Well (Ereignishorizont)
     /// abfangen — dieser Pfad rief früher direkt Game Over auf und umging das Extra-Leben.
     func testExtraLifeSurvivesGravityWell() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -134,7 +134,7 @@ final class PowerUpWeaponTests: GameCoreTestCase {
 
     /// Laserbeam zerstört einen Asteroiden, der in der Blickrichtung des Schiffs liegt.
     func testLaserBeamDestroysAsteroidInPath() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.transitionTo(.playing)

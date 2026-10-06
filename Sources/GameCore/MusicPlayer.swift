@@ -33,11 +33,13 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
     }()
 
     #if os(iOS)
-    // iOS: Musik als Knoten in der gemeinsamen SFX-Engine. `lock` schützt Knoten + Index gegen
-    // den Completion-Handler des Schedulers (läuft auf einem internen Audio-Thread).
+    // iOS: Musik als Knoten in der gemeinsamen SFX-Engine. Planung und Completion-Verarbeitung
+    // laufen auf der Steuerseite; der Audio-Callback reicht nur die Benachrichtigung weiter.
     private let lock = NSLock()
     private var musicNode: AVAudioPlayerNode?
     private var started = false
+    private var needsScheduling = true
+    private var scheduleGeneration = 0
     #else
     // macOS: eigenständiger AVAudioPlayer.
     private var player: AVAudioPlayer?
@@ -104,9 +106,10 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
         lock.lock()
         defer { lock.unlock() }
 
-        // Schon eingerichtet → nur aus der Pause fortsetzen.
+        // Ein Engine-Reset oder Trackende bei ausgeschalteter Musik verwirft die Planung.
         if started {
-            musicNode?.play()
+            if needsScheduling { scheduleCurrentLocked() }
+            if !needsScheduling { musicNode?.play() }
             return
         }
 
@@ -128,17 +131,21 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
         }
 
         scheduleCurrentLocked()
-        node.play()
+        if !needsScheduling { node.play() }
     }
 
     /// Nach einem Engine-Neustart: den (noch attachten) Knoten neu einplanen und weiterspielen.
     private func handleEngineReset() {
         lock.lock()
         defer { lock.unlock() }
-        guard started, let node = musicNode, isEnabled, !isSuppressed else { return }
+        guard started, let node = musicNode else { return }
+        scheduleGeneration += 1 // Completion einer verworfenen Planung darf die Playlist nicht weiterschalten.
+        needsScheduling = true
         node.stop()              // verwirft Reste, setzt den Knoten zurück
-        scheduleCurrentLocked()  // aktuellen Track neu anhängen
-        node.play()
+        if isEnabled && !isSuppressed {
+            scheduleCurrentLocked()
+            if !needsScheduling { node.play() }
+        }
     }
 
     /// Plant den aktuellen Track ein; im Completion-Handler wird auf den nächsten Track gewechselt
@@ -147,16 +154,18 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
     private func scheduleCurrentLocked() {
         guard let node = musicNode, index >= 0, index < tracks.count else { return }
         guard let file = try? AVAudioFile(forReading: tracks[index]) else { return }
+        let generation = scheduleGeneration
+        needsScheduling = false
         node.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            guard let self = self else { return }
-            self.lock.lock()
-            defer { self.lock.unlock() }
-            // Zum nächsten Track wechseln (abwechselnd, dann von vorn).
-            if !self.tracks.isEmpty {
-                self.index = (self.index + 1) % self.tracks.count
-            }
-            if self.isEnabled && !self.isSuppressed {
-                self.scheduleCurrentLocked()
+            // Planung/Dateizugriffe gehören auf die Steuerseite, nicht in den Audio-Callback.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.lock.lock()
+                defer { self.lock.unlock() }
+                guard generation == self.scheduleGeneration else { return }
+                self.needsScheduling = true
+                if !self.tracks.isEmpty { self.index = (self.index + 1) % self.tracks.count }
+                if self.isEnabled && !self.isSuppressed { self.scheduleCurrentLocked() }
             }
         }
     }

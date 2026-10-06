@@ -8,11 +8,14 @@ public struct InputEvent: Codable, Equatable, Sendable {
     public let frameIndex: UInt32
     public let keyCode: UInt16
     public let isDown: Bool
+    /// Nur gameplayrelevante Zeichen (F für Auto-Feuer, # für Extra-Leben), keine App-/Audiokommandos.
+    public let characters: String?
 
-    public init(frameIndex: UInt32, keyCode: UInt16, isDown: Bool) {
+    public init(frameIndex: UInt32, keyCode: UInt16, isDown: Bool, characters: String? = nil) {
         self.frameIndex = frameIndex
         self.keyCode = keyCode
         self.isDown = isDown
+        self.characters = characters
     }
 }
 
@@ -40,7 +43,9 @@ public struct Replay: Codable, Equatable, Sendable {
     /// v4: Schutz nach Schildtreffer/Revive gilt auch für weitere Treffer im selben Schritt.
     ///     v3-Aufnahmen werden abgelehnt, da deren Kollisionsfolge abweichen kann.
     /// v5: Auch Wackelasteroidenexplosionen respektieren die Schutzfrist.
-    public static let currentLogicVersion: Int = 5
+    /// v6: Pause/Resume und F/# werden vollständig wiedergegeben; Segmenttreffer und
+    ///     Absorption sind korrigiert, mehrere Implosionslöcher entstehen in stabiler Reihenfolge.
+    public static let currentLogicVersion: Int = 6
 
     public let version: Int
     public let seed: UInt64

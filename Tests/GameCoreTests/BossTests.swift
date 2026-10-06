@@ -46,7 +46,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testBombDropsDoNotOrphanPowerups() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
 
@@ -68,7 +68,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testFloatingHeadArmadaBypassesUFOLimit() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
 
@@ -170,7 +170,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testPlayerLaserDestroysSpaceCatAfterEnoughHits() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
 
@@ -202,7 +202,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testBeamDestroysUFO() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
         scene.simulateKeyDown(keyCode: 49)
@@ -218,7 +218,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testBeamDestroysSpaceCatThrottled() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
         scene.simulateKeyDown(keyCode: 49)
@@ -241,7 +241,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testNoOrphanEntitiesAfterBombOnMixedField() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
         scene.simulateKeyDown(keyCode: 49)
@@ -273,7 +273,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testSpaceCatLaserKillsShipWithOwnDeathCause() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
 
@@ -293,7 +293,7 @@ final class BossTests: GameCoreTestCase {
     }
 
     func testCatEyeLaserDoesNotHitAsteroidsOrUFOs() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
 

@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids app icon"></p>
 
-A native Asteroids-style arcade shooter for macOS and iOS (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and every sound effect is synthesized in real time; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Three game modes on macOS (two on iOS), nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
+A native Asteroids-style arcade shooter for macOS and iOS (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and sound effects use real-time synthesis or optional bundled recordings; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Three game modes on macOS (two on iOS), nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
 
 ## Download
 
@@ -78,10 +78,10 @@ Nine pickups, each with its own vector glyph:
 | `R` | Rapid | Greatly increased fire rate |
 | `O` | Option | A satellite drone fires alongside you |
 | `B` | Bomb | Screen‑clearing explosion |
-| `L` | Laser beam | Hold to fire a sweeping, edge‑wrapping beam |
+| `L` | Laser beam | Hold to fire a beam; stops at the edge in Event Horizon, wraps in the other modes |
 | `T` | Rear | Adds a backward‑firing shot |
 | `C` | Compress | Shrinks the ship to ~30 % (smaller target) |
-| `+` | Extra life | Revive centered with brief invincibility |
+| `+` | Extra life | Revive at the starting position with brief invincibility |
 
 ## Enemies & bosses
 
@@ -89,7 +89,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 
 - **Enemy saucers** — a large green UFO that fires in random directions, and a small pink one that snipes at your ship. Both drift in with a slight homing pull.
 - **Gravity wells** — black holes that warp space, drag everything inward and crush the ship on contact.
-- **Imploding asteroids** — magenta‑outlined rocks that collapse into a fresh gravity well when you shoot them.
+- **Imploding asteroids** — magenta‑outlined rocks that collapse into a fresh gravity well when you shoot them (no extra wells in Event Horizon).
 - **Wobbling bombs** — red rocks that pulse and grow through stages, then detonate into a spread of fast fragments.
 - **Space Cat** — a stalking boss that takes cover behind asteroids, leads your movement and fires twin eye‑beams; takes three hits to drive off.
 - **The Idol** — a large floating stone head that drifts in, dodges your fire and spews an armada of saucers from its mouth; takes ten hits to destroy.
@@ -97,7 +97,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 ## Controls
 
 - **Start screen:** ▲/▼ switch game mode · ◀/▶ choose starting level · Space/Enter start · D (or 30 s idle) watch an autopilot demo · I glossary · 1–5 watch a high‑score replay
-- **In game:** Arrow keys / WASD to fly · Space to fire (hold for continuous fire; with the Laser beam power-up active, hold to sweep the beam) · M toggle music · Esc pause / quit
+- **In game:** Arrow keys / WASD to fly · Space to fire (hold for continuous fire; with the Laser beam power-up active, hold to sweep the beam) · F toggle auto-fire · M toggle music · N switch synthesized / recorded effects · Esc pause / quit
 - **Replay view:** Esc exits the replay back to the title screen.
 - High scores are saved locally; enter your name on the board when you make the cut.
 - **Cheat:** press `#` for a free extra life — handy for testing, or for a relaxed, no‑pressure run.
@@ -107,6 +107,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 The simulation is **deterministic**: every run is recorded as just its seed plus your key presses, so it can be reproduced bit‑for‑bit. Two things fall out of that:
 
 - During recording and replay, resizing scales the view while the simulation keeps its starting dimensions. The title screen fits the window again.
+- Playback requires the matching simulation logic version. Version 0.15.1 uses logic version 6 and rejects older recordings; their saved bytes and high scores remain intact.
 - **Watch high‑score runs again** — on the title screen press `1`–`5` to replay that entry exactly as it was played; `Esc` exits.
 - **Render promo GIFs headlessly** — turn a replay into a clean, cursor‑free animated GIF straight from the command line, no window needed:
 
@@ -120,12 +121,12 @@ exploids --render-replay run.replay --out run.gif --scale 480 --fps 30
 
 Exploids is a hobby clone, not a product. For honest context, with the weak spots named too:
 
-**Versus the original Asteroids (1979)** — the original is monochrome vector graphics with splitting rocks, two saucers, hyperspace and an extra life at 10,000 points. Exploids keeps that core and adds a second, rotating-field mode (Mad Meteoroids), nine power-ups, gravity wells, imploding and wobbling special asteroids, two bosses, a sweeping laser beam, color, chiptune music, an in-game glossary, local high-score entry and deterministic replays you can re-watch or export as GIFs.
+**Versus the original Asteroids (1979)** — the original is monochrome vector graphics with splitting rocks, two saucers, hyperspace and an extra life at 10,000 points. Exploids keeps that core and adds a rotating-field mode (Mad Meteoroids), the bounded Event Horizon mode on macOS, nine power-ups, gravity wells, imploding and wobbling special asteroids, two bosses, a sweeping laser beam, color, chiptune music, an in-game glossary, local high-score entry and deterministic replays you can re-watch or export as GIFs.
 
-**Versus Maelstrom** — [Maelstrom](https://github.com/libsdl-org/Maelstrom) (Ambrosia, 1992; a GPL SDL port since 1995, today an SDL2/SDL3 build that runs on Apple Silicon) is the best-known still-maintained open-source Asteroids clone for the Mac, and the fairer yardstick: it already has power-ups, bonus objects and rich sound. Where Exploids actually differs:
+**Versus Maelstrom** — [Maelstrom](https://github.com/libsdl-org/Maelstrom) (Ambrosia, 1992; a GPL SDL port since 1995, today an SDL3 build that runs on Apple Silicon) is the best-known still-maintained open-source Asteroids clone for the Mac, and the fairer yardstick: it already has power-ups, bonus objects and rich sound. Where Exploids actually differs:
 
 - **Rendering:** Exploids is real-time *vector* geometry drawn procedurally at high resolution and 120 Hz ProMotion; Maelstrom is bitmap / sprite raster art.
-- **Audio:** Exploids synthesizes its sound effects live on the audio thread (only the two music tracks are files); Maelstrom plays sampled sound.
+- **Audio:** Exploids synthesizes its sound effects live on the audio thread and offers optional bundled effect recordings; Maelstrom plays sampled sound.
 - **Mechanics:** the rotating Mad Meteoroids mode, gravity wells and imploding asteroids are specific to Exploids.
 - **Stack:** native Swift 6 / SpriteKit / AppKit on Apple Silicon, versus a C/SDL port.
 
@@ -135,7 +136,7 @@ Exploids is a hobby clone, not a product. For honest context, with the weak spot
 
 - **Code:** [MIT](LICENSE) — © 2026 Daniel Müller.
 - **Heading font** `Sources/GameCore/Fonts/PressStart2P-Regular.ttf` (Press Start 2P): **SIL Open Font License 1.1** (`Sources/GameCore/Fonts/OFL.txt`) — free for any use, including commercial.
-- **⚠️ Music** `Sources/GameCore/Music/*.mp3` (two chiptune tracks): generated with **[musely.ai](https://musely.ai)** on its Free Plan — **personal, non‑commercial use only**. These tracks are **not** covered by the MIT code license and keep musely.ai's separate terms. Before any commercial use, replace them with your own / CC0 / commercially‑licensed music. All other audio is synthesized at runtime (no third‑party rights).
+- **⚠️ Music** `Sources/GameCore/Music/*.mp3` (two chiptune tracks): generated with **[musely.ai](https://musely.ai)** on its Free Plan — **personal, non‑commercial use only**. These tracks are **not** covered by the MIT code license and keep musely.ai's separate terms. Before any commercial use, replace them with your own / CC0 / commercially‑licensed music. Procedural effects are generated by the code; the optional SFX recordings have separate provenance. See [bundled assets](docs/assets.md).
 
 ## iOS port
 

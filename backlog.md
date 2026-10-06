@@ -5,8 +5,9 @@
 - Event Horizon ist seit 0.15.0 auf macOS implementiert und für die Spielabnahme
   bereit: endgültiger Austritt der Spielobjekte, spiegelnde Schiffsreflexion, genau
   ein dauerhaftes Mittelloch. Randregeln, Entity-Tracking und Replay wurden geprüft;
-  die bestehenden Modi behalten ihre Referenzergebnisse. Die subjektive Mac-Abnahme
+  Randkorrekturen aus dem Projekt-Review sind in 0.15.1 enthalten. Die subjektive Mac-Abnahme
   steht aus; die iOS-Aktivierung bleibt bis zu positiver Abnahme zurückgestellt.
+
 Die iOS-App mit Touch-Steuerung ist vorhanden; die erfolgreiche iPhone-Abnahme
 vom 2026-10-01 ist in `CHANGELOG.md` unter 0.14.12 dokumentiert.
 
@@ -23,6 +24,11 @@ vom 2026-10-01 ist in `CHANGELOG.md` unter 0.14.12 dokumentiert.
 - `--version` der nackten SwiftPM-Binary meldet außerhalb eines Checkouts
   `unknown`. Versionseinbettung nur bei geplanter separater Verteilung dieser
   Binary angehen; das App-Bundle trägt die Version bereits in der Info.plist.
+- Die iOS-Musikplanung nach Audio-Routenwechsel bei ausgeschalteter Musik wurde
+  korrigiert. Auf einem echten iPhone ohne Debugger noch gegenhören.
+- Die Medienübersicht in `docs/assets.md` nennt fehlende Herkunfts-/Lizenzbelege
+  für optionale SFX-Aufnahmen und Boss-Ausgangsbilder. Vor einer neuen öffentlichen
+  oder kommerziellen Distribution klären oder durch belegte Assets ersetzen.
 
 ## Aktuelle Entscheidungen
 

@@ -74,25 +74,16 @@ public struct CollisionHelper {
     @MainActor
     public static func laserIntersectsAsteroid(_ laser: Laser, _ asteroid: Asteroid) -> Bool {
         let (laserStart, laserEnd) = laser.getWorldSegment()
-        let astVertices = asteroid.getWorldVertices()
-        
-        guard astVertices.count >= 2 else { return false }
-        
-        // 1. Check if the laser segment intersects any of the asteroid's boundary segments
-        for i in 0..<astVertices.count {
-            let startB = astVertices[i]
-            let endB = astVertices[(i + 1) % astVertices.count]
-            if segmentsIntersect(laserStart, laserEnd, startB, endB) {
-                return true
-            }
+        return segmentIntersectsPolygon(laserStart, laserEnd, polygon: asteroid.getWorldVertices())
+    }
+
+    /// Prüft auch Durchquerungen, deren beide Endpunkte außerhalb der Kontur liegen.
+    public static func segmentIntersectsPolygon(_ start: CGPoint, _ end: CGPoint, polygon: [CGPoint]) -> Bool {
+        guard polygon.count >= 2 else { return false }
+        for i in polygon.indices {
+            if segmentsIntersect(start, end, polygon[i], polygon[(i + 1) % polygon.count]) { return true }
         }
-        
-        // 2. Containment check: is either end of the laser inside the asteroid?
-        if isPointInPolygon(laserStart, polygon: astVertices) || isPointInPolygon(laserEnd, polygon: astVertices) {
-            return true
-        }
-        
-        return false
+        return isPointInPolygon(start, polygon: polygon) || isPointInPolygon(end, polygon: polygon)
     }
 }
 

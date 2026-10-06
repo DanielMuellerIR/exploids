@@ -241,14 +241,14 @@ public final class Asteroid: SKShapeNode {
         updateWireframePath()
     }
     
-    private func updateWireframePath() {
+    private func projectedWireframeVertices() -> [CGPoint] {
         let cosP = cos(pitch)
         let sinP = sin(pitch)
         let cosY = cos(yaw)
         let sinY = sin(yaw)
         
         // Project 3D vertices to 2D
-        let projected = local3DVertices.map { v in
+        return local3DVertices.map { v in
             let x1 = v.x
             let y1 = v.y * cosP - v.z * sinP
             let z1 = v.y * sinP + v.z * cosP
@@ -259,6 +259,19 @@ public final class Asteroid: SKShapeNode {
             return CGPoint(x: x2, y: y2)
         }
         
+    }
+
+    /// Feste Simulationsgeometrie inklusive Drahtgitter; der zuletzt gerenderte Pfad kann veraltet sein.
+    func getWorldBoundaryVertices() -> [CGPoint] {
+        let c = cos(zRotation), s = sin(zRotation)
+        return getWorldVertices() + projectedWireframeVertices().map { point in
+            CGPoint(x: position.x + point.x * xScale * c - point.y * yScale * s,
+                    y: position.y + point.x * xScale * s + point.y * yScale * c)
+        }
+    }
+
+    private func updateWireframePath() {
+        let projected = projectedWireframeVertices()
         let path = CGMutablePath()
         
         // Draw outer 3D wireframe edges

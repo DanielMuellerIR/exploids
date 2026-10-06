@@ -8,6 +8,17 @@ import SpriteKit
 @MainActor
 class GameCoreTestCase: XCTestCase {
 
+    /// Auch Levelwechsel speichern Fortschritt. Jede Testszene braucht deshalb vor presentScene
+    /// einen eigenen Speicher, nicht nur Tests, die Highscores ausdrücklich bearbeiten.
+    func makeIsolatedScene(size: CGSize) -> GameScene {
+        let scene = GameScene(size: size)
+        let suite = "exploids-scene-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        scene.useUserDefaultsForTesting(defaults)
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        return scene
+    }
+
     /// Tests laufen grundsätzlich lautlos: die Spiel-Logik triggert echte SFX (Laser/Explosionen),
     /// die sonst über den geteilten SoundManager auf die Audio-Hardware gehen würden.
     ///

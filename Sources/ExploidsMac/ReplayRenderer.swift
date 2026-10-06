@@ -26,7 +26,7 @@ enum ReplayRenderer {
         var width: Int = 480
         var height: Int = 360
         /// Simulationsgröße (Szenengröße). MUSS der Aufnahme entsprechen, sonst driftet der Lauf
-        /// (Spawns/Wrap/Bounds hängen an `size`). `nil` = wie Ausgabegröße. Für Aufnahmen aus dem
+        /// (Spawns/Wrap/Bounds hängen an `size`). `nil` = gespeicherte Aufnahme-Größe. Für Aufnahmen aus dem
         /// macOS-Fenster (Default 1024×768) hier 1024×768 setzen; die Ausgabe wird beim Rendern skaliert.
         var simWidth: Int? = nil
         var simHeight: Int? = nil
@@ -54,6 +54,7 @@ enum ReplayRenderer {
         case gifDestinationFailed
         case videoWriterFailed
         case noFramesRendered
+        case invalidFrameRate
 
         var description: String {
             switch self {
@@ -61,6 +62,7 @@ enum ReplayRenderer {
             case .textureCreationFailed: return "Offscreen-Textur konnte nicht erstellt werden."
             case .gifDestinationFailed: return "GIF-Ziel konnte nicht erstellt werden."
             case .videoWriterFailed: return "Video-Writer konnte nicht erstellt/gestartet werden."
+            case .invalidFrameRate: return "Die Bildrate muss zwischen 1 und 120 FPS liegen."
             case .noFramesRendered: return "Es wurden keine Frames gerendert (leere Aufnahme?)."
             }
         }
@@ -68,6 +70,7 @@ enum ReplayRenderer {
 
     /// Rendert die Aufnahme in eine GIF-Datei.
     static func renderToGIF(_ replay: Replay, outputURL: URL, options: Options = Options()) throws {
+        guard (1...GameScene.simStepsPerSecond).contains(options.fps) else { throw RenderError.invalidFrameRate }
         guard let device = MTLCreateSystemDefaultDevice() else { throw RenderError.noMetalDevice }
         guard let commandQueue = device.makeCommandQueue() else { throw RenderError.noMetalDevice }
 
@@ -106,7 +109,6 @@ enum ReplayRenderer {
         // Echtzeit-Akkumulator in update(_:) bleibt damit außen vor. `renderer.update(atTime:)` tickt
         // nur noch die visuellen SKActions auf dieselbe Sim-Zeit. Je `stride` ein Bild aufnehmen.
         scene.externalStepDriving = true
-        let stride = max(1, options.frameStride ?? (GameScene.simStepsPerSecond / max(1, options.fps)))
         var simFrame = 0
         var simTime: TimeInterval = 0.0
         while scene.advanceOneStep() {            // ein fester Sim-Schritt; false = Aufnahme zu Ende
@@ -119,7 +121,7 @@ enum ReplayRenderer {
                 continue
             }
 
-            if (simFrame - options.startFrame) % stride == 0 {
+            if shouldCapture(simFrame - options.startFrame, options: options) {
                 // Asteroiden-Drahtgitter vor dem Capture neu aufbauen (der Sim-Schritt tut das nicht
                 // mehr pro Schritt, sondern der Host pro gerendertem Bild — hier headless).
                 scene.refreshAsteroidWireframes()
@@ -141,6 +143,7 @@ enum ReplayRenderer {
     /// Gleiche treue Simulation wie der GIF-Pfad (Sim in Aufnahme-Größe), Frames gehen aber über einen
     /// `AVAssetWriter` statt ImageIO.
     static func renderToVideo(_ replay: Replay, outputURL: URL, options: Options = Options()) throws {
+        guard (1...GameScene.simStepsPerSecond).contains(options.fps) else { throw RenderError.invalidFrameRate }
         guard let device = MTLCreateSystemDefaultDevice() else { throw RenderError.noMetalDevice }
         guard let commandQueue = device.makeCommandQueue() else { throw RenderError.noMetalDevice }
 
@@ -190,7 +193,6 @@ enum ReplayRenderer {
         writer.startSession(atSourceTime: .zero)
 
         let fps = max(1, options.fps)
-        let stride = max(1, options.frameStride ?? (GameScene.simStepsPerSecond / fps))
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
         var videoFrame = 0
         var simFrame = 0
@@ -200,7 +202,7 @@ enum ReplayRenderer {
             simTime += GameScene.simStep
             renderer.update(atTime: simTime)
             if simFrame < options.startFrame { simFrame += 1; continue }
-            if (simFrame - options.startFrame) % stride == 0 {
+            if shouldCapture(simFrame - options.startFrame, options: options) {
                 // Asteroiden-Drahtgitter vor dem Capture neu aufbauen (siehe GIF-Pfad oben).
                 scene.refreshAsteroidWireframes()
                 if let img = renderFrame(renderer: renderer, commandQueue: commandQueue,
@@ -221,6 +223,14 @@ enum ReplayRenderer {
         writer.finishWriting { sem.signal() }
         sem.wait()
         guard videoFrame > 0, writer.status == .completed else { throw RenderError.videoWriterFailed }
+    }
+
+    /// Ganze Simulationsschritte auswählen, ohne 120/FPS abzurunden (z.B. 25 FPS).
+    /// Ein expliziter Stride bleibt eine bewusste Änderung des Abspieltempos.
+    private static func shouldCapture(_ frame: Int, options: Options) -> Bool {
+        if let stride = options.frameStride { return frame % max(1, stride) == 0 }
+        return frame == 0 || frame * options.fps / GameScene.simStepsPerSecond
+            > (frame - 1) * options.fps / GameScene.simStepsPerSecond
     }
 
     /// Zeichnet ein `CGImage` in einen frischen BGRA-`CVPixelBuffer` für den Video-Writer.

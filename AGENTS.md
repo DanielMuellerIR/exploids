@@ -7,7 +7,7 @@ macOS und iOS. Swift 6, SpriteKit, AVFoundation, SwiftPM.
 
 Das SwiftPM-Workspace trennt:
 
-- `Sources/GameCore/`: plattformunabhängige Simulation, Entities, Kollision,
+- `Sources/GameCore/`: für macOS/iOS geteilte Simulation, Entities, Kollision,
   Audio, deterministischer Zufall, Replay und Persistenz.
 - `Sources/ExploidsMac/`: dünne AppKit-Shell und headless Replay-/GIF-Renderer.
 - `ios/`: vorhandene Xcode/iOS-App mit Touch-Steuerung, bindet `GameCore` ein;
@@ -21,7 +21,8 @@ Das SwiftPM-Workspace trennt:
 - `notarize-lib.sh`: gemeinsame Signier-/Notarisierungs-Helfer (gesourct).
 - `VERSION`: einzige Quelle der Produktversion.
 
-`GameCore` bleibt AppKit-frei und für macOS/iOS kompilierbar. Eingaben laufen über
+`GameCore` bleibt für macOS/iOS kompilierbar; die AppKit-Tastaturbrücke ist bedingt
+auf macOS kompiliert. Neue Spiellogik bleibt ohne AppKit-Abhängigkeit. Eingaben laufen über
 plattformneutrale `handle`/`simulateKeyDown`-/`simulateKeyUp`-Pfade; Shells übersetzen
 nur Tastatur, Touch oder GameController. Quit ist Callback, kein `NSApp` im Core.
 
@@ -116,13 +117,15 @@ bash build-app.sh
 ```
 
 `swift test` deckt nur den in `Package.swift` registrierten Target
-`Tests/GameCoreTests` ab. Alles daneben — CLI-Versionspfad, Austauschlogik von
+`Tests/GameCoreTests` ab. Alles daneben — CLI-Versionspfad, stumme Replay-Exporte,
+Austauschlogik von
 `install.sh`, Aufräumen in `notarize-lib.sh`, die beiden Fleet-Regeln in
 `Tests/fleet-rules.sh`, die Release-Vorbedingungen in `Tests/release-guards.sh` —
 läuft über `Tests/run-shell-tests.sh`; dort gehört jeder neue Shell-Test
-eingetragen, sonst hat er keinen Aufrufer. Die Shell-Tests arbeiten mit Attrappen
-in Temp-Verzeichnissen: kein Signieren, kein Notarisieren, kein Schreiben nach
-`/Applications`.
+eingetragen, sonst hat er keinen Aufrufer. Fehlerpfade werden mit Attrappen geprüft;
+CLI-Prüfungen verwenden echte Builds und temporäre Dateien. GIF/Video brauchen Metal
+und melden andernfalls ausdrücklich einen Skip. Kein Signieren, kein Notarisieren,
+kein Schreiben nach `/Applications`.
 
 Wer in einem Test eine Zeichenkette in einer Binärdatei sucht, nimmt `strings -`
 und **nie** `strings -a`: Auf macOS heißt `-a` „alle Sektionen der Objektdatei"
@@ -210,6 +213,7 @@ Anweisung.
 - `build.sh`: App-Build (Wrapper); `build-app.sh`: der eigentliche Bauschritt.
 - [`backlog.md`](backlog.md): verifizierte offene Arbeit.
 - [`docs/replay-system-plan.md`](docs/replay-system-plan.md): Replayvertrag und Format.
+- [`docs/assets.md`](docs/assets.md): Herkunft und Lizenzstand der gebündelten Medien.
 - [`docs/webapp-portierung-machbarkeit.md`](docs/webapp-portierung-machbarkeit.md): Analyse zur Webversion.
 - [`turrican-like-powerup-tts.md`](turrican-like-powerup-tts.md): Voice-Sample-Workflow.
 - [`docs/archive/agent-context-legacy-2026-07-14.md`](docs/archive/agent-context-legacy-2026-07-14.md): frühere Chronik, nicht autoritativ.

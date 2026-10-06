@@ -1,6 +1,7 @@
 # Plan: Deterministisches Replay-System
 
-Stand: 2026-06-25. **Status: Phase 1 + 2 + 3 vollständig abgeschlossen** (inkl. 3.1 Fixed-Timestep,
+Planungsstand: 2026-06-25. Die Phasennotizen dokumentieren die damalige Umsetzung;
+der aktuelle Vertrag steht im Abschnitt „Aktueller Replay-Vertrag“. **Status: Phase 1 + 2 + 3 vollständig abgeschlossen** (inkl. 3.1 Fixed-Timestep,
 umgesetzt in v0.12.0; Spielgefühl über Playtest abzunehmen). Dieses Dokument ist die
 Arbeitsgrundlage; jeder Unterschritt hat ein prüfbares Erfolgskriterium.
 
@@ -26,7 +27,7 @@ Frame-Zeit in einem Akkumulator und treibt die Simulation in festen Schritten (`
 v2-Aufnahmen werden abgelehnt). Headless Renderer und Tests treiben die Sim direkt per
 `advanceOneStep()` (kein Echtzeit-Akkumulator, `externalStepDriving`). Den Catch-up nach einem
 Hänger deckeln die App-Hosts über `maxFrameDelta` (0.25 s); Tests lassen ihn aus (Default
-`.infinity`), um per großem `update(_:)`-Sprung deterministisch vorzuspulen. 93 Tests grün;
+`.infinity`), um per großem `update(_:)`-Sprung deterministisch vorzuspulen. Regressionen geprüft;
 **Spielgefühl über Playtest abzunehmen.**
 
 **Umsetzungsnotiz Phase 1 (erledigt):** PRNG `GameRandom` (SplitMix64) eingeführt; alle
@@ -312,7 +313,7 @@ Die Datenstruktur bleibt gleich; die geänderten Ergebnisse erfordern Logikversi
 Version-3-Aufnahmen bleiben lesbar, werden bei der Wiedergabe aber abgelehnt.
 Highscores und gespeicherte Aufnahmebytes werden dadurch nicht gelöscht.
 
-## Event Horizon und Modus-Kompatibilität
+## Event Horizon und Modus-Kompatibilität bei Einführung (0.15.0)
 
 Seit 0.15.0 verwendet Event Horizon `gameMode = 2`; Ancient Asteroids bleibt 0 und
 Mad Meteoroids bleibt 1. Aufbau und Logikversion 5 der Aufnahmen bleiben erhalten,
@@ -320,3 +321,28 @@ weil vorhandene Läufe bei gleichem Seed und gleicher Eingabe unverändert simul
 Ältere Binaries ohne den neuen Enum-Wert lehnen Event-Horizon-Aufnahmen beim Dekodieren
 ab; sie dürfen nicht als Ancient-/Mad-Aufnahmen interpretiert werden. Auf iOS ist
 der Modus vorerst weder auswählbar noch zur Replay-Wiedergabe freigegeben.
+
+## Aktueller Replay-Vertrag (0.15.1, 2026-10-06)
+
+`Replay.currentLogicVersion` ist 6. Die korrigierten Segmenttreffer, Absorptionen
+und Spielzeitfristen können gegenüber Version 5 andere Ergebnisse erzeugen.
+Alle älteren Logikversionen werden deshalb beim Abspielen ausdrücklich abgelehnt;
+das Dekodieren bleibt möglich. Highscores und die gespeicherten Aufnahmebytes
+werden nicht gelöscht. Ein alter Lauf benötigt zur Wiedergabe seine passende Binary.
+
+Eine Aufnahme speichert Seed, Startlevel, Modus, Auto-Feuer-Anfangszustand,
+Szenengröße, Schrittzahl und geordnete Eingaben. `InputEvent.characters` ist optional
+und enthält nur `f` oder `#`, wenn die Aktion davon abhängt. Fehlende Zeichenfelder
+alter Aufnahmen werden als `nil` gelesen. Tastatur- und Replay-Eingabe benutzen
+denselben Handler. Eine Pause verbraucht keine Spielschritte; Pause, Freigaben von
+Tasten und Fortsetzen stehen in ihrer Reihenfolge am selben Schrittindex.
+
+Die Simulation läuft mit 120 festen Schritten je Spielsekunde. GIF und Video wählen
+bei automatischem Capture-Takt 1–120 Bilder pro Sekunde, auch wenn die Bildrate 120
+nicht ganzzahlig teilt. Ein expliziter `--stride` verändert bewusst das Abspieltempo.
+Die Wiedergabe verwendet standardmäßig die gespeicherte Szenengröße; eine abweichende
+`--sim-scale` ist ein diagnostischer Eingriff und kann das Ergebnis ändern.
+
+Die Moduswerte bleiben Ancient Asteroids = 0, Mad Meteoroids = 1 und Event Horizon = 2.
+Event Horizon ist auf iOS bis zur positiven Mac-Abnahme weder auswählbar noch für
+Replays freigegeben. Audio bleibt außerhalb des Gameplay-Determinismus.

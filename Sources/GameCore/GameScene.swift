@@ -650,10 +650,12 @@ public final class GameScene: SKScene {
             attractTimer = 0
         }
         // Aufnahme: jedes Tastenereignis im laufenden Spiel festhalten. (Injizierte Replay-Eingaben
-        // tragen keine `characters`/Modifier, lösen also weder den M- noch den Cmd-Q-Zweig aus.)
+        // tragen nur gameplayrelevante Zeichen für F/#, keine Musik-/App-Kommandos.)
         // Cmd+Q wird bereits oben behandelt (vor dem Attract-Abbruch).
-        if gameState == .playing {
-            recorder?.recordEvent(keyCode: keyCode, isDown: true)
+        if gameState == .playing || gameState == .quitConfirmation {
+            let replayCharacters = characters == "#" ? "#"
+                : (charactersIgnoringModifiers?.lowercased() == "f" ? "f" : nil)
+            recorder?.recordEvent(keyCode: keyCode, isDown: true, characters: replayCharacters)
         }
 
         // „M" schaltet die Hintergrundmusik global ein/aus – in jedem Zustand außer der
@@ -816,7 +818,7 @@ public final class GameScene: SKScene {
         if replayPlayer != nil && !isInjectingReplay {
             return
         }
-        if gameState == .playing {
+        if gameState == .playing || gameState == .quitConfirmation {
             recorder?.recordEvent(keyCode: keyCode, isDown: false)
             activeKeys.remove(keyCode)
             if keyCode == 49 { // Feuertaste losgelassen: Dauerfeuer beenden
@@ -961,6 +963,7 @@ public final class GameScene: SKScene {
             recorder?.recordStep()
         }
         stepSimulation(deltaTime: GameScene.simStep)
+        if renderHUDHidden { hideRenderHUD() }
         return true
     }
 
@@ -970,12 +973,11 @@ public final class GameScene: SKScene {
         // Eine Quelle der Wahrheit für Zeit: akkumulierte Spielzeit. Ab hier benennt `currentTime` die
         // SPIELZEIT (nicht die Echtzeit) – der gesamte restliche Rumpf und alle Helfer rechnen gegen
         // `gameTime`. Grundlage für deterministisches Replay (Lauf hängt nur an Seed + Eingaben).
+        // Pausen verbrauchen weder Spielzeit noch Power-up-/Schutzfristen. Ihre Eingaben
+        // liegen beim Recorder am nächsten Spielschritt; die Pausendauer wird nicht gespeichert.
+        if gameState == .quitConfirmation { return }
         gameTime += deltaTime
         let currentTime = gameTime
-
-        if gameState == .quitConfirmation {
-            return
-        }
 
         // Mad-Meteoroids: Feld-Drehung dieses Frames bestimmen, BEVOR Sterne/Objekte sie nutzen.
         // Nur im laufenden Spiel und nicht während des Level-Übergangs.
@@ -1409,13 +1411,15 @@ public final class GameScene: SKScene {
             
             // Collision detection: Asteroid vs Asteroid (Absorption)
             var asteroidsToRemoval = Set<Asteroid>()
-            var collapsedImplodingAsteroids = Set<Asteroid>()
+            // Die Paarreihenfolge bleibt auch bei mehreren Kollapsen deterministisch.
+            var collapsedImplodingAsteroids: [Asteroid] = []
             
             for i in 0..<activeAsteroids.count {
                 let astA = activeAsteroids[i]
                 guard !asteroidsToRemoval.contains(astA) else { continue }
                 
                 for j in (i+1)..<activeAsteroids.count {
+                    if asteroidsToRemoval.contains(astA) { break }
                     let astB = activeAsteroids[j]
                     guard !asteroidsToRemoval.contains(astB) else { continue }
                     
@@ -1452,7 +1456,7 @@ public final class GameScene: SKScene {
                             createExplosion(at: absorbed.position, sizeClass: .small)
                             
                             if newScale >= 3.0 {
-                                collapsedImplodingAsteroids.insert(absorber)
+                                collapsedImplodingAsteroids.append(absorber)
                                 asteroidsToRemoval.insert(absorber)
                             }
                         }
@@ -1623,7 +1627,7 @@ public final class GameScene: SKScene {
                 for laser in remainingLasers {
                     if !ship.isHidden && currentTime >= invincibilityEndTime && laser.type != .normal {
                         let (start, end) = laser.getWorldSegment()
-                        if CollisionHelper.isPointInPolygon(start, polygon: shipPoly) || CollisionHelper.isPointInPolygon(end, polygon: shipPoly) {
+                        if CollisionHelper.segmentIntersectsPolygon(start, end, polygon: shipPoly) {
                             laser.removeFromParent()
                             lastDeathCause = (laser.type == .catEye) ? .spaceCatLaser : .ufoLaser
                             damageShip()
@@ -2096,6 +2100,7 @@ public final class GameScene: SKScene {
         }
         ship.setScale(scale)
         for drone in options { drone.setScale(scale) }
+        if gameMode == .eventHorizon { reflectEventHorizonShip() }
     }
 
     /// Beim Revive (Extra Life) gehen ALLE aktiven Power-ups verloren – Timer, Schild, Beiboote,
@@ -2558,10 +2563,10 @@ public final class GameScene: SKScene {
 
     /// Speist eine aufgezeichnete Eingabe während der Wiedergabe ein. Setzt `isInjectingReplay`, um
     /// die Live-Eingabe-Sperre in den Tasten-Handlern gezielt zu umgehen.
-    func injectReplayInput(keyCode: UInt16, isDown: Bool) {
+    func injectReplayInput(keyCode: UInt16, isDown: Bool, characters: String? = nil) {
         isInjectingReplay = true
         if isDown {
-            handleKeyDown(keyCode: keyCode, characters: nil, charactersIgnoringModifiers: nil, isCommandDown: false)
+            handleKeyDown(keyCode: keyCode, characters: characters, charactersIgnoringModifiers: characters, isCommandDown: false)
         } else {
             handleKeyUp(keyCode: keyCode)
         }
@@ -2754,6 +2759,7 @@ public final class GameScene: SKScene {
                 
                 ship.isHidden = false
                 activeKeys.removeAll()
+                isSpaceHeld = false
             } else {
                 // Fresh game session
                 if replayPlayer == nil {

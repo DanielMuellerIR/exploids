@@ -13,7 +13,7 @@ final class ModeTests: GameCoreTestCase {
     /// Im Mad-Modus rotiert das Feld um die Bildmitte: ein Asteroid (ohne Eigen-Velocity) muss
     /// seinen Abstand zum Zentrum behalten, aber seinen Winkel ändern.
     func testMadModeRotatesAsteroidsAroundCenter() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.setGameModeForTesting(.madMeteoroids)
@@ -46,7 +46,7 @@ final class ModeTests: GameCoreTestCase {
     /// Verlässt ein Objekt im Mad-Modus den Feldradius, wird es auf die gegenüberliegende Seite
     /// knapp innerhalb des Radius umgesetzt (kreisförmiges Wrapping).
     func testMadModeCircularWrap() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.setGameModeForTesting(.madMeteoroids)
@@ -73,7 +73,7 @@ final class ModeTests: GameCoreTestCase {
     /// Regression: Im Ancient-Modus darf KEINE Feld-Rotation stattfinden — ein ruhender Asteroid
     /// innerhalb des Bildschirms bleibt exakt liegen.
     func testAncientModeDoesNotRotate() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.setGameModeForTesting(.ancientAsteroids)
@@ -96,7 +96,7 @@ final class ModeTests: GameCoreTestCase {
     /// Mad-Modus soll fairer sein als Ancient: weniger gleichzeitige Asteroiden, höhere
     /// Power-Up-Chance (beim selben Level).
     func testMadModeReducesAsteroidsAndBoostsPowerUps() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
 
@@ -122,7 +122,7 @@ final class ModeTests: GameCoreTestCase {
 
     /// Auf dem Game-Over-Screen führt Escape zurück zum Startbildschirm (Modus-/Level-Wahl).
     func testGameOverEscapeReturnsToStartScreen() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
 
@@ -149,7 +149,7 @@ final class ModeTests: GameCoreTestCase {
     // MARK: - Level Progression & Imploding Asteroid Tests
     
     func testImplodingAsteroidGrowth() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -174,7 +174,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testAsteroidAbsorption() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -199,7 +199,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testLevelTransition() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -229,10 +229,14 @@ final class ModeTests: GameCoreTestCase {
     
     func testLevelSelection() {
         let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let suite = "exploids-mode-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        scene.useUserDefaultsForTesting(defaults)
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
-        UserDefaults.standard.set(3, forKey: "exploids_max_level_reached")
+        defaults.set(3, forKey: "exploids_max_level_reached")
         scene.loadHighScores()
         scene.transitionTo(.startScreen)
         
@@ -267,7 +271,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testWobblingAsteroidProgressionAndDetonation() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -306,7 +310,7 @@ final class ModeTests: GameCoreTestCase {
     
     func testWobblingExplosionRespectsShieldAndReviveProtection() {
         for shield in [true, false] {
-            let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+            let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
             let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
             view.presentScene(scene)
             scene.transitionTo(.playing)
@@ -331,7 +335,7 @@ final class ModeTests: GameCoreTestCase {
     }
 
     func testWobblingAsteroidDefusal() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -358,7 +362,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testFrontConeSpawningRejection() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -387,7 +391,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testPowerUpRetentionAndLifetimeExtension() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -448,11 +452,15 @@ final class ModeTests: GameCoreTestCase {
     
     func testLevel10InfiniteDifficultyScaling() {
         let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let suite = "exploids-mode-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        scene.useUserDefaultsForTesting(defaults)
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
         // Select starting level 10 and start
-        UserDefaults.standard.set(10, forKey: "exploids_max_level_reached")
+        defaults.set(10, forKey: "exploids_max_level_reached")
         scene.loadHighScores()
         scene.transitionTo(.startScreen)
         // Select level 10
@@ -472,7 +480,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testPowerUpLowLifetimeExtension() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         
@@ -523,7 +531,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testSpawningSafetyFallback() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 1000))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 1000))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 1000))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -554,7 +562,7 @@ final class ModeTests: GameCoreTestCase {
     // MARK: - Escape Quit & Glossary Tests
     
     func testPowerUpResetsOnRestart() {
-        let scene = GameScene(size: CGSize(width: 800, height: 600))
+        let scene = makeIsolatedScene(size: CGSize(width: 800, height: 600))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -574,7 +582,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testEscKeyDuringPlayingTriggersQuitConfirmation() {
-        let scene = GameScene(size: CGSize(width: 800, height: 600))
+        let scene = makeIsolatedScene(size: CGSize(width: 800, height: 600))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -586,7 +594,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testQuitConfirmationNavigation() {
-        let scene = GameScene(size: CGSize(width: 800, height: 600))
+        let scene = makeIsolatedScene(size: CGSize(width: 800, height: 600))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         view.presentScene(scene)
         scene.transitionTo(.playing)
@@ -609,7 +617,7 @@ final class ModeTests: GameCoreTestCase {
     }
     
     func testGlossaryOpenAndNavigation() {
-        let scene = GameScene(size: CGSize(width: 800, height: 600))
+        let scene = makeIsolatedScene(size: CGSize(width: 800, height: 600))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         view.presentScene(scene)
         scene.transitionTo(.startScreen)

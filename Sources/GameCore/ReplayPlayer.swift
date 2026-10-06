@@ -38,7 +38,7 @@ public final class ReplayPlayer {
         while nextEventIndex < replay.events.count,
               replay.events[nextEventIndex].frameIndex == currentFrame {
             let e = replay.events[nextEventIndex]
-            scene.injectReplayInput(keyCode: e.keyCode, isDown: e.isDown)
+            scene.injectReplayInput(keyCode: e.keyCode, isDown: e.isDown, characters: e.characters)
             nextEventIndex += 1
         }
 

@@ -17,8 +17,7 @@ public final class SoundManager: @unchecked Sendable {
     private let sampleRate: Double = 44100.0
     
     // SFX Mixer State
-    private let sfxLock = NSLock()
-    private var activeSounds: [ActiveSound] = []
+    private let sfxMixer = ProceduralSoundMixer()
 
     // MARK: - Sample-basierte SFX (optionaler Modus, umschaltbar zur Laufzeit)
 
@@ -51,6 +50,10 @@ public final class SoundManager: @unchecked Sendable {
     private var headVoiceRestart: Bool = false
 
     // Engine Hum Synthesis State (only mutated on the audio render thread)
+    private var engineNoise = GameRandom(seed: UInt64.random(in: .min ... .max))
+    private var renderThrustActive = false
+    private var renderHeadActive = false
+    private var renderHeadOpenness = 0.0
     private var enginePhase: Double = 0.0
     private var engineLfoPhase: Double = 0.0
     private var engineVolLfoPhase: Double = 0.0
@@ -104,7 +107,7 @@ public final class SoundManager: @unchecked Sendable {
             object: audioEngine,
             queue: nil
         ) { [weak self] _ in
-            self?.handleConfigurationChange()
+            DispatchQueue.main.async { [weak self] in self?.handleConfigurationChange() }
         }
         #endif
         // Automatically set up and start the audio engine
@@ -242,46 +245,8 @@ public final class SoundManager: @unchecked Sendable {
         let sfxNode = AVAudioSourceNode { [weak self] (isSilence, timestamp, frameCount, outputData) -> OSStatus in
             guard let self = self else { return noErr }
             
-            self.sfxLock.lock()
-            defer { self.sfxLock.unlock() }
-            
-            let abl = UnsafeMutableAudioBufferListPointer(outputData)
-            
-            for buffer in abl {
-                if let mData = buffer.mData {
-                    memset(mData, 0, Int(buffer.mDataByteSize))
-                }
-            }
-            
-            if self.activeSounds.isEmpty {
-                isSilence.pointee = true
-                return noErr
-            }
-            
-            isSilence.pointee = false
-            let localSampleRate = self.sampleRate
-            
-            for frame in 0..<Int(frameCount) {
-                var sum: Double = 0.0
-                var i = 0
-                while i < self.activeSounds.count {
-                    let sound = self.activeSounds[i]
-                    if let sample = sound.nextSample(sampleRate: localSampleRate) {
-                        sum += sample
-                        i += 1
-                    } else {
-                        self.activeSounds.remove(at: i)
-                    }
-                }
-                
-                let finalSample = Float(max(-1.0, min(1.0, sum)))
-                for buffer in abl {
-                    if let ptr = buffer.mData?.assumingMemoryBound(to: Float.self) {
-                        ptr[frame] = finalSample
-                    }
-                }
-            }
-            
+            isSilence.pointee = ObjCBool(!self.sfxMixer.render(frameCount: Int(frameCount), outputData: outputData,
+                                                              sampleRate: self.sampleRate))
             return noErr
         }
         
@@ -289,13 +254,19 @@ public final class SoundManager: @unchecked Sendable {
         let engineNode = AVAudioSourceNode { [weak self] (isSilence, timestamp, frameCount, outputData) -> OSStatus in
             guard let self = self else { return noErr }
             
-            self.engineLock.lock()
-            let thrustActive = self.isThrustActive
-            let headActive = self.isHeadVoiceActive
-            let headOpen = self.headVoiceOpenness
-            let headRestart = self.headVoiceRestart
-            if headRestart { self.headVoiceRestart = false }
-            self.engineLock.unlock()
+            // Bei gleichzeitiger Steuerung den letzten Snapshot weiterverwenden; niemals warten.
+            var headRestart = false
+            if self.engineLock.try() {
+                self.renderThrustActive = self.isThrustActive
+                self.renderHeadActive = self.isHeadVoiceActive
+                self.renderHeadOpenness = self.headVoiceOpenness
+                headRestart = self.headVoiceRestart
+                self.headVoiceRestart = false
+                self.engineLock.unlock()
+            }
+            let thrustActive = self.renderThrustActive
+            let headActive = self.renderHeadActive
+            let headOpen = self.renderHeadOpenness
 
             if headRestart {
                 self.headVoiceTime = 0.0
@@ -356,7 +327,7 @@ public final class SoundManager: @unchecked Sendable {
                 let square = (self.enginePhase.truncatingRemainder(dividingBy: 2.0 * .pi) < .pi) ? 1.0 : -1.0
                 let mixedWave = 0.7 * triangle + 0.3 * square
                 // codereview-ok: SoundManager-Jitter ausdrücklich vom Determinismus/Replay ausgenommen (Plan-Doku, AGENTS.md); Fix optional/niedrige Priorität (2026-07-01)
-                let noise = Double.random(in: -0.05...0.05)
+                let noise = (Double(self.engineNoise.next() >> 11) * (2.0 / 9007199254740992.0) - 1.0) * 0.05
                 
                 var sampleValue = (mixedWave + noise) * finalVolume
 
@@ -413,9 +384,6 @@ public final class SoundManager: @unchecked Sendable {
         self.sfxNode = sfxNode
         self.engineNode = engineNode
         
-        sfxLock.lock()
-        activeSounds.reserveCapacity(32)
-        sfxLock.unlock()
     }
     
     private func playSound(_ type: ActiveSound.SoundType) {
@@ -431,11 +399,7 @@ public final class SoundManager: @unchecked Sendable {
             if playSampled(name(for: type)) { return }
         }
 
-        sfxLock.lock()
-        defer { self.sfxLock.unlock() }
-
-        guard activeSounds.count < 16 else { return }
-        activeSounds.append(ActiveSound(type: type, sampleRate: sampleRate))
+        sfxMixer.enqueue(type, sampleRate: sampleRate)
     }
 
     // MARK: - Sample-basierte SFX: Laden & Abspielen
@@ -603,14 +567,23 @@ final class ActiveSound: @unchecked Sendable {
         case implosion
     }
     
-    let type: SoundType
+    private(set) var type: SoundType = .laser
+    private(set) var isActive = false
+    private var noise = GameRandom(seed: 0)
     private(set) var currentFrame: Int = 0
-    let totalFrames: Int
+    private(set) var totalFrames: Int = 0
     private var phase: Double = 0.0
     private var lastSample: Double = 0.0
     
-    init(type: SoundType, sampleRate: Double) {
+    init() {}
+
+    func reset(type: SoundType, sampleRate: Double, seed: UInt64) {
         self.type = type
+        currentFrame = 0
+        phase = 0
+        lastSample = 0
+        noise = GameRandom(seed: seed)
+        isActive = true
         switch type {
         case .laser:
             self.totalFrames = Int(0.15 * sampleRate)
@@ -631,7 +604,7 @@ final class ActiveSound: @unchecked Sendable {
     
     /// Generates the next sample frame for the sound effect.
     func nextSample(sampleRate: Double) -> Double? {
-        guard currentFrame < totalFrames else { return nil }
+        guard isActive, currentFrame < totalFrames else { isActive = false; return nil }
         
         let progress = Double(currentFrame) / Double(totalFrames)
         var sampleValue: Double = 0.0
@@ -661,16 +634,20 @@ final class ActiveSound: @unchecked Sendable {
             let cutoff = startCutoff + (endCutoff - startCutoff) * progress
             let alpha = min(1.0, max(0.0, 2.0 * .pi * cutoff / sampleRate))
             
-            let noise = Double.random(in: -1.0...1.0)
+            let noise = nextNoiseSample()
             let filtered = lastSample + alpha * (noise - lastSample)
             lastSample = filtered
             
             sampleValue = filtered * volume * 0.3
             
         case .powerUp:
-            let notes = [280.0, 420.0, 560.0, 840.0]
-            let noteIndex = Int(progress * 4.0)
-            let currentFreq = notes[min(3, noteIndex)]
+            let currentFreq: Double
+            switch Int(progress * 4) {
+            case 0: currentFreq = 280
+            case 1: currentFreq = 420
+            case 2: currentFreq = 560
+            default: currentFreq = 840
+            }
             let volume = 1.0 - progress
             
             let fraction = phase / (2.0 * .pi)
@@ -690,7 +667,7 @@ final class ActiveSound: @unchecked Sendable {
             let cutoff = startCutoff + (endCutoff - startCutoff) * progress
             let alpha = min(1.0, max(0.0, 2.0 * .pi * cutoff / sampleRate))
             
-            let noise = Double.random(in: -1.0...1.0)
+            let noise = nextNoiseSample()
             let filtered = lastSample + alpha * (noise - lastSample)
             lastSample = filtered
             
@@ -714,16 +691,20 @@ final class ActiveSound: @unchecked Sendable {
             
         case .levelComplete:
             // Ascending major arpeggio sequence followed by C major chord
-            let notes = [261.6, 329.6, 392.0, 523.3, 659.3, 784.0]
-            let count = Double(notes.count)
-            let noteIdx = Int(progress * 1.5 * count)
-            
             let currentFreq: Double
-            if noteIdx < notes.count {
-                currentFreq = notes[noteIdx]
-            } else {
-                let chordFreqs = [523.3, 659.3, 784.0]
-                currentFreq = chordFreqs[currentFrame % 3]
+            switch Int(progress * 9) {
+            case 0: currentFreq = 261.6
+            case 1: currentFreq = 329.6
+            case 2: currentFreq = 392
+            case 3: currentFreq = 523.3
+            case 4: currentFreq = 659.3
+            case 5: currentFreq = 784
+            default:
+                switch currentFrame % 3 {
+                case 0: currentFreq = 523.3
+                case 1: currentFreq = 659.3
+                default: currentFreq = 784
+                }
             }
             
             let volume = 1.0 - progress
@@ -745,7 +726,7 @@ final class ActiveSound: @unchecked Sendable {
             let volume = (1.0 - progress) * (1.0 - progress)
             
             let alpha = min(1.0, max(0.0, 2.0 * .pi * currentFreq / sampleRate))
-            let noise = Double.random(in: -1.0...1.0)
+            let noise = nextNoiseSample()
             let filtered = lastSample + alpha * (noise - lastSample)
             lastSample = filtered
             
@@ -757,4 +738,9 @@ final class ActiveSound: @unchecked Sendable {
         currentFrame += 1
         return sampleValue
     }
+    /// Eigener Audio-Zufall: kein System-RNG-Aufruf im Renderthread, kein Gameplay-RNG-Verbrauch.
+    private func nextNoiseSample() -> Double {
+        Double(noise.next() >> 11) * (2.0 / 9007199254740992.0) - 1.0
+    }
+
 }

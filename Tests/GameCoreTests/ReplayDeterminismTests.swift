@@ -10,7 +10,7 @@ import AppKit
 final class ReplayDeterminismTests: GameCoreTestCase {
 
     func testReplayResizeKeepsHUDAtSceneEdgesAndRestoresStartScreen() {
-        let scene = GameScene(size: CGSize(width: 1024, height: 768))
+        let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         scene.scaleMode = .resizeFill
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
         view.presentScene(scene)
@@ -86,7 +86,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
 
     func testReplayUsesRecordedSizeAcrossWindowSizes() throws {
         for seed: UInt64 in [1234, 5678] {
-            let recorded = GameScene(size: CGSize(width: 1000, height: 800))
+            let recorded = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
             let sourceView = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
             sourceView.presentScene(recorded)
             recorded.startNewGameForTesting(seed: seed, startLevel: 1)
@@ -113,7 +113,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     }
 
     func testRecordingKeepsSimulationSizeWhenWindowChanges() throws {
-        let scene = GameScene(size: CGSize(width: 1000.5, height: 800.5))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000.5, height: 800.5))
         scene.scaleMode = .resizeFill
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000.5, height: 800.5))
         view.presentScene(scene)
@@ -165,7 +165,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
 
     /// Ein injizierter Seed muss übernommen werden; ohne Injektion wird trotzdem einer gesetzt.
     func testStartNewGameAppliesInjectedSeed() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
 
@@ -189,7 +189,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     @MainActor
     private func runScriptedGame(seed: UInt64, startLevel: Int, frames: Int,
                                  mode: GameMode = .ancientAsteroids) -> GameScene {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.startNewGameForTesting(seed: seed, startLevel: startLevel, mode: mode)
@@ -270,7 +270,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     /// Gravity-Wells, Power-up-Drops, mehrere Level-Aufstiege.
     func testSimulationDeterministicLongRunWithBossesAndLevels() {
         @MainActor func longRun(seed: UInt64) -> GameScene {
-            let scene = GameScene(size: CGSize(width: 1000, height: 800))
+            let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
             let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
             view.presentScene(scene)
             scene.autoFire = true
@@ -374,7 +374,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         let seed: UInt64 = 0x1234_5678
 
         // --- Aufnahme ---
-        let a = GameScene(size: CGSize(width: 1000, height: 800))
+        let a = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewA.presentScene(a)
         a.startNewGameForTesting(seed: seed, startLevel: 1)
@@ -390,7 +390,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         XCTAssertFalse(replay.events.isEmpty, "Das Skript muss Tastenereignisse erzeugt haben")
 
         // --- Wiedergabe in frische Szene ---
-        let b = GameScene(size: CGSize(width: 1000, height: 800))
+        let b = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewB.presentScene(b)
         XCTAssertTrue(b.startReplay(replay), "Kompatibles Replay muss starten")
@@ -412,7 +412,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         let seed: UInt64 = 0x0A07_0F19
 
         // --- Aufnahme mit Auto-Feuer, OHNE manuelles Schießen (nur Drehen) ---
-        let a = GameScene(size: CGSize(width: 1000, height: 800))
+        let a = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewA.presentScene(a)
         a.autoFire = true
@@ -432,7 +432,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         XCTAssertTrue(replay.autoFire, "Die Aufnahme muss den Auto-Feuer-Zustand festhalten")
 
         // --- Wiedergabe in frische Szene mit Auto-Feuer AUS als Default ---
-        let b = GameScene(size: CGSize(width: 1000, height: 800))
+        let b = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewB.presentScene(b)
         XCTAssertFalse(b.autoFire, "Frische Szene hat Auto-Feuer per Default aus")
@@ -455,7 +455,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
 
     /// Inkompatible Aufnahmen (fremdes Logik-Tag) dürfen nicht abgespielt werden.
     func testStartReplayRejectsIncompatibleVersion() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         let stale = Replay(version: Replay.currentLogicVersion + 1, seed: 1, startLevel: 1,
@@ -470,7 +470,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         let decoded = try Replay(data: old.encoded())
         XCTAssertEqual(decoded, old)
         XCTAssertFalse(decoded.isCompatible)
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         XCTAssertFalse(scene.startReplay(decoded))
@@ -521,7 +521,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
     /// (JSON wie in UserDefaults) noch immer identisch ab.
     func testPersistedHighScoreReplayStillReproduces() {
         // Aufnahme + Referenz-Snapshot erzeugen.
-        let a = GameScene(size: CGSize(width: 1000, height: 800))
+        let a = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let viewA = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewA.presentScene(a)
         a.startNewGameForTesting(seed: 0xBEEF_F00D, startLevel: 1)
@@ -536,7 +536,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
         let reloaded = try! JSONDecoder().decode([HighScore].self, from: json)
 
         // Aus dem neugeladenen Eintrag abspielen.
-        let b = GameScene(size: CGSize(width: 1000, height: 800))
+        let b = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let viewB = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         viewB.presentScene(b)
         guard let restored = b.replay(for: reloaded[0]) else {
@@ -612,7 +612,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
 
     /// Ein ungültiger Index startet kein Replay (deterministisch, unabhängig von persistierten Scores).
     func testWatchReplayNoOpForInvalidIndex() {
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         XCTAssertFalse(scene.watchHighScoreReplay(at: 999), "Index außerhalb der Liste startet nichts")
@@ -627,7 +627,7 @@ final class ReplayDeterminismTests: GameCoreTestCase {
             .appendingPathComponent("exploids-replay-archive-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: tmp) }
 
-        let scene = GameScene(size: CGSize(width: 1000, height: 800))
+        let scene = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
         let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         view.presentScene(scene)
         scene.replaySaveDirectory = tmp
