@@ -2,6 +2,16 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.15.0] — 2026-10-06
+
+- Neuer macOS-Spielmodus Event Horizon: bewegliche Spielobjekte verschwinden nach
+  vollständigem Verlassen des Spielfelds; das Schiff reflektiert an den Rändern.
+- Genau ein dauerhaftes schwarzes Loch bleibt in der Mitte, auch nach Treffern und
+  Levelwechseln. Implodierende Asteroiden erzeugen in diesem Modus keine weiteren Löcher.
+- Start und Wiederbelebung liegen außerhalb des Lochkerns; der Laserstrahl endet am Rand.
+- Event Horizon ist auf iOS vorerst nicht auswählbar. Bestehende Modi und ihre
+  Replay-Logikversion 5 bleiben unverändert; der neue Modus verwendet den Wert 2.
+
 ## [0.14.14] — 2026-10-02
 
 - Der Replay-Hinweis wird während der Levelblende ausgeblendet, damit die

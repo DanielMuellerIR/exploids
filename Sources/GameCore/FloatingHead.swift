@@ -37,6 +37,8 @@ public final class FloatingHead: SKNode {
     /// Asteroid (Radius 40).
     public let collisionRadius: CGFloat = 68.0
 
+    private(set) var boundaryLocalBounds = CGRect(x: -68.0, y: -68.0, width: 136.0, height: 136.0)
+
     /// Zeitpunkt des letzten Laserbeam-Treffers (Treffer-Drosselung des Dauer-Strahls, damit der
     /// Boss nicht in Sekundenbruchteilen zerschmilzt). Wird von der GameScene gesetzt.
     public var lastBeamHitTime: TimeInterval = 0.0
@@ -379,6 +381,7 @@ public final class FloatingHead: SKNode {
         let sprite = SKSpriteNode(texture: tex, size: size)
         art.addChild(sprite)
         headSprite = sprite
+        boundaryLocalBounds = sprite.frame
 
         // Norm-Koordinate -> lokale Szenen-Koordinate (Sprite ist um (0,0) zentriert, y nach oben).
         func local(_ n: CGPoint) -> CGPoint {

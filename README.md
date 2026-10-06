@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids app icon"></p>
 
-A native Asteroids-style arcade shooter for macOS and iOS (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and every sound effect is synthesized in real time; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Two game modes, nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
+A native Asteroids-style arcade shooter for macOS and iOS (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and every sound effect is synthesized in real time; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Three game modes on macOS (two on iOS), nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
 
 ## Download
 
@@ -65,6 +65,7 @@ Pick on the start screen (▲/▼ to switch, ◀/▶ for the starting level, Spa
 
 - **Ancient Asteroids** — the classic mode. Fixed playfield; objects wrap around the screen edges.
 - **Mad Meteoroids** — the whole field (asteroids, gravity wells, power‑ups, starfield) rotates continuously around the screen center while your ship stays exempt (Crazy‑Comets style). Rotation speed ramps with the level, with scheduled direction changes and occasional "record‑scratch" jolts at higher levels.
+- **Event Horizon** — currently macOS only. Moving gameplay objects disappear once they are fully outside the screen. The ship reflects off the edges. One permanent black hole remains at the center; this mode creates no additional black holes.
 
 ## Power‑ups
 

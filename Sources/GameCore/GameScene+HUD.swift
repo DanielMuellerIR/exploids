@@ -460,7 +460,12 @@ extension GameScene {
     }
 
     func updateModeSelectionLabel() {
-        let modeName = (selectedMode == .madMeteoroids) ? "MAD METEOROIDS" : "ANCIENT ASTEROIDS"
+        let modeName: String
+        switch selectedMode {
+        case .ancientAsteroids: modeName = "ANCIENT ASTEROIDS"
+        case .madMeteoroids: modeName = "MAD METEOROIDS"
+        case .eventHorizon: modeName = "EVENT HORIZON"
+        }
         let hint = isCompactLayout ? "" : "  (▲/▼ TO SELECT)"
         modeSelectionLabel.text = "MODE: \(modeName)\(hint)"
     }

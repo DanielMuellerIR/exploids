@@ -49,9 +49,11 @@ gespeicherte Größe nutzen, weil Spawn-/Wrap-/Gegnerlogik davon abhängt.
 
 ## Gameplay-Invarianten
 
-- Zwei Modi bleiben getrennt: Ancient wrappt am festen Feld; Mad rotiert Positionen
+- Modi bleiben getrennt: Ancient wrappt am festen Feld; Mad rotiert Positionen
   und Geschwindigkeiten im flachen Weltkoordinatensystem. Kein rotierender Parent, der
-  die bestehende World-Space-Kollision unbemerkt ändert.
+  die bestehende World-Space-Kollision unbemerkt ändert. Event Horizon entfernt Objekte
+  erst nach vollständigem Randübertritt und reflektiert die Schiffsbewegung. Sein einziges
+  Mittelloch bleibt bei Treffern und Levelwechseln bestehen. Die Auswahl ist vorerst macOS-only.
 - Level sind zeitbasiert. Autopilot-Balancing darf nicht nur „alle Gegner töten“ als
   Fitness optimieren; Überlebenszeit und mehrere Seeds messen.
 - Entity-Arrays und SpriteKit-Szenengraph müssen konsistent bleiben. Spawns während
@@ -174,8 +176,8 @@ Testschritt. Testanzahlen nicht in dauerhafte Doku schreiben.
 
 ## Aktiver Backlog
 
-Kanonisch in `backlog.md`: derzeit keine beauftragte offene Umsetzung oder
-Geräteabnahme. Der iOS-Port ist vorhanden; die iPhone-Abnahme ist im Changelog
+Kanonisch in `backlog.md`: Event Horizon zunächst auf macOS abnehmen; iOS erst
+nach positiver Abnahme freigeben. Der iOS-Port ist vorhanden; die iPhone-Abnahme ist im Changelog
 0.14.12 dokumentiert. Simulationsextraktion, iOS-GameController-Unterstützung,
 Scroll-Modus und Versionseinbettung für die separat verteilte SwiftPM-Binary sind
 zurückgestellt. Balance/Fixed-Timestep nur bei reproduzierbarem Bericht untersuchen.

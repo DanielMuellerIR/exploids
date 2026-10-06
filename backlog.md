@@ -1,6 +1,12 @@
 # Aktiver Backlog
 
-Aktuell gibt es keine beauftragte offene Umsetzung oder Geräteabnahme.
+## Aktueller Prüfstand
+
+- Event Horizon ist seit 0.15.0 auf macOS implementiert und für die Spielabnahme
+  bereit: endgültiger Austritt der Spielobjekte, spiegelnde Schiffsreflexion, genau
+  ein dauerhaftes Mittelloch. Randregeln, Entity-Tracking und Replay wurden geprüft;
+  die bestehenden Modi behalten ihre Referenzergebnisse. Die subjektive Mac-Abnahme
+  steht aus; die iOS-Aktivierung bleibt bis zu positiver Abnahme zurückgestellt.
 Die iOS-App mit Touch-Steuerung ist vorhanden; die erfolgreiche iPhone-Abnahme
 vom 2026-10-01 ist in `CHANGELOG.md` unter 0.14.12 dokumentiert.
 

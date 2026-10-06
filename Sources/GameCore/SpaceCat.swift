@@ -45,6 +45,8 @@ public final class SpaceCat: SKNode {
     /// damit sie „überall treffbar" ist (vorher 26 = nur der mittlere Rumpf -> kaum zu treffen).
     public let collisionRadius: CGFloat = 42.0
 
+    private(set) var boundaryLocalBounds = CGRect(x: -42.0, y: -42.0, width: 84.0, height: 84.0)
+
     /// Zeitpunkt des letzten Laserbeam-Treffers (für die Treffer-Drosselung des Dauer-Strahls,
     /// damit die Katze nicht in Sekundenbruchteilen zerschmilzt). Wird von der GameScene gesetzt.
     public var lastBeamHitTime: TimeInterval = 0.0
@@ -458,6 +460,7 @@ public final class SpaceCat: SKNode {
         left.alpha = 0.0
         addChild(left)
         catLeft = left
+        boundaryLocalBounds = right.frame.union(left.frame)
 
         // Lokaler Augen-Ursprung bei Blick nach rechts (Norm-Koord -> lokale Szenen-Koord, y oben).
         eyeOffsetRight = CGPoint(x: offset.x + (eyeNorm.x - 0.5) * size.width,

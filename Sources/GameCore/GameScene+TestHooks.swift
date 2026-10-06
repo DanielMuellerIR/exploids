@@ -129,6 +129,9 @@ extension GameScene {
             && count(SpaceCat.self) == activeCats.count
             && count(PowerUp.self)  == activePowerUps.count
             && count(Laser.self)    == activeLasers.count
+            && count(GravityWell.self) == activeGravityWells.count
+            && count(FloatingHead.self) == (activeHead == nil ? 0 : 1)
+            && count(OptionDrone.self) == options.count
     }
     
     /// For testing: returns the triple shot end time.

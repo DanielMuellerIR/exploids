@@ -40,7 +40,7 @@ public enum GameState: Sendable {
 }
 
 /// Auswählbarer Spielmodus. `UInt8`-rawValue + `Codable` für stabile Persistenz im Replay-Format
-/// (ancientAsteroids = 0, madMeteoroids = 1 – Reihenfolge nicht ändern, sonst werden alte Replays
+/// (ancientAsteroids = 0, madMeteoroids = 1, eventHorizon = 2 – Werte nicht ändern, sonst werden alte Replays
 /// falsch dekodiert).
 public enum GameMode: UInt8, Sendable, Codable {
     /// Klassischer Modus: festes Spielfeld, Objekte wrappen an den Bildschirmkanten.
@@ -48,6 +48,16 @@ public enum GameMode: UInt8, Sendable, Codable {
     /// Neuer Modus: das gesamte Spielfeld (Objekte + Sternenfeld) rotiert kontinuierlich um die
     /// Bildschirmmitte, nur das Spieler-Raumschiff bleibt davon unberührt (vgl. Crazy Comets).
     case madMeteoroids = 1
+    /// Festes Feld: Objekte verlassen es, das Schiff reflektiert am Rand, ein Mittelloch bleibt.
+    case eventHorizon = 2
+
+    static var selectableModes: [GameMode] {
+        #if os(macOS)
+        [.ancientAsteroids, .madMeteoroids, .eventHorizon]
+        #else
+        [.ancientAsteroids, .madMeteoroids]
+        #endif
+    }
 }
 
 /// Zentrale Gameplay-Tuning-Konstanten (Waffen, Einsammeln, Splits) — nach dem Muster von
@@ -189,6 +199,7 @@ public final class GameScene: SKScene {
     public private(set) var gameMode: GameMode = .ancientAsteroids
     /// Der auf dem Startscreen vorgewählte Modus.
     var selectedMode: GameMode = .ancientAsteroids
+    var eventHorizonEnteredNodes = Set<ObjectIdentifier>()
 
     // Mad-Meteoroids: Rotations-Zustand des Spielfelds (nur im madMeteoroids-Modus aktiv)
     /// Aktuelle Winkelgeschwindigkeit des Feldes in Radiant/Sekunde (Vorzeichen = Drehrichtung).
@@ -328,7 +339,7 @@ public final class GameScene: SKScene {
     public internal(set) var activeUFOs: [UFO] = []
     public internal(set) var activeGravityWells: [GravityWell] = []
     public internal(set) var activePowerUps: [PowerUp] = []
-    private var options: [OptionDrone] = []
+    var options: [OptionDrone] = []
 
     /// Aktiver Kopf-Boss („Der Götze"), falls gerade einer im Bild ist (max. einer gleichzeitig).
     public internal(set) var activeHead: FloatingHead?
@@ -692,8 +703,11 @@ public final class GameScene: SKScene {
                     selectedStartLevel += 1
                     updateLevelSelectionLabel()
                 }
-            } else if keyCode == 126 || keyCode == 125 { // Up or Down arrow -> toggle game mode
-                selectedMode = (selectedMode == .ancientAsteroids) ? .madMeteoroids : .ancientAsteroids
+            } else if keyCode == 126 || keyCode == 125 {
+                let modes = GameMode.selectableModes
+                let index = modes.firstIndex(of: selectedMode) ?? 0
+                let direction = keyCode == 125 ? 1 : -1
+                selectedMode = modes[(index + direction + modes.count) % modes.count]
                 updateModeSelectionLabel()
             } else if let digit = digitForKey(keyCode: keyCode, characters: characters), (1...5).contains(digit) {
                 // Zahlentaste 1–5: Replay des entsprechenden Highscore-Eintrags ansehen (falls einer
@@ -1117,7 +1131,7 @@ public final class GameScene: SKScene {
                     }
                     
                     // Periodically spawn Gravity Wells (Black Holes)
-                    if let bhInt = config.blackHoleInterval {
+                    if gameMode != .eventHorizon, let bhInt = config.blackHoleInterval {
                         if isSpawningEnabled && currentTime - lastGravityWellSpawnTime >= bhInt {
                             lastGravityWellSpawnTime = currentTime
                             if activeGravityWells.isEmpty {
@@ -1170,7 +1184,11 @@ public final class GameScene: SKScene {
             
             // Update the ship
             ship.update(deltaTime: deltaTime, isThrusting: isThrusting, rotationInput: rotationInput)
-            ship.wrapAround(screenSize: size)
+            if gameMode == .eventHorizon {
+                reflectEventHorizonShip()
+            } else {
+                ship.wrapAround(screenSize: size)
+            }
 
             // Power-up-Effekte mit Zeitbezug (Compress-Ablauf, Laserbeam-Strahl).
             updateTimedPowerUpEffects(currentTime: currentTime)
@@ -1209,9 +1227,9 @@ public final class GameScene: SKScene {
                         // Über damageShip(), damit ein Extra-Leben auch hier den Tod abfängt.
                         lastDeathCause = .gravityWell
                         damageShip()
-                        // Treffer -> das Loch kollabiert sofort und zieht nicht weiter an
-                        // (sonst bliebe man im Sog hängen, nachdem z.B. ein Schild verbraucht wurde).
-                        wellsToCollapse.append(well)
+                        // Normale Löcher kollabieren nach einem Treffer. Das permanente Mittelloch
+                        // bleibt; der Revive-Startpunkt liegt deshalb außerhalb seines Kerns.
+                        if gameMode != .eventHorizon { wellsToCollapse.append(well) }
                     }
                 }
                 
@@ -1629,7 +1647,7 @@ public final class GameScene: SKScene {
             asteroid.update(deltaTime: deltaTime)
             if gameMode == .madMeteoroids {
                 applyFieldRotation(toAsteroid: asteroid)
-            } else {
+            } else if gameMode != .eventHorizon {
                 asteroid.wrapAround(screenSize: size)
             }
 
@@ -1660,7 +1678,7 @@ public final class GameScene: SKScene {
             if expired {
                 laser.removeFromParent()
             } else {
-                laser.wrapAround(screenSize: size)
+                if gameMode != .eventHorizon { laser.wrapAround(screenSize: size) }
                 remainingLasers.append(laser)
             }
         }
@@ -1681,7 +1699,7 @@ public final class GameScene: SKScene {
                 }
             }
             
-            if ufo.isExited(screenSize: size) {
+            if gameMode != .eventHorizon && ufo.isExited(screenSize: size) {
                 ufo.removeFromParent()
             } else {
                 remainingUFOs.append(ufo)
@@ -1716,7 +1734,7 @@ public final class GameScene: SKScene {
                     p.position = rotatedAroundOrigin(p.position, by: fieldDeltaThisFrame)
                     p.velocity = rotatedAroundOrigin(p.velocity, by: fieldDeltaThisFrame)
                     p.position = circularWrapped(p.position, radius: madFieldRadius())
-                } else {
+                } else if gameMode != .eventHorizon {
                     p.wrapAround(screenSize: size)
                 }
                 remainingPowerUps.append(p)
@@ -1724,6 +1742,8 @@ public final class GameScene: SKScene {
         }
         self.activePowerUps = remainingPowerUps
         
+        if gameMode == .eventHorizon { removeExitedEventHorizonEntities() }
+
         // Process Invincibility blinks
         let isInvincible = currentTime < invincibilityEndTime
         if isInvincible {
@@ -1743,14 +1763,14 @@ public final class GameScene: SKScene {
             invincibilityEndTime = gameTime + 1.5
             shakeCamera(amplitude: 4.5, numberOfShakes: 6, durationPerShake: 0.03)
         } else if extraLives > 0 {
-            // Extra-Life-Power-up: kein Game Over – stattdessen in der Mitte wiederbeleben und
+            // Extra-Life-Power-up: kein Game Over – stattdessen am Startpunkt wiederbeleben und
             // kurz unsterblich machen. Beim Revive gehen ALLE aktiven Power-ups verloren.
             extraLives -= 1
             updateLivesLabel()
             resetPowerUpsOnRevive()
             SoundManager.shared.playExplosion()
             createShipExplosion(at: ship.position)
-            ship.position = .zero
+            ship.position = shipStartPosition
             ship.velocity = .zero
             invincibilityEndTime = gameTime + extraLifeInvincibility
             shakeCamera(amplitude: 6.0, numberOfShakes: 7, durationPerShake: 0.035)
@@ -2263,7 +2283,8 @@ public final class GameScene: SKScene {
 
     /// Baut den Laserbeam dieses Frames auf: eine Polylinie ab der Schiffsnase in Blickrichtung,
     /// halbe Bildschirmbreite lang, an den Bildschirmkanten toroidal umgebrochen (ragt also auf der
-    /// gegenüberliegenden Seite wieder herein). Zerstört Asteroiden entlang des Strahls.
+    /// gegenüberliegenden Seite wieder herein). Event Horizon endet am Rand. Zerstört Asteroiden
+    /// entlang des Strahls.
     func fireBeam(currentTime: TimeInterval) {
         let halfW = (size.width > 100 ? size.width : 1024.0) / 2
         let halfH = (size.height > 100 ? size.height : 768.0) / 2
@@ -2282,14 +2303,24 @@ public final class GameScene: SKScene {
         points.reserveCapacity(count + 1)
         for i in 0...count {
             let d = CGFloat(i) * step
-            let wx = wrapCoordinate(tipX + dx * d, half: halfW)
-            let wy = wrapCoordinate(tipY + dy * d, half: halfH)
-            points.append(CGPoint(x: wx, y: wy))
+            let point = CGPoint(x: tipX + dx * d, y: tipY + dy * d)
+            if gameMode == .eventHorizon {
+                guard abs(point.x) <= halfW && abs(point.y) <= halfH else { break }
+                points.append(point)
+            } else {
+                points.append(CGPoint(x: wrapCoordinate(point.x, half: halfW),
+                                      y: wrapCoordinate(point.y, half: halfH)))
+            }
+        }
+
+        guard let firstPoint = points.first else {
+            beamNode.isHidden = true
+            return
         }
 
         // Visual aufbauen; bei einem Wrap-Sprung den Stift neu ansetzen.
         let path = CGMutablePath()
-        path.move(to: points[0])
+        path.move(to: firstPoint)
         for i in 1..<points.count {
             let prev = points[i - 1]
             let cur = points[i]
@@ -2507,7 +2538,7 @@ public final class GameScene: SKScene {
     /// Ohne expliziten CLI-/Renderer-Override gilt immer die aufgezeichnete Größe.
     @discardableResult
     public func startReplay(_ replay: Replay, simulationSize: CGSize? = nil) -> Bool {
-        guard replay.isCompatible else { return false }
+        guard replay.isCompatible, GameMode.selectableModes.contains(replay.gameMode) else { return false }
         let dimensions = simulationSize ?? CGSize(width: replay.width, height: replay.height)
         guard dimensions.width.isFinite, dimensions.height.isFinite,
               dimensions.width > 0, dimensions.height > 0 else { return false }
@@ -2811,7 +2842,7 @@ public final class GameScene: SKScene {
                 clearGameEntities()
 
                 // Reset ship
-                ship.position = .zero
+                ship.position = shipStartPosition
                 ship.velocity = .zero
                 ship.zRotation = 0.0
                 ship.setScale(1.0)
@@ -2837,6 +2868,12 @@ public final class GameScene: SKScene {
                 timerLabel.isHidden = false
                 levelLabel.isHidden = false
                 
+                if gameMode == .eventHorizon {
+                    let well = GravityWell(lifetime: .infinity)
+                    addChild(well)
+                    activeGravityWells.append(well)
+                }
+
                 // Spawn initial asteroids
                 let initialCount = max(3, currentConfig().maxAsteroids / 2)
                 for _ in 0..<initialCount {
@@ -2972,10 +3009,11 @@ public final class GameScene: SKScene {
         }
         activeUFOs.removeAll()
         
-        for well in activeGravityWells {
-            well.removeFromParent()
+        if gameMode != .eventHorizon {
+            for well in activeGravityWells { well.removeFromParent() }
+            activeGravityWells.removeAll()
         }
-        activeGravityWells.removeAll()
+        eventHorizonEnteredNodes.removeAll()
 
         activeHead?.removeFromParent()
         activeHead = nil
@@ -2989,11 +3027,13 @@ public final class GameScene: SKScene {
     private func triggerImplosionCollapse(asteroid: Asteroid) {
         SoundManager.shared.playImplosion()
         
-        let collapseWell = GravityWell(strength: GameplayTuning.implosionCollapseStrength,
-                                       lifetime: GameplayTuning.implosionCollapseLifetime)
-        collapseWell.position = asteroid.position
-        self.addChild(collapseWell)
-        self.activeGravityWells.append(collapseWell)
+        if gameMode != .eventHorizon {
+            let collapseWell = GravityWell(strength: GameplayTuning.implosionCollapseStrength,
+                                           lifetime: GameplayTuning.implosionCollapseLifetime)
+            collapseWell.position = asteroid.position
+            self.addChild(collapseWell)
+            self.activeGravityWells.append(collapseWell)
+        }
         
         createImplosionExplosion(at: asteroid.position)
         shakeCamera(amplitude: 6.0, numberOfShakes: 8, durationPerShake: 0.03)
@@ -3162,7 +3202,9 @@ public final class GameScene: SKScene {
                 fireCatTwinLaser(shot)
                 SoundManager.shared.playUfoSound()
             }
-            if cat.isFinished {
+            // Event Horizon verwendet die vollständige Grafikgrenze statt der alten 60-Punkte-
+            // Austrittsmarke. Die fliehende Katze bewegt sich bis zur Entfernung weiter.
+            if cat.isFinished && gameMode != .eventHorizon {
                 cat.removeFromParent()
             } else {
                 survivors.append(cat)
@@ -3214,6 +3256,7 @@ public final class GameScene: SKScene {
     }
 
     func clearGameEntities() {
+        eventHorizonEnteredNodes.removeAll()
         for ast in activeAsteroids {
             ast.removeFromParent()
         }

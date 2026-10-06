@@ -311,3 +311,12 @@ selben Simulationsschritt, auch innerhalb der Gravity-Well- und Laser-Schleifen.
 Die Datenstruktur bleibt gleich; die geänderten Ergebnisse erfordern Logikversion 4.
 Version-3-Aufnahmen bleiben lesbar, werden bei der Wiedergabe aber abgelehnt.
 Highscores und gespeicherte Aufnahmebytes werden dadurch nicht gelöscht.
+
+## Event Horizon und Modus-Kompatibilität
+
+Seit 0.15.0 verwendet Event Horizon `gameMode = 2`; Ancient Asteroids bleibt 0 und
+Mad Meteoroids bleibt 1. Aufbau und Logikversion 5 der Aufnahmen bleiben erhalten,
+weil vorhandene Läufe bei gleichem Seed und gleicher Eingabe unverändert simulieren.
+Ältere Binaries ohne den neuen Enum-Wert lehnen Event-Horizon-Aufnahmen beim Dekodieren
+ab; sie dürfen nicht als Ancient-/Mad-Aufnahmen interpretiert werden. Auf iOS ist
+der Modus vorerst weder auswählbar noch zur Replay-Wiedergabe freigegeben.
