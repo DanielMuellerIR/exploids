@@ -2,6 +2,15 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.15.3] — 2026-10-07
+
+- Das Idol verwendet eine eigenständige Schädelgrafik mit Steinring und auf Schwarz
+  sichtbarer Außenkontur. Bewegliche Pupillen und UFO-Spawn sitzen in den Augenhöhlen
+  beziehungsweise im offenen Mund.
+- Replay-Logikversion 8 berücksichtigt den neuen Mund-/Spawnpunkt; ältere Aufnahmen
+  werden beim Abspielen abgelehnt, ihre Bytes und Highscores bleiben erhalten.
+- Bossbeschreibung und Medienherkunft sind aktualisiert.
+
 ## [0.15.2] — 2026-10-07
 
 - Spielerlaser treffen UFOs über ihr vollständiges Segment. Frontlaser und Beam

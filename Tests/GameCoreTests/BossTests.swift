@@ -99,9 +99,9 @@ final class BossTests: GameCoreTestCase {
     /// dort liegt es NEBEN dem .xctest-Bundle, nicht darin.
     func testBossArtTexturesLoadFromBundle() {
         let cat = ArtTexture.load("space_cat")
-        let head = ArtTexture.load("zardoz_head")
+        let head = ArtTexture.load("skull_head")
         XCTAssertNotNil(cat, "space_cat.png fehlt im Art-Bundle")
-        XCTAssertNotNil(head, "zardoz_head.png fehlt im Art-Bundle")
+        XCTAssertNotNil(head, "skull_head.png fehlt im Art-Bundle")
         XCTAssertGreaterThan(cat?.size().width ?? 0, 0)
         XCTAssertGreaterThan(head?.size().height ?? 0, 0)
     }

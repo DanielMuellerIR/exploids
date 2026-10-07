@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids App-Icon"></p>
 
-Ein nativer Arcade-Shooter für macOS und iOS im Asteroids-Stil (Swift 6 · SpriteKit) mit einem an den Commodore 64 angelehnten Vektor-Look — in moderner hoher Auflösung und butterweicher Bildrate (Apple Silicon, ProMotion 120 Hz). Fast jede Grafik ist prozedurale Vektor-Geometrie — nur die beiden Bosse nutzen getracte Vektor-Konturen als Texturen — und die Soundeffekte stammen aus Echtzeitsynthese oder optionalen gebündelten Aufnahmen; mitgeliefert sind zwei Chiptune-Musikstücke, die Boss-Texturen und ein optionales Paket aufgenommener Soundeffekte. Drei Spielmodi auf macOS (zwei auf iOS), neun Power-Ups, Gravitationsfelder, gegnerische UFOs, zwei Bosse, ein Pixel-Font-HUD und ein deterministisches Replay-System, das Promo-GIFs headless rendern kann.
+Ein nativer Arcade-Shooter für macOS und iOS im Asteroids-Stil (Swift 6 · SpriteKit) mit einem an den Commodore 64 angelehnten Vektor-Look — in moderner hoher Auflösung und butterweicher Bildrate (Apple Silicon, ProMotion 120 Hz). Fast jede Grafik ist prozedurale Vektor-Geometrie — nur die beiden Bosse nutzen Konturgrafiken als Texturen — und die Soundeffekte stammen aus Echtzeitsynthese oder optionalen gebündelten Aufnahmen; mitgeliefert sind zwei Chiptune-Musikstücke, die Boss-Texturen und ein optionales Paket aufgenommener Soundeffekte. Drei Spielmodi auf macOS (zwei auf iOS), neun Power-Ups, Gravitationsfelder, gegnerische UFOs, zwei Bosse, ein Pixel-Font-HUD und ein deterministisches Replay-System, das Promo-GIFs headless rendern kann.
 
 > Der Text im Spiel ist auf Englisch.
 
@@ -94,7 +94,7 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 - **Implodierende Asteroiden** — magenta umrandete Brocken, die beim Abschuss zu einem frischen Gravitationsfeld kollabieren; in Event Horizon entstehen keine zusätzlichen Löcher.
 - **Wobble-Bomben** — rote Brocken, die pulsieren, in Stufen wachsen und dann in einen Fächer schneller Splitter detonieren.
 - **Weltraumkatze** — ein pirschender Boss, der hinter Asteroiden in Deckung geht, deine Bewegung vorhält und mit Zwillings-Augenstrahlen feuert; drei Treffer vertreiben sie.
-- **Das Idol** — ein großer schwebender Steinkopf, der hereingleitet, deinen Schüssen ausweicht und eine Armada UFOs aus dem Mund speit; zehn Treffer zerstören ihn.
+- **Das Idol** — ein schwebender Schädel in einem Steinring, mit heller Kontur und Augen, die deinem Schiff folgen. Er gleitet herein, weicht deinen Schüssen aus und speit eine Armada UFOs aus dem Mund; zehn Treffer zerstören ihn.
 
 ## Steuerung
 
@@ -109,7 +109,7 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 Die Simulation ist **deterministisch**: Jeder Durchlauf wird allein als Seed plus deine Tastendrücke aufgezeichnet und lässt sich dadurch bit-genau reproduzieren. Daraus folgen zwei Dinge:
 
 - Während Aufnahme und Wiedergabe skaliert eine Größenänderung nur die Ansicht; die Simulation behält ihre Startgröße. Der Startbildschirm passt sich anschließend wieder ans Fenster an.
-- Die Wiedergabe benötigt die passende Simulations-Logikversion. Version 0.15.2 verwendet Logikversion 7 und lehnt ältere Aufnahmen ab; deren gespeicherte Bytes und Highscores bleiben erhalten.
+- Die Wiedergabe benötigt die passende Simulations-Logikversion. Version 0.15.3 verwendet Logikversion 8 und lehnt ältere Aufnahmen ab; deren gespeicherte Bytes und Highscores bleiben erhalten.
 - **Highscore-Läufe erneut ansehen** — im Startbildschirm `1`–`5` drücken, um den Eintrag exakt so abzuspielen, wie er gespielt wurde; `Esc` verlässt ihn.
 - **Promo-GIFs headless rendern** — ein Replay direkt auf der Kommandozeile in ein sauberes, cursorfreies animiertes GIF verwandeln, ganz ohne Fenster:
 

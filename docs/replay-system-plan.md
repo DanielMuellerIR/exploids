@@ -322,10 +322,10 @@ weil vorhandene Läufe bei gleichem Seed und gleicher Eingabe unverändert simul
 ab; sie dürfen nicht als Ancient-/Mad-Aufnahmen interpretiert werden. Auf iOS ist
 der Modus vorerst weder auswählbar noch zur Replay-Wiedergabe freigegeben.
 
-## Aktueller Replay-Vertrag (0.15.2, 2026-10-07)
+## Aktueller Replay-Vertrag (0.15.3, 2026-10-07)
 
-`Replay.currentLogicVersion` ist 7. Vollständige Lasersegmente gegen UFOs und
-Waffenursprünge an der skalierten Schiffsnase können gegenüber Version 6 andere Ergebnisse erzeugen.
+`Replay.currentLogicVersion` ist 8. Der Mund-/UFO-Spawnpunkt des Kopf-Bosses folgt
+der neuen Schädelgrafik und kann gegenüber Version 7 andere Ergebnisse erzeugen.
 Alle älteren Logikversionen werden deshalb beim Abspielen ausdrücklich abgelehnt;
 das Dekodieren bleibt möglich. Highscores und die gespeicherten Aufnahmebytes
 werden nicht gelöscht. Ein alter Lauf benötigt zur Wiedergabe seine passende Binary.

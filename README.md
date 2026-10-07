@@ -4,7 +4,7 @@
 
 <p align="center"><img src="Icon/icon_1024.png" width="180" alt="Exploids app icon"></p>
 
-A native Asteroids-style arcade shooter for macOS and iOS (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use traced vector‑contour textures — and sound effects use real-time synthesis or optional bundled recordings; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Three game modes on macOS (two on iOS), nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
+A native Asteroids-style arcade shooter for macOS and iOS (Swift 6 · SpriteKit) with a Commodore‑64‑inspired vector look, rendered at modern high resolution and butter‑smooth frame rates (Apple Silicon, ProMotion 120 Hz). Almost every graphic is procedural vector geometry — only the two bosses use contour textures — and sound effects use real-time synthesis or optional bundled recordings; the bundled media are two chiptune music tracks, the boss textures and an optional pack of recorded sound effects. Three game modes on macOS (two on iOS), nine power‑ups, gravity wells, enemy saucers, two bosses, a pixel‑font HUD, and a deterministic replay system that can render promo GIFs headlessly.
 
 ## Download
 
@@ -92,7 +92,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 - **Imploding asteroids** — magenta‑outlined rocks that collapse into a fresh gravity well when you shoot them (no extra wells in Event Horizon).
 - **Wobbling bombs** — red rocks that pulse and grow through stages, then detonate into a spread of fast fragments.
 - **Space Cat** — a stalking boss that takes cover behind asteroids, leads your movement and fires twin eye‑beams; takes three hits to drive off.
-- **The Idol** — a large floating stone head that drifts in, dodges your fire and spews an armada of saucers from its mouth; takes ten hits to destroy.
+- **The Idol** — a floating skull surrounded by a stone ring, with a bright contour and eyes that track your ship. It drifts in, dodges your fire and spews an armada of saucers from its mouth; takes ten hits to destroy.
 
 ## Controls
 
@@ -107,7 +107,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 The simulation is **deterministic**: every run is recorded as just its seed plus your key presses, so it can be reproduced bit‑for‑bit. Two things fall out of that:
 
 - During recording and replay, resizing scales the view while the simulation keeps its starting dimensions. The title screen fits the window again.
-- Playback requires the matching simulation logic version. Version 0.15.2 uses logic version 7 and rejects older recordings; their saved bytes and high scores remain intact.
+- Playback requires the matching simulation logic version. Version 0.15.3 uses logic version 8 and rejects older recordings; their saved bytes and high scores remain intact.
 - **Watch high‑score runs again** — on the title screen press `1`–`5` to replay that entry exactly as it was played; `Esc` exits.
 - **Render promo GIFs headlessly** — turn a replay into a clean, cursor‑free animated GIF straight from the command line, no window needed:
 

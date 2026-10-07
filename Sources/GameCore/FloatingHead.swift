@@ -84,15 +84,15 @@ public final class FloatingHead: SKNode {
     /// 0 = Mund zu, 1 = Mund ganz offen.
     private var mouthProgress: CGFloat = 0.0
 
-    // Darstellung: vektorisierte Kontur als Textur (Art/zardoz_head.png, Silber auf transparent –
-    // der Zardoz-„Schrei"-Patch). `headHeight` ist die Bildhöhe in Szenen-Einheiten; Augen/Mund als
+    // Darstellung: eigene Schädelkontur als Textur (Art/skull_head.png, Silber auf transparent).
+    // `headHeight` ist die Bildhöhe in Szenen-Einheiten; Augen/Mund als
     // normierte Texturkoordinaten (0..1, y nach unten), zentral justierbar. Aus ihnen werden die
-    // Pupillen-Sockel (bewegliche Augen) und der Mund-Mittelpunkt (UFO-Spawn) berechnet. Der Schrei-
-    // Mund ist dauerhaft offen – es gibt keine sichtbare Mund-Animation mehr.
+    // Pupillen-Sockel (bewegliche Augen) und der Mund-Mittelpunkt (UFO-Spawn) berechnet.
+    // Der Mund ist dauerhaft offen; sein Öffnungsgrad steuert nur den Ablauf und die Stimme.
     private let headHeight: CGFloat = 220.0
-    private let leftEyeNorm  = CGPoint(x: 0.264, y: 0.31)
-    private let rightEyeNorm = CGPoint(x: 0.514, y: 0.31)
-    private let mouthNorm    = CGPoint(x: 0.386, y: 0.52)
+    private let leftEyeNorm  = CGPoint(x: 0.382, y: 0.50)
+    private let rightEyeNorm = CGPoint(x: 0.628, y: 0.50)
+    private let mouthNorm    = CGPoint(x: 0.50, y: 0.75)
 
     // Grafik-Referenzen
     private let art = SKNode()
@@ -365,12 +365,12 @@ public final class FloatingHead: SKNode {
 
     // MARK: - Grafik-Aufbau (vektorisierte Kontur-Textur)
 
-    /// Baut den Kopf-Boss aus der getracten Zardoz-Textur (Silber auf transparent) als ein zentriertes
+    /// Baut den Kopf-Boss aus der eigenen Schädelkontur (Silber auf transparent) als ein zentriertes
     /// Sprite und legt darüber die beweglichen Glüh-Pupillen sowie die (zunächst versteckten)
     /// Schadens-Risse. Aus den normierten Augen-/Mund-Koordinaten werden die lokalen Sockel- und
     /// Mund-Positionen berechnet (Textur-y nach unten -> Szenen-y nach oben gespiegelt).
     private func buildArt() {
-        guard let tex = ArtTexture.load("zardoz_head") else {
+        guard let tex = ArtTexture.load("skull_head") else {
             buildFallbackArt()
             return
         }
@@ -391,8 +391,7 @@ public final class FloatingHead: SKNode {
         rightSocketCenter = local(rightEyeNorm)
         mouthLocal = local(mouthNorm)
 
-        // Bewegliche Glüh-Pupillen über den (in die Textur gestickten) Augen – sie verdecken die
-        // statischen Pupillen und folgen dem Schiff (der „die Augen bewegen sich noch"-Wunsch).
+        // Bewegliche Glüh-Pupillen sitzen in den leeren Augenhöhlen und folgen dem Schiff.
         leftPupil = pupilNode(at: leftSocketCenter)
         rightPupil = pupilNode(at: rightSocketCenter)
         art.addChild(leftPupil)

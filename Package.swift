@@ -35,7 +35,7 @@ let package = Package(
                 .copy("Fonts"),
                 // Vektorisierte Boss-Grafiken (PNG, nachgezeichnete Konturen) – über
                 // GameCoreResources.bundle als Textur geladen: `space_cat.png`
-                // (Weltraumkatze), `zardoz_head.png` (Kopf-Boss).
+                // (Weltraumkatze), `skull_head.png` (Kopf-Boss).
                 .copy("Art")
             ]
         ),
