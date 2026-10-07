@@ -840,12 +840,8 @@ public final class GameScene: SKScene {
         lastLaserTime = now
         
         let angle = ship.zRotation
-        let tipDistance: CGFloat = 18.0
-        let spawnPos = CGPoint(
-            x: ship.position.x + tipDistance * cos(angle),
-            y: ship.position.y + tipDistance * sin(angle)
-        )
-        
+        let spawnPos = ship.frontWeaponOrigin
+
         let isTripleActive = now < tripleShotEndTime
         
         if isTripleActive {
@@ -879,9 +875,10 @@ public final class GameScene: SKScene {
         // Rear laser power-up: additionally fire one shot straight backwards.
         if now < rearLaserEndTime {
             let rearAngle = angle + .pi
+            let rearDistance: CGFloat = 18
             let rearSpawn = CGPoint(
-                x: ship.position.x + tipDistance * cos(rearAngle),
-                y: ship.position.y + tipDistance * sin(rearAngle)
+                x: ship.position.x + rearDistance * cos(rearAngle),
+                y: ship.position.y + rearDistance * sin(rearAngle)
             )
             let rearLaser = Laser(position: rearSpawn, angle: rearAngle, type: .normal)
             self.addChild(rearLaser)
@@ -1493,7 +1490,7 @@ public final class GameScene: SKScene {
 
                 for ufo in activeUFOs {
                     let ufoPoly = ufo.getWorldVertices()
-                    let hit = CollisionHelper.isPointInPolygon(start, polygon: ufoPoly) || CollisionHelper.isPointInPolygon(end, polygon: ufoPoly)
+                    let hit = CollisionHelper.segmentIntersectsPolygon(start, end, polygon: ufoPoly)
                     
                     if !hitUFOs.contains(ufo) && hit {
                         laser.pierceCount += 1
@@ -2300,8 +2297,9 @@ public final class GameScene: SKScene {
         let step: CGFloat = 7.0
         let count = max(1, Int(beamLength / step))
 
-        let tipX = ship.position.x + 18.0 * dx
-        let tipY = ship.position.y + 18.0 * dy
+        let origin = ship.frontWeaponOrigin
+        let tipX = origin.x
+        let tipY = origin.y
 
         // Stützpunkte entlang der Richtung, jeweils toroidal in [-half, half] gewrappt.
         var points: [CGPoint] = []
@@ -2310,7 +2308,16 @@ public final class GameScene: SKScene {
             let d = CGFloat(i) * step
             let point = CGPoint(x: tipX + dx * d, y: tipY + dy * d)
             if gameMode == .eventHorizon {
-                guard abs(point.x) <= halfW && abs(point.y) <= halfH else { break }
+                if abs(point.x) > halfW || abs(point.y) > halfH {
+                    if !points.isEmpty {
+                        let toX = dx > 0 ? (halfW - tipX) / dx : (dx < 0 ? (-halfW - tipX) / dx : .infinity)
+                        let toY = dy > 0 ? (halfH - tipY) / dy : (dy < 0 ? (-halfH - tipY) / dy : .infinity)
+                        let distance = min(toX, toY)
+                        // Auch der kurze Rest zwischen Schiffsnase und Wand muss eine Linie ergeben.
+                        if distance > 0 { points.append(CGPoint(x: tipX + dx * distance, y: tipY + dy * distance)) }
+                    }
+                    break
+                }
                 points.append(point)
             } else {
                 points.append(CGPoint(x: wrapCoordinate(point.x, half: halfW),

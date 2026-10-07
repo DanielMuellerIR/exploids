@@ -107,7 +107,7 @@ Beyond the splitting rocks, the field fills up as you climb the levels:
 The simulation is **deterministic**: every run is recorded as just its seed plus your key presses, so it can be reproduced bit‑for‑bit. Two things fall out of that:
 
 - During recording and replay, resizing scales the view while the simulation keeps its starting dimensions. The title screen fits the window again.
-- Playback requires the matching simulation logic version. Version 0.15.1 uses logic version 6 and rejects older recordings; their saved bytes and high scores remain intact.
+- Playback requires the matching simulation logic version. Version 0.15.2 uses logic version 7 and rejects older recordings; their saved bytes and high scores remain intact.
 - **Watch high‑score runs again** — on the title screen press `1`–`5` to replay that entry exactly as it was played; `Esc` exits.
 - **Render promo GIFs headlessly** — turn a replay into a clean, cursor‑free animated GIF straight from the command line, no window needed:
 
@@ -116,6 +116,8 @@ exploids --render-demo --out demo.gif            # scripted sample run -> GIF (p
 exploids --export-replay 0 --out run.replay      # export high-score entry #0's replay to a file
 exploids --render-replay run.replay --out run.gif --scale 480 --fps 30
 ```
+
+GIF export preserves duration in whole hundredths of a second and combines rates above 50 FPS; video keeps the requested frame rate.
 
 ## How it compares
 

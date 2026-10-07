@@ -57,24 +57,29 @@ elif [ "$metal_status" -ne 0 ]; then
     exit "$metal_status"
 fi
 
-"$bin_dir/exploids" --render-replay "$probe/current.replay" --out "$probe/run.gif" --scale 160 --fps 25 --max-frames 0 --no-sound
-"$bin_dir/exploids" --render-video "$probe/current.replay" --out "$probe/run.mp4" --scale 160 --fps 25 --max-frames 0 --no-sound
-swift - "$probe/run.gif" "$probe/run.mp4" <<'SWIFT'
+for fps in 24 25 30 60; do
+    "$bin_dir/exploids" --render-replay "$probe/current.replay" --out "$probe/run-$fps.gif" --scale 160 --fps "$fps" --max-frames 0 --no-sound
+done
+"$bin_dir/exploids" --render-video "$probe/current.replay" --out "$probe/run.mp4" --scale 160 --fps 60 --max-frames 0 --no-sound
+swift - "$probe" <<'SWIFT'
 import Foundation
 import ImageIO
 import AVFoundation
-let gif = CGImageSourceCreateWithURL(URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL, nil)!
-let count = CGImageSourceGetCount(gif)
-precondition(count == 50, "Zwei Sekunden bei 25 FPS müssen 50 Bilder ergeben, erhalten: \(count)")
-var duration = 0.0
-for i in 0..<count {
-    let props = CGImageSourceCopyPropertiesAtIndex(gif, i, nil)! as NSDictionary
-    let gifProps = props[kCGImagePropertyGIFDictionary] as! NSDictionary
-    duration += (gifProps[kCGImagePropertyGIFUnclampedDelayTime] as? Double)
-        ?? (gifProps[kCGImagePropertyGIFDelayTime] as! Double)
+let root = URL(fileURLWithPath: CommandLine.arguments[1])
+for fps in [24, 25, 30, 60] {
+    let gif = CGImageSourceCreateWithURL(root.appendingPathComponent("run-\(fps).gif") as CFURL, nil)!
+    let count = CGImageSourceGetCount(gif)
+    precondition(count == min(fps * 2, 100), "Falsche GIF-Bildzahl bei \(fps) FPS: \(count)")
+    var duration = 0.0
+    for i in 0..<count {
+        let props = CGImageSourceCopyPropertiesAtIndex(gif, i, nil)! as NSDictionary
+        let gifProps = props[kCGImagePropertyGIFDictionary] as! NSDictionary
+        duration += (gifProps[kCGImagePropertyGIFUnclampedDelayTime] as? Double)
+            ?? (gifProps[kCGImagePropertyGIFDelayTime] as! Double)
+    }
+    precondition(abs(duration - 2) < 0.001, "GIF verändert das Abspieltempo bei \(fps) FPS: \(duration)")
 }
-precondition(abs(duration - 2) < 0.001, "GIF verändert das Abspieltempo: \(duration)")
-let video = AVURLAsset(url: URL(fileURLWithPath: CommandLine.arguments[2]))
+let video = AVURLAsset(url: root.appendingPathComponent("run.mp4"))
 precondition(abs(CMTimeGetSeconds(video.duration) - 2) < 0.001, "Video verändert das Abspieltempo")
-print("replay-cli: OK (bewegtes Schiff, alte Logik abgelehnt, 25 FPS in Echtzeit)")
+print("replay-cli: OK (bewegtes Schiff, alte Logik abgelehnt, GIF 24/25/30/60 FPS und Video 60 FPS in Echtzeit)")
 SWIFT

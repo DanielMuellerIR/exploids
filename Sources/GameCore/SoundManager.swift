@@ -117,10 +117,10 @@ public final class SoundManager: @unchecked Sendable {
     #if os(iOS)
     /// Wird aufgerufen, nachdem die Engine neu gestartet wurde (Konfigurationswechsel) – damit der
     /// MusicPlayer seinen Musik-Knoten neu einplanen kann. Wird vom MusicPlayer gesetzt.
-    public var onEngineReset: (@Sendable () -> Void)?
+    public var onEngineReset: (@MainActor @Sendable () -> Void)?
 
     /// Reagiert auf AVAudioEngineConfigurationChange: Engine neu starten und Abnehmer benachrichtigen.
-    private func handleConfigurationChange() {
+    @MainActor private func handleConfigurationChange() {
         guard !isMuted else { return }
         do {
             if !audioEngine.isRunning {

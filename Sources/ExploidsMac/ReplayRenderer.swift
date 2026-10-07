@@ -135,7 +135,8 @@ enum ReplayRenderer {
         }
 
         guard !images.isEmpty else { throw RenderError.noFramesRendered }
-        try encodeGIF(images: images, fps: options.fps, to: outputURL)
+        do { try GIFEncoder.encode(images: images, fps: options.fps, to: outputURL) }
+        catch { throw RenderError.gifDestinationFailed }
     }
 
     /// Rendert die Aufnahme als h264-Video (mp4). Für lange Läufe gedacht, die als GIF zu groß wären –
@@ -289,24 +290,4 @@ enum ReplayRenderer {
         return ctx.makeImage()
     }
 
-    /// Kodiert die Frames als animiertes GIF (Endlosschleife) per ImageIO.
-    private static func encodeGIF(images: [CGImage], fps: Int, to url: URL) throws {
-        let gifType = UTType.gif.identifier as CFString
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, gifType, images.count, nil) else {
-            throw RenderError.gifDestinationFailed
-        }
-        let fileProps = [kCGImagePropertyGIFDictionary as String:
-                            [kCGImagePropertyGIFLoopCount as String: 0]]    // 0 = Endlosschleife
-        CGImageDestinationSetProperties(dest, fileProps as CFDictionary)
-
-        let delay = 1.0 / Double(max(1, fps))
-        let frameProps = [kCGImagePropertyGIFDictionary as String:
-                            [kCGImagePropertyGIFDelayTime as String: delay]]
-        for img in images {
-            CGImageDestinationAddImage(dest, img, frameProps as CFDictionary)
-        }
-        if !CGImageDestinationFinalize(dest) {
-            throw RenderError.gifDestinationFailed
-        }
-    }
 }

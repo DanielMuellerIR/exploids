@@ -44,7 +44,8 @@ extension GameScene {
         activeAsteroids.removeAll { asteroid in
             let bounds = eventHorizonBounds(asteroid.getWorldBoundaryVertices(), padding: asteroid.lineWidth / 2)
             if bounds.intersects(eventHorizonScreenBounds) { asteroid.hasEnteredScreen = true }
-            return removeIfExited(asteroid, bounds: bounds, canEnter: !asteroid.hasEnteredScreen)
+            guard asteroid.hasEnteredScreen else { return false }
+            return removeIfExited(asteroid, bounds: bounds)
         }
         activeLasers.removeAll { laser in
             let segment = laser.getWorldSegment()
@@ -69,18 +70,17 @@ extension GameScene {
             activeHead = nil
             SoundManager.shared.stopAllHeadSounds()
         }
-        let liveNodes: [SKNode] = activeAsteroids + activeLasers + activeUFOs + activePowerUps + activeCats
+        let liveNodes: [SKNode] = activeUFOs + activeCats
             + (activeHead.map { [$0] } ?? [])
         eventHorizonEnteredNodes.formIntersection(Set(liveNodes.map(ObjectIdentifier.init)))
     }
 
     private func removeIfExited(_ node: SKNode, bounds: CGRect, canEnter: Bool = false) -> Bool {
-        let identifier = ObjectIdentifier(node)
         if bounds.intersects(eventHorizonScreenBounds) {
-            eventHorizonEnteredNodes.insert(identifier)
+            if canEnter { eventHorizonEnteredNodes.insert(ObjectIdentifier(node)) }
             return false
         }
-        if canEnter && !eventHorizonEnteredNodes.contains(identifier) { return false }
+        if canEnter && !eventHorizonEnteredNodes.contains(ObjectIdentifier(node)) { return false }
         node.removeFromParent()
         return true
     }

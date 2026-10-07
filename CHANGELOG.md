@@ -2,6 +2,18 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.15.2] — 2026-10-07
+
+- Spielerlaser treffen UFOs über ihr vollständiges Segment. Frontlaser und Beam
+  entstehen an der skalierten Schiffsnase; kurze Beams enden sichtbar an der Wand.
+- GIFs verteilen ganze Hundertstelsekunden über die Bildfolge und fassen Raten
+  oberhalb von 50 FPS zusammen. Die Gesamtdauer bleibt bis auf GIF-Zeitauflösung
+  erhalten; Video behält seine gewünschte Bildrate.
+- Event Horizon verfolgt zusätzliche Eintrittskennungen nur für UFO, Katze und Kopf.
+- Der iOS-Engine-Reset drückt seinen MainActor-Vertrag ausdrücklich aus.
+- Replay-Logikversion 7 lehnt ältere Aufnahmen zur Wiedergabe ab; gespeicherte
+  Aufnahmebytes und Highscores bleiben erhalten.
+
 ## [0.15.1] — 2026-10-06
 
 - Pausen stoppen alle Spielzeitfristen; losgelassene Feuertasten bleiben nach dem

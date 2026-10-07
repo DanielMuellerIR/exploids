@@ -135,7 +135,7 @@ public final class MusicPlayer: NSObject, AVAudioPlayerDelegate, @unchecked Send
     }
 
     /// Nach einem Engine-Neustart: den (noch attachten) Knoten neu einplanen und weiterspielen.
-    private func handleEngineReset() {
+    @MainActor private func handleEngineReset() {
         lock.lock()
         defer { lock.unlock() }
         guard started, let node = musicNode else { return }

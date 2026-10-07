@@ -322,10 +322,10 @@ weil vorhandene Läufe bei gleichem Seed und gleicher Eingabe unverändert simul
 ab; sie dürfen nicht als Ancient-/Mad-Aufnahmen interpretiert werden. Auf iOS ist
 der Modus vorerst weder auswählbar noch zur Replay-Wiedergabe freigegeben.
 
-## Aktueller Replay-Vertrag (0.15.1, 2026-10-06)
+## Aktueller Replay-Vertrag (0.15.2, 2026-10-07)
 
-`Replay.currentLogicVersion` ist 6. Die korrigierten Segmenttreffer, Absorptionen
-und Spielzeitfristen können gegenüber Version 5 andere Ergebnisse erzeugen.
+`Replay.currentLogicVersion` ist 7. Vollständige Lasersegmente gegen UFOs und
+Waffenursprünge an der skalierten Schiffsnase können gegenüber Version 6 andere Ergebnisse erzeugen.
 Alle älteren Logikversionen werden deshalb beim Abspielen ausdrücklich abgelehnt;
 das Dekodieren bleibt möglich. Highscores und die gespeicherten Aufnahmebytes
 werden nicht gelöscht. Ein alter Lauf benötigt zur Wiedergabe seine passende Binary.
@@ -339,7 +339,8 @@ Tasten und Fortsetzen stehen in ihrer Reihenfolge am selben Schrittindex.
 
 Die Simulation läuft mit 120 festen Schritten je Spielsekunde. GIF und Video wählen
 bei automatischem Capture-Takt 1–120 Bilder pro Sekunde, auch wenn die Bildrate 120
-nicht ganzzahlig teilt. Ein expliziter `--stride` verändert bewusst das Abspieltempo.
+nicht ganzzahlig teilt. GIF verteilt seine Dauer auf ganze Hundertstelsekunden und fasst Raten oberhalb
+von 50 FPS zusammen; die Video-Bildrate bleibt unverändert. Ein expliziter `--stride` verändert bewusst das Abspieltempo.
 Die Wiedergabe verwendet standardmäßig die gespeicherte Szenengröße; eine abweichende
 `--sim-scale` ist ein diagnostischer Eingriff und kann das Ergebnis ändern.
 

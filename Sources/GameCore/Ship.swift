@@ -246,20 +246,18 @@ public final class Ship: SKShapeNode {
     
     /// Returns world-space coordinates of the ship's vertices.
     public func getWorldVertices() -> [CGPoint] {
-        let cosTheta = cos(zRotation)
-        let sinTheta = sin(zRotation)
-        // Skalierung berücksichtigen, damit z.B. das Compress-Power-Up (Schiff auf ~30%) auch die
-        // Kollisionsfläche schrumpft – nicht nur die Optik.
-        return vertices.map { pt in
-            let sx = pt.x * xScale
-            let sy = pt.y * yScale
-            return CGPoint(
-                x: position.x + sx * cosTheta - sy * sinTheta,
-                y: position.y + sx * sinTheta + sy * cosTheta
-            )
-        }
+        vertices.map(worldVertex)
     }
-    
+
+    var frontWeaponOrigin: CGPoint { worldVertex(vertices[0]) }
+
+    private func worldVertex(_ point: CGPoint) -> CGPoint {
+        let x = point.x * xScale, y = point.y * yScale
+        let c = cos(zRotation), s = sin(zRotation)
+        return CGPoint(x: position.x + x * c - y * s,
+                       y: position.y + x * s + y * c)
+    }
+
     // MARK: - Drone Targeting helper
     
     /// Returns target positions for R-Type Options to follow the ship with a spacing offset.

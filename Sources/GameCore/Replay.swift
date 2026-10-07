@@ -45,7 +45,8 @@ public struct Replay: Codable, Equatable, Sendable {
     /// v5: Auch Wackelasteroidenexplosionen respektieren die Schutzfrist.
     /// v6: Pause/Resume und F/# werden vollständig wiedergegeben; Segmenttreffer und
     ///     Absorption sind korrigiert, mehrere Implosionslöcher entstehen in stabiler Reihenfolge.
-    public static let currentLogicVersion: Int = 6
+    /// v7: Spielerlaser prüfen ganze UFO-Segmente; Frontwaffen folgen der skalierten Schiffsnase.
+    public static let currentLogicVersion: Int = 7
 
     public let version: Int
     public let seed: UInt64
