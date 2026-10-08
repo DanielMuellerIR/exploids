@@ -2,6 +2,14 @@
 
 All notable changes to Exploids. Dates are ISO 8601 (YYYY-MM-DD).
 
+## [0.15.4] — 2026-10-08
+
+- GIF-Ausschnitte behalten auch bei unvollständigen Schlussintervallen ihre echte Dauer. Die Bildauswahl steht vor dem Rendern fest; hohe Bildraten erzeugen nur tatsächlich benötigte GIF-Bilder.
+- Hecklaser entstehen am skalierten Schiffsrumpf und bleiben bei Compress auch unmittelbar an den Wänden im Spielfeld.
+- Mund-/Spawnpunkt und Randgeometrie des Idols bleiben bei fehlender Grafik identisch.
+- Stumme Simulation und Replay-Prüfung benötigen keine Metal-View mehr. Der gemeinsame Szenenaufbau läuft genau einmal.
+- Replay-Logikversion 9 lehnt ältere Aufnahmen zur Wiedergabe ab; gespeicherte Aufnahmebytes und Highscores bleiben erhalten.
+
 ## [0.15.3] — 2026-10-07
 
 - Das Idol verwendet eine eigenständige Schädelgrafik mit Steinring und auf Schwarz

@@ -30,6 +30,15 @@ struct GIFTimingTest {
             precondition(abs(duration - 2) < 0.001, "\(fps) FPS speichern \(duration) statt 2 Sekunden")
             precondition(CGImageSourceGetCount(gif) == min(fps * 2, 100))
         }
+        for fps in [1, 25, 30, 60, 120] {
+            let count = Int(ceil(241.0 * Double(fps) / 120))
+            let timing = GIFEncoder.plan(frameCount: count, fps: fps, duration: 241.0 / 120)
+            precondition(timing.reduce(0) { $0 + $1.ticks } == 201)
+            precondition(timing.allSatisfy { $0.ticks >= 2 })
+            precondition(timing.allSatisfy { $0.sourceIndex < count })
+            if fps == 120 { precondition(timing.count == 100, "Überflüssige Renderbilder geplant") }
+            if fps == 1 { precondition(timing.map(\.ticks) == [100, 101]) }
+        }
         print("gif-timing: OK (gespeicherte Dauer bei 24/25/30/60/120 FPS)")
     }
 }

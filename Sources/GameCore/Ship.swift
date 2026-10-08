@@ -250,6 +250,7 @@ public final class Ship: SKShapeNode {
     }
 
     var frontWeaponOrigin: CGPoint { worldVertex(vertices[0]) }
+    var rearWeaponOrigin: CGPoint { worldVertex(CGPoint(x: vertices.map(\.x).min() ?? -12, y: 0)) }
 
     private func worldVertex(_ point: CGPoint) -> CGPoint {
         let x = point.x * xScale, y = point.y * yScale

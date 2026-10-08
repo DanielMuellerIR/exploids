@@ -8,6 +8,24 @@ import SpriteKit
 @MainActor
 final class BossTests: GameCoreTestCase {
 
+    func testHeadSimulationDoesNotDependOnTextureAvailability() throws {
+        let texture = try XCTUnwrap(ArtTexture.load("skull_head"))
+        var first = GameRandom(seed: 42), second = GameRandom(seed: 42)
+        let textured = FloatingHead(screenSize: CGSize(width: 1000, height: 800), using: &first, texture: texture)
+        let fallback = FloatingHead(screenSize: CGSize(width: 1000, height: 800), using: &second, texture: nil)
+        XCTAssertEqual(textured.boundaryLocalBounds, fallback.boundaryLocalBounds)
+        XCTAssertEqual(textured.mouthWorldPosition, fallback.mouthWorldPosition)
+        for _ in 0..<1500 {
+            let a = textured.update(deltaTime: GameScene.simStep, shipPosition: .zero)
+            let b = fallback.update(deltaTime: GameScene.simStep, shipPosition: .zero)
+            XCTAssertEqual(a, b)
+            XCTAssertEqual(textured.position, fallback.position)
+            XCTAssertEqual(textured.mouthWorldPosition, fallback.mouthWorldPosition)
+            XCTAssertEqual(textured.phase, fallback.phase)
+        }
+        XCTAssertEqual(first.next(), second.next())
+    }
+
     // MARK: - Kopf-Boss (FloatingHead)
 
     func testFloatingHeadStartsEntering() {

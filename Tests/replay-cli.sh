@@ -12,7 +12,8 @@ import pathlib, plistlib, re, sys
 version = int(re.search(r'currentLogicVersion: Int = (\d+)', pathlib.Path('Sources/GameCore/Replay.swift').read_text()).group(1))
 replay = dict(version=version, seed=42, startLevel=1, gameMode=0, events=[], frameCount=240,
               autoFire=False, width=1000, height=800)
-for name, v in [('current', version), ('old', version-1)]:
+for name, v in [('current', version), ('odd', version), ('old', version-1)]:
+    replay['frameCount'] = 241 if name == 'odd' else 240
     replay['version'] = v
     (pathlib.Path(sys.argv[1]) / (name+'.replay')).write_bytes(plistlib.dumps(replay, fmt=plistlib.FMT_BINARY))
 PY
@@ -57,16 +58,18 @@ elif [ "$metal_status" -ne 0 ]; then
     exit "$metal_status"
 fi
 
-for fps in 24 25 30 60; do
+for fps in 24 25 30 60 120; do
     "$bin_dir/exploids" --render-replay "$probe/current.replay" --out "$probe/run-$fps.gif" --scale 160 --fps "$fps" --max-frames 0 --no-sound
 done
+"$bin_dir/exploids" --render-replay "$probe/odd.replay" --out "$probe/odd.gif" --scale 160 --fps 1 --max-frames 0 --no-sound
+"$bin_dir/exploids" --render-replay "$probe/odd.replay" --out "$probe/stride.gif" --scale 160 --fps 1 --stride 120 --max-frames 0 --no-sound
 "$bin_dir/exploids" --render-video "$probe/current.replay" --out "$probe/run.mp4" --scale 160 --fps 60 --max-frames 0 --no-sound
 swift - "$probe" <<'SWIFT'
 import Foundation
 import ImageIO
 import AVFoundation
 let root = URL(fileURLWithPath: CommandLine.arguments[1])
-for fps in [24, 25, 30, 60] {
+for fps in [24, 25, 30, 60, 120] {
     let gif = CGImageSourceCreateWithURL(root.appendingPathComponent("run-\(fps).gif") as CFURL, nil)!
     let count = CGImageSourceGetCount(gif)
     precondition(count == min(fps * 2, 100), "Falsche GIF-Bildzahl bei \(fps) FPS: \(count)")
@@ -79,7 +82,18 @@ for fps in [24, 25, 30, 60] {
     }
     precondition(abs(duration - 2) < 0.001, "GIF verändert das Abspieltempo bei \(fps) FPS: \(duration)")
 }
+for (name, expected) in [("odd", 2.01), ("stride", 3.0)] {
+    let gif = CGImageSourceCreateWithURL(root.appendingPathComponent(name + ".gif") as CFURL, nil)!
+    var duration = 0.0
+    for index in 0..<CGImageSourceGetCount(gif) {
+        let properties = CGImageSourceCopyPropertiesAtIndex(gif, index, nil)! as NSDictionary
+        let timing = properties[kCGImagePropertyGIFDictionary] as! NSDictionary
+        duration += (timing[kCGImagePropertyGIFUnclampedDelayTime] as? Double)
+            ?? (timing[kCGImagePropertyGIFDelayTime] as! Double)
+    }
+    precondition(abs(duration - expected) < 0.001, "Falsche Restdauer/Stride: \(name) = \(duration)")
+}
 let video = AVURLAsset(url: root.appendingPathComponent("run.mp4"))
 precondition(abs(CMTimeGetSeconds(video.duration) - 2) < 0.001, "Video verändert das Abspieltempo")
-print("replay-cli: OK (bewegtes Schiff, alte Logik abgelehnt, GIF 24/25/30/60 FPS und Video 60 FPS in Echtzeit)")
+print("replay-cli: OK (bewegtes Schiff, alte Logik abgelehnt, GIF 1/24/25/30/60/120 FPS und Video 60 FPS in Echtzeit)")
 SWIFT

@@ -47,7 +47,8 @@ public struct Replay: Codable, Equatable, Sendable {
     ///     Absorption sind korrigiert, mehrere Implosionslöcher entstehen in stabiler Reihenfolge.
     /// v7: Spielerlaser prüfen ganze UFO-Segmente; Frontwaffen folgen der skalierten Schiffsnase.
     /// v8: Der UFO-Spawnpunkt des Kopf-Bosses folgt dem Mund der neuen Schädelgrafik.
-    public static let currentLogicVersion: Int = 8
+    /// v9: Heckwaffen folgen dem skalierten Rumpf; Boss-Geometrie ist ressourcenunabhängig.
+    public static let currentLogicVersion: Int = 9
 
     public let version: Int
     public let seed: UInt64

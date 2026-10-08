@@ -84,8 +84,7 @@ enum ReplayRenderer {
         let simH = options.simHeight ?? replay.height
         let scene = GameScene(size: CGSize(width: simW, height: simH))
         scene.scaleMode = .fill
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: simW, height: simH))
-        view.presentScene(scene)
+        scene.initializeSimulation()
         if options.hideHUD { scene.setHUDHiddenForRender(true) }
         scene.replayAutoFireOverride = options.autoFireOverride
         guard scene.startReplay(replay, simulationSize: CGSize(width: simW, height: simH)) else { throw RenderError.noFramesRendered }
@@ -104,6 +103,18 @@ enum ReplayRenderer {
 
         let viewport = CGRect(x: 0, y: 0, width: width, height: height)
         var images: [CGImage] = []
+        let startFrame = max(0, options.startFrame)
+        let remaining = max(0, replay.frameCount - startFrame)
+        var sampleFrames: [Int] = []
+        for frame in 0..<remaining where shouldCapture(frame, options: options) {
+            sampleFrames.append(frame + startFrame)
+            if options.maxFrames > 0 && sampleFrames.count >= options.maxFrames { break }
+        }
+        let duration = options.frameStride == nil
+            ? min(Double(remaining) * GameScene.simStep, Double(sampleFrames.count) / Double(options.fps))
+            : Double(sampleFrames.count) / Double(options.fps)
+        let timing = GIFEncoder.plan(frameCount: sampleFrames.count, fps: options.fps, duration: duration)
+        let captureFrames = Set(timing.map { sampleFrames[$0.sourceIndex] })
 
         // Simulation hier explizit Schritt für Schritt treiben (advanceOneStep); der normale
         // Echtzeit-Akkumulator in update(_:) bleibt damit außen vor. `renderer.update(atTime:)` tickt
@@ -115,27 +126,20 @@ enum ReplayRenderer {
             simTime += GameScene.simStep
             renderer.update(atTime: simTime)       // SKActions/visuelle Effekte auf simTime ticken
 
-            // Schritte vor dem gewünschten Startpunkt nur simulieren, nicht aufnehmen (Ausschnitt-Wahl).
-            if simFrame < options.startFrame {
-                simFrame += 1
-                continue
-            }
-
-            if shouldCapture(simFrame - options.startFrame, options: options) {
-                // Asteroiden-Drahtgitter vor dem Capture neu aufbauen (der Sim-Schritt tut das nicht
-                // mehr pro Schritt, sondern der Host pro gerendertem Bild — hier headless).
+            if captureFrames.contains(simFrame) {
                 scene.refreshAsteroidWireframes()
-                if let img = renderFrame(renderer: renderer, commandQueue: commandQueue,
-                                         texture: texture, viewport: viewport) {
-                    images.append(img)
+                guard let image = renderFrame(renderer: renderer, commandQueue: commandQueue,
+                                              texture: texture, viewport: viewport) else {
+                    throw RenderError.textureCreationFailed
                 }
-                if options.maxFrames > 0 && images.count >= options.maxFrames { break }
+                images.append(image)
+                if images.count == timing.count { break }
             }
             simFrame += 1
         }
 
         guard !images.isEmpty else { throw RenderError.noFramesRendered }
-        do { try GIFEncoder.encode(images: images, fps: options.fps, to: outputURL) }
+        do { try GIFEncoder.encode(images: images, timing: timing, to: outputURL) }
         catch { throw RenderError.gifDestinationFailed }
     }
 
@@ -154,8 +158,7 @@ enum ReplayRenderer {
         let simH = options.simHeight ?? replay.height
         let scene = GameScene(size: CGSize(width: simW, height: simH))
         scene.scaleMode = .fill
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: simW, height: simH))
-        view.presentScene(scene)
+        scene.initializeSimulation()
         if options.hideHUD { scene.setHUDHiddenForRender(true) }
         scene.replayAutoFireOverride = options.autoFireOverride
         guard scene.startReplay(replay, simulationSize: CGSize(width: simW, height: simH)) else { throw RenderError.noFramesRendered }

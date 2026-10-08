@@ -20,6 +20,23 @@ final class EventHorizonTests: GameCoreTestCase {
         return (scene, view)
     }
 
+    func testCompressedRearShotStartsInsideEveryWall() {
+        for angle: CGFloat in [0, .pi / 2, .pi, -.pi / 2] {
+            let (scene, view) = makeScene(); _ = view
+            scene.collectPowerUpForTesting(type: .compress)
+            scene.collectPowerUpForTesting(type: .rear)
+            scene.ship.zRotation = angle
+            scene.ship.position = CGPoint(x: -499 * cos(angle), y: -399 * sin(angle))
+            scene.advanceOneStep()
+            scene.fireLaserForTesting()
+            XCTAssertEqual(scene.activeLasers.count, 2)
+            let rear = scene.activeLasers.last!
+            XCTAssertTrue(scene.eventHorizonScreenBounds.contains(rear.position))
+            XCTAssertEqual(rear.position.x, scene.ship.rearWeaponOrigin.x, accuracy: 0.0001)
+            XCTAssertEqual(rear.position.y, scene.ship.rearWeaponOrigin.y, accuracy: 0.0001)
+        }
+    }
+
     func testModeSelectionAndReplayValue() throws {
         XCTAssertEqual(GameMode.eventHorizon.rawValue, 2)
         let (scene, view) = makeScene()

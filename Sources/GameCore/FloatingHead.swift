@@ -37,7 +37,7 @@ public final class FloatingHead: SKNode {
     /// Asteroid (Radius 40).
     public let collisionRadius: CGFloat = 68.0
 
-    private(set) var boundaryLocalBounds = CGRect(x: -68.0, y: -68.0, width: 136.0, height: 136.0)
+    let boundaryLocalBounds = CGRect(x: -110, y: -110, width: 220, height: 220)
 
     /// Zeitpunkt des letzten Laserbeam-Treffers (Treffer-Drosselung des Dauer-Strahls, damit der
     /// Boss nicht in Sekundenbruchteilen zerschmilzt). Wird von der GameScene gesetzt.
@@ -85,14 +85,12 @@ public final class FloatingHead: SKNode {
     private var mouthProgress: CGFloat = 0.0
 
     // Darstellung: eigene Schädelkontur als Textur (Art/skull_head.png, Silber auf transparent).
-    // `headHeight` ist die Bildhöhe in Szenen-Einheiten; Augen/Mund als
+    // Die feste Geometrie bleibt auch ohne Textur gleich; Augen als
     // normierte Texturkoordinaten (0..1, y nach unten), zentral justierbar. Aus ihnen werden die
-    // Pupillen-Sockel (bewegliche Augen) und der Mund-Mittelpunkt (UFO-Spawn) berechnet.
+    // Pupillen-Sockel (bewegliche Augen) berechnet. Der UFO-Spawn liegt fest bei (0, -55).
     // Der Mund ist dauerhaft offen; sein Öffnungsgrad steuert nur den Ablauf und die Stimme.
-    private let headHeight: CGFloat = 220.0
     private let leftEyeNorm  = CGPoint(x: 0.382, y: 0.50)
     private let rightEyeNorm = CGPoint(x: 0.628, y: 0.50)
-    private let mouthNorm    = CGPoint(x: 0.50, y: 0.75)
 
     // Grafik-Referenzen
     private let art = SKNode()
@@ -101,7 +99,7 @@ public final class FloatingHead: SKNode {
     private var rightPupil: SKShapeNode!
     private var leftSocketCenter: CGPoint = .zero    // lokale Augen-Mitten (in buildArt berechnet)
     private var rightSocketCenter: CGPoint = .zero
-    private var mouthLocal: CGPoint = .zero          // lokaler Mund-Mittelpunkt (UFO-Spawn-Ursprung)
+    private let mouthLocal = CGPoint(x: 0, y: -55)    // lokaler Mund-Mittelpunkt (UFO-Spawn-Ursprung)
     // Schadens-Risse (anfangs versteckt, je Treffer eine Stufe sichtbar).
     private var leftEyeCrack: SKShapeNode!
     private var rightEyeCrack: SKShapeNode!
@@ -117,7 +115,11 @@ public final class FloatingHead: SKNode {
 
     /// Erzeugt den Kopf-Boss für eine gegebene Szenengröße. Er startet über dem oberen Bildrand und
     /// schwebt in den oberen Bildbereich hinein.
-    public init(screenSize: CGSize, using rng: inout GameRandom) {
+    public convenience init(screenSize: CGSize, using rng: inout GameRandom) {
+        self.init(screenSize: screenSize, using: &rng, texture: ArtTexture.load("skull_head"))
+    }
+
+    init(screenSize: CGSize, using rng: inout GameRandom, texture: SKTexture?) {
         self.screenSize = screenSize
         self.hoverTarget = CGPoint(x: 0, y: screenSize.height * 0.18)
         self.offscreenY = screenSize.height * 0.5 + 280.0
@@ -128,7 +130,7 @@ public final class FloatingHead: SKNode {
 
         // Container aufrecht (die Textur ist bereits korrekt orientiert; keine Mockup-Spiegelung mehr).
         addChild(art)
-        buildArt()
+        buildArt(texture: texture)
 
         self.position = CGPoint(x: 0, y: offscreenY)
         self.zPosition = 5
@@ -367,21 +369,18 @@ public final class FloatingHead: SKNode {
 
     /// Baut den Kopf-Boss aus der eigenen Schädelkontur (Silber auf transparent) als ein zentriertes
     /// Sprite und legt darüber die beweglichen Glüh-Pupillen sowie die (zunächst versteckten)
-    /// Schadens-Risse. Aus den normierten Augen-/Mund-Koordinaten werden die lokalen Sockel- und
-    /// Mund-Positionen berechnet (Textur-y nach unten -> Szenen-y nach oben gespiegelt).
-    private func buildArt() {
-        guard let tex = ArtTexture.load("skull_head") else {
+    /// Schadens-Risse. Die normierten Augenkoordinaten bestimmen die lokalen Sockel;
+    /// der Mund bleibt unabhängig von der Textur an seinem festen Simulationsursprung.
+    private func buildArt(texture: SKTexture?) {
+        guard let tex = texture else {
             buildFallbackArt()
             return
         }
-        let texSize = tex.size()
-        let aspect = texSize.width / max(1.0, texSize.height)
-        let size = CGSize(width: headHeight * aspect, height: headHeight)
+        let size = boundaryLocalBounds.size
 
         let sprite = SKSpriteNode(texture: tex, size: size)
         art.addChild(sprite)
         headSprite = sprite
-        boundaryLocalBounds = sprite.frame
 
         // Norm-Koordinate -> lokale Szenen-Koordinate (Sprite ist um (0,0) zentriert, y nach oben).
         func local(_ n: CGPoint) -> CGPoint {
@@ -389,7 +388,6 @@ public final class FloatingHead: SKNode {
         }
         leftSocketCenter = local(leftEyeNorm)
         rightSocketCenter = local(rightEyeNorm)
-        mouthLocal = local(mouthNorm)
 
         // Bewegliche Glüh-Pupillen sitzen in den leeren Augenhöhlen und folgen dem Schiff.
         leftPupil = pupilNode(at: leftSocketCenter)
@@ -418,7 +416,6 @@ public final class FloatingHead: SKNode {
         art.addChild(circle)
         leftSocketCenter = CGPoint(x: -collisionRadius * 0.35, y: collisionRadius * 0.2)
         rightSocketCenter = CGPoint(x: collisionRadius * 0.35, y: collisionRadius * 0.2)
-        mouthLocal = CGPoint(x: 0, y: -collisionRadius * 0.3)
         headSprite = SKSpriteNode(color: .clear, size: .zero)
         leftPupil = pupilNode(at: leftSocketCenter)
         rightPupil = pupilNode(at: rightSocketCenter)

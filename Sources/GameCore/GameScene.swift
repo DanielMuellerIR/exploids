@@ -544,6 +544,23 @@ public final class GameScene: SKScene {
     
     public override func didMove(to view: SKView) {
         super.didMove(to: view)
+        initializeSimulation()
+
+        #if canImport(AppKit)
+        // Das Fenster kann erst nach didMove verfügbar sein; Tastaturfokus dann nachsetzen.
+        DispatchQueue.main.async { [weak view] in
+            guard let view = view else { return }
+            view.window?.makeFirstResponder(view)
+        }
+        #endif
+    }
+
+    private var simulationInitialized = false
+
+    /// Gemeinsamer, einmaliger Aufbau für sichtbares Spiel und stumme CLI-Simulation.
+    public func initializeSimulation() {
+        guard !simulationInitialized else { return }
+        simulationInitialized = true
 
         // Gebündelten Pixel-Font registrieren, bevor die Labels konfiguriert werden.
         RetroFont.registerIfNeeded()
@@ -578,16 +595,6 @@ public final class GameScene: SKScene {
             transitionTo(.startScreen)
         }
         
-        // Tastatur-Fokus sicherstellen: Die hostende SKView muss First Responder des Fensters sein,
-        // sonst erreichen keyDown-Events die Scene nicht. Beim Aufruf von didMove ist das Fenster
-        // noch nicht fertig (view.window == nil), daher verzögert auf dem Main-Loop nachsetzen.
-        // Nur macOS: First-Responder/keyDown gibt es auf iOS nicht – dort kommt die Eingabe per Touch.
-        #if canImport(AppKit)
-        DispatchQueue.main.async { [weak view] in
-            guard let view = view else { return }
-            view.window?.makeFirstResponder(view)
-        }
-        #endif
     }
     
     // MARK: - Input Handling
@@ -875,11 +882,7 @@ public final class GameScene: SKScene {
         // Rear laser power-up: additionally fire one shot straight backwards.
         if now < rearLaserEndTime {
             let rearAngle = angle + .pi
-            let rearDistance: CGFloat = 18
-            let rearSpawn = CGPoint(
-                x: ship.position.x + rearDistance * cos(rearAngle),
-                y: ship.position.y + rearDistance * sin(rearAngle)
-            )
+            let rearSpawn = ship.rearWeaponOrigin
             let rearLaser = Laser(position: rearSpawn, angle: rearAngle, type: .normal)
             self.addChild(rearLaser)
             self.activeLasers.append(rearLaser)

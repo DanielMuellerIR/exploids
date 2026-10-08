@@ -9,6 +9,29 @@ import AppKit
 @MainActor
 final class ReplayDeterminismTests: GameCoreTestCase {
 
+    func testSimulationInitializationIsIdempotentAndMatchesPresentedScene() {
+        let headless = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
+        headless.initializeSimulation()
+        let ship = headless.ship
+        let children = headless.children.count
+        headless.initializeSimulation()
+        XCTAssertTrue(ship === headless.ship)
+        XCTAssertEqual(children, headless.children.count)
+        let presented = makeIsolatedScene(size: CGSize(width: 1000, height: 800))
+        let view = SKView(frame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        view.presentScene(presented)
+        for scene in [headless, presented] {
+            scene.startNewGame(seed: 42)
+            scene.simulateKeyDown(keyCode: 13)
+            for _ in 0..<120 { scene.advanceOneStep() }
+        }
+        XCTAssertEqual(headless.ship.position, presented.ship.position)
+        XCTAssertEqual(headless.activeAsteroids.map(\.position), presented.activeAsteroids.map(\.position))
+        XCTAssertEqual(headless.score, presented.score)
+        var a = headless.rng, b = presented.rng
+        XCTAssertEqual(a.next(), b.next())
+    }
+
     func testReplayResizeKeepsHUDAtSceneEdgesAndRestoresStartScreen() {
         let scene = makeIsolatedScene(size: CGSize(width: 1024, height: 768))
         scene.scaleMode = .resizeFill

@@ -357,9 +357,8 @@ struct Main {
         
         // 3. Check for --test-mode
         if arguments.contains("--test-mode") {
-            let view = SKView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
             let scene = GameScene(size: CGSize(width: 1024, height: 768))
-            view.presentScene(scene)
+            scene.initializeSimulation()
             
             scene.startNewGame(seed: 42)
             print("Starting headless simulation...")
@@ -413,9 +412,8 @@ struct Main {
         }
 
         // Szene aufsetzen (lädt Highscores aus dem Store) und Replay des Eintrags holen.
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         let scene = GameScene(size: CGSize(width: 800, height: 600))
-        view.presentScene(scene)
+        scene.initializeSimulation()
         guard index >= 0, index < scene.highScores.count else {
             FileHandle.standardError.write(Data("Fehler: Highscore-Index \(index) existiert nicht (0..\(scene.highScores.count - 1)).\n".utf8)); exit(3)
         }
@@ -444,9 +442,8 @@ struct Main {
             // der Aufnahme gespeicherte Größe nehmen; --width/--height überschreiben.
             let w = argValue(arguments, "--width").flatMap { Int($0) } ?? replay.width
             let h = argValue(arguments, "--height").flatMap { Int($0) } ?? replay.height
-            let view = SKView(frame: CGRect(x: 0, y: 0, width: w, height: h))
             let scene = GameScene(size: CGSize(width: w, height: h))
-            view.presentScene(scene)
+            scene.initializeSimulation()
             if arguments.contains("--auto-fire") { scene.replayAutoFireOverride = true }
             if arguments.contains("--no-auto-fire") { scene.replayAutoFireOverride = false }
             guard scene.startReplay(replay, simulationSize: CGSize(width: w, height: h)) else {
@@ -473,9 +470,8 @@ struct Main {
         let startLevel = Int(argValue(arguments, "--level") ?? "3") ?? 3
 
         // Szene aufsetzen und einen festen, frame-indizierten Lauf aufzeichnen.
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: 480, height: 360))
         let scene = GameScene(size: CGSize(width: 480, height: 360))
-        view.presentScene(scene)
+        scene.initializeSimulation()
         if arguments.contains("--auto-fire") { scene.autoFire = true }
         // Höheres Start-Level → mehr Asteroiden/Gegner im Demo-GIF.
         scene.startNewGameForTesting(seed: 0xC0FFEE, startLevel: startLevel, mode: .ancientAsteroids)
@@ -532,8 +528,7 @@ struct Main {
     /// Domain) und nur bei beendetem Spiel (ein laufendes überschreibt die Liste beim nächsten Game Over).
     private static func runResetHighScores() {
         let scene = GameScene(size: CGSize(width: 800, height: 600))
-        let view = SKView(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
-        view.presentScene(scene)
+        scene.initializeSimulation()
         scene.clearHighScores()
         print("Highscores gelöscht (leere Liste gespeichert).")
         exit(0)

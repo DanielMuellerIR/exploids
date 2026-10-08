@@ -109,7 +109,7 @@ Neun Aufsammler, jeder mit eigenem Vektor-Symbol:
 Die Simulation ist **deterministisch**: Jeder Durchlauf wird allein als Seed plus deine Tastendrücke aufgezeichnet und lässt sich dadurch bit-genau reproduzieren. Daraus folgen zwei Dinge:
 
 - Während Aufnahme und Wiedergabe skaliert eine Größenänderung nur die Ansicht; die Simulation behält ihre Startgröße. Der Startbildschirm passt sich anschließend wieder ans Fenster an.
-- Die Wiedergabe benötigt die passende Simulations-Logikversion. Version 0.15.3 verwendet Logikversion 8 und lehnt ältere Aufnahmen ab; deren gespeicherte Bytes und Highscores bleiben erhalten.
+- Die Wiedergabe benötigt die passende Simulations-Logikversion. Version 0.15.4 verwendet Logikversion 9 und lehnt ältere Aufnahmen ab; deren gespeicherte Bytes und Highscores bleiben erhalten.
 - **Highscore-Läufe erneut ansehen** — im Startbildschirm `1`–`5` drücken, um den Eintrag exakt so abzuspielen, wie er gespielt wurde; `Esc` verlässt ihn.
 - **Promo-GIFs headless rendern** — ein Replay direkt auf der Kommandozeile in ein sauberes, cursorfreies animiertes GIF verwandeln, ganz ohne Fenster:
 
